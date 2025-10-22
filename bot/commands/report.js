@@ -10,6 +10,7 @@ const Platform = require('../../models/Platform');
 const Company = require('../../models/Company');
 const Reports = require('../../models/Reports');
 const User = require('../../models/Users');
+const generateOffer = require('../utils/generateOffer');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -48,6 +49,7 @@ module.exports = {
                 content: `**Report Submitted Successfully!**\n\n**Platform:** ${platform.name}\n**Company:** ${company.name}\n**Severity:** ${severity.toUpperCase()}\n**Report ID:** \`${report._id}\``,
                 flags: 64,
             });
+            await generateOffer(interaction.client, report, interaction.user);
         } catch (err) {
             console.error(err);
             await interaction.followUp({
@@ -160,10 +162,10 @@ async function selectCompany(interaction, platformId) {
 
 async function selectSeverity(interaction) {
     const severities = [
-        { label: 'Low', value: 'low', description: 'Minor issue' },
-        { label: 'Medium', value: 'medium', description: 'Moderate issue' },
-        { label: 'High', value: 'high', description: 'Severe issue' },
-        { label: 'Critical', value: 'critical', description: 'Extremely severe' },
+        { label: 'Low', value: 'Low', description: 'Minor issue' },
+        { label: 'Medium', value: 'Medium', description: 'Moderate issue' },
+        { label: 'High', value: 'High', description: 'Severe issue' },
+        { label: 'Critical', value: 'Critical', description: 'Extremely severe' },
     ];
 
     const selectMenu = new StringSelectMenuBuilder()

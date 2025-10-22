@@ -17,7 +17,7 @@ const reportSchema = new Schema({
 
     volunerablity_sev: {
         type: String,
-        enum: ['low', 'medium', 'high', 'critical'],
+        enum: ['Low', 'Medium', 'High', 'Critical'],
         required: true
     },
     status: {

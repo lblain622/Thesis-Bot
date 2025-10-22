@@ -17,7 +17,7 @@ const companyOfferSchema = new Schema({
         type: Number,
         default: 0
     },
-    repuatation_offered: String,
+    repuatation_offered: Number,
     status: {
         type: String,
         enum: ['pending', 'accepted', 'rejected', 'expired'],
@@ -28,7 +28,8 @@ const companyOfferSchema = new Schema({
         type: Date,
         default: Date.now
     },
-    resloved_at: Date
+    resloved_at: Date,
+    counter_offered: Number,
 }, { timestamps: true });
 
 module.exports = model('Company_Offer', companyOfferSchema);

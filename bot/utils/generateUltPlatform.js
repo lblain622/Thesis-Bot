@@ -1,14 +1,16 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
 const mongoose = require('mongoose');
 const Platform = require('../../models/Platform');
 const Company = require('../../models/Company');
+const BountyTier = require('../../models/BountyTiers');
+const CompanyOffer = require('../../models/CompanyOffers');
 
 async function generateUltPlatform() {
     try {
         await mongoose.connect(process.env.MONGO_URI);
         console.log('✅ MongoDB connected');
 
-        // Upsert platform (create or update)
+
         const platformData = {
             name: 'Ultimatum Test Platform',
             description: 'A test platform for the Ultimatum Game simulation.',
@@ -26,49 +28,80 @@ async function generateUltPlatform() {
             { $set: platformData },
             { new: true, upsert: true }
         );
+        console.log(` Platform ready: ${platform.name}`);
 
-        console.log(`✅ Platform ready: ${platform.name}`);
 
-        // Companies for this platform
+        const tiers = [
+            { severity: 'Low', min_value: '50', max_value: '150', description: 'Minor issues' },
+            { severity: 'Medium', min_value: '150', max_value: '400', description: 'Moderate issues' },
+            { severity: 'High', min_value: '400', max_value: '700', description: 'Severe issues' },
+            { severity: 'Critical', min_value: '700', max_value: '1200', description: 'Extremely severe issues' },
+        ];
+
+
+        for (const t of tiers) {
+            await BountyTier.findOneAndUpdate(
+                { severity: t.severity },
+                { $set: t },
+                { new: true, upsert: true }
+            );
+        }
+
+        // Companies
         const companies = [
             {
                 name: 'FairCorp',
                 description: 'High transparency, fair offers.',
+                platform_id: platform._id,
+                variants: [],
+                bounty_tiers: tiers.map(t => t._id), // link bounty tiers
             },
             {
                 name: 'Lowball Inc',
                 description: 'Low transparency, unfair offers.',
+                platform_id: platform._id,
+                variants: [],
+                bounty_tiers: tiers.map(t => t._id),
             },
             {
                 name: 'ReputationX',
-                description: 'Offers mix of money and reputation.',
+                description: 'Mix of money and reputation points.',
+                platform_id: platform._id,
+                variants: [],
+                bounty_tiers: tiers.map(t => t._id),
             },
         ];
 
-        // Generate or update each company
         for (const data of companies) {
-            const updated = await Company.findOneAndUpdate(
+            await Company.findOneAndUpdate(
                 { name: data.name },
-                {
-                    $set: {
-                        description: data.description,
-                        platform_id: platform._id,
-                        variants: [],
-                        bounty_tiers: [],
-                    },
-                },
+                { $set: data },
                 { new: true, upsert: true }
             );
-
-            console.log(`🏢 Company ready: ${updated.name}`);
         }
 
-        console.log('Ultimatum Test Platform setup complete.');
+        // Example CompanyOffer template (counter_offer included)
+        const exampleOffer = {
+            company_id: companies[0]._id, // just for seeding
+            report_id: null,
+            user_id: null,
+            original_amount: 500,
+            offered_amount: 500,
+            offer_percent: 100,
+            reputation_offered: '10 points',
+            status: 'pending',
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week
+            created_at: new Date(),
+            resolved_at: null,
+            counter_offer: null,
+        };
+
+        console.log(' Ultimatum Test Platform setup complete.');
     } catch (err) {
         console.error('Error generating Ultimatum Platform:', err);
     } finally {
         await mongoose.disconnect();
-        console.log('MongoDB disconnected');
+        console.log(' MongoDB disconnected');
     }
 }
 
