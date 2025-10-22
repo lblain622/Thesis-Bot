@@ -5,6 +5,10 @@ const userSchema = new Schema({
         type: String,
         required: true
     },
+    discord_name:{
+        type: String,
+        required: true
+    },
     reports_made: {
         type: Number,
         default: 0
@@ -23,4 +27,4 @@ const userSchema = new Schema({
     }
 }, { timestamps: true });
 
-module.exports = model('User', userSchema);
+module.exports = model('Users', userSchema);

@@ -1,6 +1,6 @@
 const { Schema, model } = require('mongoose');
 
-const vulnerabilitySchema = new Schema({
+const volunerabilitySchema = new Schema({
     company_id: {
         type: String,
         required: true
@@ -20,4 +20,4 @@ const vulnerabilitySchema = new Schema({
     experation_date: Date
 }, { timestamps: true });
 
-module.exports = model('Vulnerability', vulnerabilitySchema);
+module.exports = model('Volunerabilies', volunerabilitySchema);

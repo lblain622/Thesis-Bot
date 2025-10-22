@@ -13,8 +13,12 @@ const reportSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Company'
     },
+    vulnerability_id: { type: Schema.Types.ObjectId, ref: 'Volunerabilies' },
+
     volunerablity_sev: {
-        type: String
+        type: String,
+        enum: ['low', 'medium', 'high', 'critical'],
+        required: true
     },
     status: {
         type: String,
