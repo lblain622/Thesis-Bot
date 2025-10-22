@@ -214,7 +214,7 @@ async function selectSeverity(interaction) {
 
 async function showSummary(interaction, platform, company, severity) {
     const summaryContent = `
-**📋 Report Summary**
+**Report Summary**
 
 **Platform:** ${platform.name}
 **Company:** ${company.name}
@@ -272,7 +272,12 @@ async function saveReport(interaction, platformId, companyId, severity, descript
     const discordId = interaction.user.id;
     const discordName = interaction.user.username;
     let user = await User.findOne({ discord_id: discordId });
-    if (!user) user = await User.create({ discord_id: discordId, discord_name: discordName });
+
+
+    await User.updateOne(
+        { _id: user._id },
+        { $inc: { reports_made: 1 } }
+    );
 
     return await Reports.create({
         user_id: user._id,
@@ -281,6 +286,7 @@ async function saveReport(interaction, platformId, companyId, severity, descript
         volunerablity_sev: severity,
         description,
     });
+
 }
 
 async function waitForSelect(message, userId, customIds) {
