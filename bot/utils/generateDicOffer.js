@@ -15,8 +15,8 @@ async function generateDictatorOffer(client, report, discordUser) {
   const base = Math.floor(Math.random() * (max - min + 1)) + min;
 
   const options = {
-    option1: { money: base, rep: 0 }, // pure money
-    option2: { money: Math.floor(base * 0.7), rep: 50 }, // recognition tradeoff
+    option1: { money: base, rep: 0 },
+    option2: { money: Math.floor(base * 0.7), rep: 50 },
   };
 
   const offer = await CompanyOffer.create({
@@ -31,8 +31,7 @@ async function generateDictatorOffer(client, report, discordUser) {
 
   await discordUser.send({
     content:
-      `Offer from ${company.name}\nSeverity: ${report.volunerablity_sev}\n` +
-      `Tier Range: ${min}-${max}\n\n` +
+      `Offer from ${company.name}\n for a Severity: ${report.volunerablity_sev} Report\n` +
       `Option 1: $${options.option1.money} + ${options.option1.rep} reputation\n` +
       `Option 2: $${options.option2.money} + ${options.option2.rep} reputation\n\n` +
       `Please choose one:`,
