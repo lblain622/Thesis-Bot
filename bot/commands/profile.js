@@ -15,7 +15,7 @@ module.exports = {
 
     }
 }
-=======
+
         .setDescription('See your profile'),
 
     async execute(interaction) {
@@ -33,4 +33,4 @@ module.exports = {
 
     }
 }
->>>>>>> c72755ba4acdd95fb07d3001cf15845d3f52efc9
+

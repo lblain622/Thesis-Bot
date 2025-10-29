@@ -11,6 +11,7 @@ const Company = require('../../models/Company');
 const Reports = require('../../models/Reports');
 const User = require('../../models/Users');
 const generateOffer = require('../utils/generateOffer');
+const generateDictatorOffer = require('../utils/generateDicOffer')
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -21,7 +22,7 @@ module.exports = {
         await interaction.deferReply({ flags: 64 });
 
         try {
-            const platformId = await selectPlatform(interaction);
+            const platformId = await selectPlatform(interact);
             if (!platformId) return;
 
             const companyId = await selectCompany(interaction, platformId);
@@ -39,7 +40,7 @@ module.exports = {
 
             const report = await saveReport(
                 interaction,
-                platformId,
+                platform.id,
                 companyId,
                 severity,
                 "No description provided" // Default description
@@ -49,7 +50,12 @@ module.exports = {
                 content: `**Report Submitted Successfully!**\n\n**Platform:** ${platform.name}\n**Company:** ${company.name}\n**Severity:** ${severity.toUpperCase()}\n**Report ID:** \`${report._id}\``,
                 flags: 64,
             });
-            await generateOffer(interaction.client, report, interaction.user);
+
+            if (platform.name === 'Ultimatum Test Platform') {
+                await generateOfferForReport(client, report, interaction.user);
+            } else if (platform.name === 'Dictator Test Platform') {
+                await generateDictatorOffer(client, report, interaction.user);
+            }
         } catch (err) {
             console.error(err);
             await interaction.followUp({
@@ -101,7 +107,7 @@ async function selectPlatform(interaction) {
     }
 
     await response.update({ content: 'Platform selected.', components: [] });
-    return response.values[0];
+    return response.values[0], response.value[1];
 }
 
 async function selectCompany(interaction, platformId) {
@@ -155,9 +161,11 @@ async function selectCompany(interaction, platformId) {
         await response.update({ content: 'Report canceled.', components: [] });
         return null;
     }
+    const selectedId = response.values[0];
+    const selectedPlatform = platforms.find((p) => p._id.toString() === selectedId);
 
     await response.update({ content: 'Company selected.', components: [] });
-    return response.values[0];
+    return {id:selectedId,name:selectedPlatform};
 }
 
 async function selectSeverity(interaction) {
