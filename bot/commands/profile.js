@@ -1,22 +1,10 @@
-<<<<<<< HEAD
-const {SlashCommandBuilder} = require("discord.js");
-=======
 const {SlashCommandBuilder, EmbedBuilder} = require("discord.js");
->>>>>>> c72755ba4acdd95fb07d3001cf15845d3f52efc9
+
 const User = require("../../models/Users");
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('profile')
-<<<<<<< HEAD
-        .setDescription('View Current Profile'),
+        .setName('profile').setDescription('View Your Profile'),
 
-    async execute(interaction) {
-       const user = User.findOne({discord_id:interaction.user.id});
-
-    }
-}
-
-        .setDescription('See your profile'),
 
     async execute(interaction) {
         const user = await User.findOne({discord_id: interaction.user.id});
@@ -33,4 +21,3 @@ module.exports = {
 
     }
 }
-

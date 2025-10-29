@@ -22,10 +22,12 @@ module.exports = {
         await interaction.deferReply({ flags: 64 });
 
         try {
-            const platformId = await selectPlatform(interact);
+            const platformRes = await selectPlatform(interaction);
+            const platformId = platformRes.id;
             if (!platformId) return;
 
             const companyId = await selectCompany(interaction, platformId);
+            console.log(companyId)
             if (!companyId) return;
 
             const severity = await selectSeverity(interaction);
@@ -51,10 +53,10 @@ module.exports = {
                 flags: 64,
             });
 
-            if (platform.name === 'Ultimatum Test Platform') {
-                await generateOfferForReport(client, report, interaction.user);
-            } else if (platform.name === 'Dictator Test Platform') {
-                await generateDictatorOffer(client, report, interaction.user);
+            if (platformRes.name === 'Ultimatum Test Platform') {
+                await generateOffer(interaction.client, report, interaction.user);
+            } else if (platformRes.name === 'Dictator Test Platform') {
+                await generateDictatorOffer(interaction.client, report, interaction.user);
             }
         } catch (err) {
             console.error(err);
@@ -105,9 +107,11 @@ async function selectPlatform(interaction) {
         await response.update({ content: 'Report canceled.', components: [] });
         return null;
     }
+    const selectedId = response.values[0];
+    const selectedPlatform = platforms.find((p) => p._id.toString() === selectedId);
 
     await response.update({ content: 'Platform selected.', components: [] });
-    return response.values[0], response.value[1];
+    return {id:selectedId,name:selectedPlatform.name};
 }
 
 async function selectCompany(interaction, platformId) {
@@ -161,11 +165,9 @@ async function selectCompany(interaction, platformId) {
         await response.update({ content: 'Report canceled.', components: [] });
         return null;
     }
-    const selectedId = response.values[0];
-    const selectedPlatform = platforms.find((p) => p._id.toString() === selectedId);
 
     await response.update({ content: 'Company selected.', components: [] });
-    return {id:selectedId,name:selectedPlatform};
+    return response.values[0];;
 }
 
 async function selectSeverity(interaction) {
