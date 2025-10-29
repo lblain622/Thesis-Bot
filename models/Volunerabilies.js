@@ -17,7 +17,9 @@ const volunerabilitySchema = new Schema({
         type: Boolean,
         default: false
     },
-    experation_date: Date
+    reported_date: Date,
+    seen_by: {type: Schema.Types.ObjectId, ref: 'User'},
+  
 }, { timestamps: true });
 
 module.exports = model('Volunerabilies', volunerabilitySchema);
