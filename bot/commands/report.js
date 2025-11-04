@@ -22,6 +22,7 @@ module.exports = {
         await interaction.deferReply({ flags: 64 });
 
         try {
+            //TODO: ADD New Users UPSERT
             const platformRes = await selectPlatform(interaction);
             const platformId = platformRes.id;
             if (!platformId) return;
@@ -29,7 +30,7 @@ module.exports = {
             const companyId = await selectCompany(interaction, platformId);
             console.log(companyId)
             if (!companyId) return;
-
+            //TODO: Hide severity
             const severity = await selectSeverity(interaction);
             if (!severity) return;
 
