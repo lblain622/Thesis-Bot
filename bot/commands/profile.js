@@ -7,7 +7,10 @@ module.exports = {
 
 
     async execute(interaction) {
-        const user = await User.findOne({discord_id: interaction.user.id});
+        let user = await User.findOne({discord_id: interaction.user.id});
+        if (!user) {
+            user = await User.create({ discord_id: interaction.user.id, username: interaction.user.username });
+        }
 
         const embdVar = new EmbedBuilder()
             .setTitle(`${interaction.user.username}'s Profile`)

@@ -283,7 +283,9 @@ async function saveReport(interaction, platformId, companyId, severity, descript
     const discordId = interaction.user.id;
     const discordName = interaction.user.username;
     let user = await User.findOne({ discord_id: discordId });
-
+    if (!user) {
+        user = await User.create({ discord_id: discordId, username: discordName, reports_made: 0 });
+    }
 
     await User.updateOne(
         { _id: user._id },
