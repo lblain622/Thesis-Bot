@@ -11,11 +11,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "axios": "^1.13.1",
     "discord.js": "^14.23.2",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "mongoose": "^8.19.2",
-    "moongoose": "^0.0.5"
+    "moongoose": "^0.0.5",
+    "tailwindcss": "^4.1.16"
   },
   "devDependencies": {
     "eslint": "^9.38.0"

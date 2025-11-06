@@ -17,8 +17,19 @@ const volunerabilitySchema = new Schema({
         type: Boolean,
         default: false
     },
+    is_resolved_date: Date,
     reported_date: Date,
-    seen_by: {type: Schema.Types.ObjectId, ref: 'User'},
+    experation_date: Date,
+    visibility: {
+        isGlobal: {
+            type: Boolean,
+            default: false
+        },
+        allowedUsers: [{
+            type: Schema.Types.ObjectId,
+            ref: 'User'
+        }]
+    }
   
 }, { timestamps: true });
 

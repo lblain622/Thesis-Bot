@@ -28,6 +28,15 @@ const companyOfferSchema = new Schema({
         type: Date,
         default: Date.now
     },
+    dictator_choice: {
+        type: String,
+        enum: ['option1', 'option2', null],
+        default: null,
+      },
+    dictator_options: {
+        type: Object,
+        default: null,
+      },
     resloved_at: Date,
     counter_offered: Number,
 }, { timestamps: true });

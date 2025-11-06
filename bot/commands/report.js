@@ -11,6 +11,7 @@ const Company = require('../../models/Company');
 const Reports = require('../../models/Reports');
 const User = require('../../models/Users');
 const generateOffer = require('../utils/generateOffer');
+const generateDictatorOffer = require('../utils/generateDicOffer')
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -21,12 +22,15 @@ module.exports = {
         await interaction.deferReply({ flags: 64 });
 
         try {
-            const platformId = await selectPlatform(interaction);
+            //TODO: ADD New Users UPSERT
+            const platformRes = await selectPlatform(interaction);
+            const platformId = platformRes.id;
             if (!platformId) return;
 
             const companyId = await selectCompany(interaction, platformId);
+            console.log(companyId)
             if (!companyId) return;
-
+            //TODO: Hide severity
             const severity = await selectSeverity(interaction);
             if (!severity) return;
 
@@ -39,7 +43,7 @@ module.exports = {
 
             const report = await saveReport(
                 interaction,
-                platformId,
+                platform.id,
                 companyId,
                 severity,
                 "No description provided" // Default description
@@ -49,7 +53,12 @@ module.exports = {
                 content: `**Report Submitted Successfully!**\n\n**Platform:** ${platform.name}\n**Company:** ${company.name}\n**Severity:** ${severity.toUpperCase()}\n**Report ID:** \`${report._id}\``,
                 flags: 64,
             });
-            await generateOffer(interaction.client, report, interaction.user);
+
+            if (platformRes.name === 'Ultimatum Test Platform') {
+                await generateOffer(interaction.client, report, interaction.user);
+            } else if (platformRes.name === 'Dictator Test Platform') {
+                await generateDictatorOffer(interaction.client, report, interaction.user);
+            }
         } catch (err) {
             console.error(err);
             await interaction.followUp({
@@ -99,9 +108,11 @@ async function selectPlatform(interaction) {
         await response.update({ content: 'Report canceled.', components: [] });
         return null;
     }
+    const selectedId = response.values[0];
+    const selectedPlatform = platforms.find((p) => p._id.toString() === selectedId);
 
     await response.update({ content: 'Platform selected.', components: [] });
-    return response.values[0];
+    return {id:selectedId,name:selectedPlatform.name};
 }
 
 async function selectCompany(interaction, platformId) {
@@ -157,7 +168,7 @@ async function selectCompany(interaction, platformId) {
     }
 
     await response.update({ content: 'Company selected.', components: [] });
-    return response.values[0];
+    return response.values[0];;
 }
 
 async function selectSeverity(interaction) {
@@ -272,7 +283,9 @@ async function saveReport(interaction, platformId, companyId, severity, descript
     const discordId = interaction.user.id;
     const discordName = interaction.user.username;
     let user = await User.findOne({ discord_id: discordId });
-
+    if (!user) {
+        user = await User.create({ discord_id: discordId, username: discordName, reports_made: 0 });
+    }
 
     await User.updateOne(
         { _id: user._id },
