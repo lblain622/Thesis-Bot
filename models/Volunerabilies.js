@@ -25,10 +25,10 @@ const volunerabilitySchema = new Schema({
             type: Boolean,
             default: false
         },
-        allowedUsers: [{
+        allowedUsers: {
             type: Schema.Types.ObjectId,
             ref: 'User'
-        }]
+        }
     }
   
 }, { timestamps: true });
