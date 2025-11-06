@@ -24,6 +24,10 @@ const userSchema = new Schema({
     last_active: {
         type: Date,
         default: Date.now
+    },
+    reputation_breakdown:{
+        type: Array,
+        default: []
     }
 }, { timestamps: true });
 
