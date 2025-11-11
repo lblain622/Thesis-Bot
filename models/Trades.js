@@ -16,7 +16,15 @@ const tradeSchema = new Schema({
  ru_item_type:{
      type:String,
      emun:['volunerabilies','money','both']
- }
+ },
+ gu_value:{
+     type: Schema.Types.Mixed,
+     required: true
+ },
+ ru_value:{
+     type: Schema.Types.Mixed,
+     required: true
+ },
 
 })
 

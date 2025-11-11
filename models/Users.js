@@ -25,10 +25,19 @@ const userSchema = new Schema({
         type: Date,
         default: Date.now
     },
-    reputation_breakdown:{
-        type: Array,
-        default: []
-    }
+    reputation_breakdown:[
+        {
+            company_id: {
+                type: Schema.Types.ObjectId,
+                ref: 'Companies',
+                required: true
+            },
+            trust_score: {
+                type: Number,
+                default: 0
+            }
+        }
+    ]
 }, { timestamps: true });
 
 module.exports = model('Users', userSchema);
