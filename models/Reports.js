@@ -20,7 +20,7 @@ const reportSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Volunerabilies'
     },
-
+  
     vuln_identifier: String,
     volunerablity_sev: {
         type: String,

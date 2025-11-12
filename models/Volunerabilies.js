@@ -1,10 +1,12 @@
+const { Schema, model } = require('mongoose');
+
 const volunerabilitySchema = new Schema({
     company_id: {
         type: Schema.Types.ObjectId,
         ref: 'Company',
         required: true
     },
-    // Vulnerability identification (user provides fake name/ID)
+  
     vuln_identifier: {
         type: String,
         required: true,
@@ -18,7 +20,7 @@ const volunerabilitySchema = new Schema({
     },
     name: String,
     description: String,
-    // CVSS Scoring
+
     cvss_score: {
         type: Number,
         min: 0,
@@ -30,16 +32,37 @@ const volunerabilitySchema = new Schema({
         enum: ['None', 'Low', 'Medium', 'High', 'Critical'],
         required: true
     },
-   
-    poc_submitted: {
-        type: Boolean,
-        default: false
+
+    pocs_submitted: [{
+        user_id: {
+            type: Schema.Types.ObjectId,
+            ref: 'Users'
+        },
+        submitted_at: Date,
+        poc_data: {
+            steps: [String],
+            screenshots: [String],
+            notes: String
+        }
+    }],
+
+    reported_by: [{
+        user_id: {
+            type: Schema.Types.ObjectId,
+            ref: 'Users'
+        },
+        reported_at: Date,
+        report_id: {
+            type: Schema.Types.ObjectId,
+            ref: 'Report'
+        }
+    }],
+
+    first_reporter: {
+        type: Schema.Types.ObjectId,
+        ref: 'Users'
     },
-    poc_data: {
-        steps: [String],
-        screenshots: [String],
-        notes: String
-    },
+    first_reported_at: Date,
     isReported: {
         type: Boolean,
         default: false
@@ -62,18 +85,22 @@ const volunerabilitySchema = new Schema({
             ref: 'Users'
         }]
     },
-    // Discovery metadata
-    discovered_by: {
-        type: Schema.Types.ObjectId,
-        ref: 'Users'
-    },
-    discovered_at: {
-        type: Date,
-        default: Date.now
-    }
+
+    discovered_by: [{
+        user_id: {
+            type: Schema.Types.ObjectId,
+            ref: 'Users'
+        },
+        discovered_at: {
+            type: Date,
+            default: Date.now
+        }
+    }]
 }, { timestamps: true });
 
 volunerabilitySchema.index({ vuln_identifier: 1 });
 volunerabilitySchema.index({ company_id: 1, isReported: 1 });
+volunerabilitySchema.index({ 'visibility.allowedUsers': 1 });
+volunerabilitySchema.index({ 'reported_by.user_id': 1 });
 
 module.exports = model('Volunerabilies', volunerabilitySchema);
