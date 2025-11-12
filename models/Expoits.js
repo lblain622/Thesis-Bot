@@ -1,19 +1,42 @@
 const { Schema, model } = require('mongoose');
 
 const exploitSchema = new Schema({
-    volunerability_id:{
+    volunerability_id: {
         type: Schema.Types.ObjectId,
-        ref: 'Volunerabilies'
+        ref: 'Volunerabilies',
+        required: true
     },
-    exposure_chance:{
-        type: Number
+    user_id: {
+        type: Schema.Types.ObjectId,
+        ref: 'Users',
+        required: true
     },
-    money_per_cycle:{
-        type:Number,
+    exposure_chance: {
+        type: Number,
+        required: true,
+        min: 0,
+        max: 1
     },
-    last_rewarded:{
-        type:Date
+    money_per_cycle: {
+        type: Number,
+        required: true
+    },
+    last_rewarded: {
+        type: Date,
+        default: Date.now
+    },
+    cycles_completed: {
+        type: Number,
+        default: 0
+    },
+    is_caught: {
+        type: Boolean,
+        default: false
+    },
+    started_at: {
+        type: Date,
+        default: Date.now
     }
-})
+}, { timestamps: true });
 
-module.exports = model("Exploit",exploitSchema)
+module.exports = model('Exploit', exploitSchema);
