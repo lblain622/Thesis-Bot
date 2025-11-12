@@ -1,5 +1,7 @@
 const { Schema, model } = require('mongoose');
 
+
+
 const reportSchema = new Schema({
     user_id: {
         type: Schema.Types.ObjectId,
@@ -20,17 +22,22 @@ const reportSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Volunerabilies'
     },
-  
+    // Report can reference existing vuln or create new one
     vuln_identifier: String,
     volunerablity_sev: {
         type: String,
         enum: ['None', 'Low', 'Medium', 'High', 'Critical'],
         required: true
     },
-
+    // CVSS information
     cvss_score: Number,
     cvss_vector: String,
-
+    // HackerOne-style fields
+    report_title: String,
+    report_description: String,
+    impact_description: String,
+    poc_steps: [String],
+    // Is this a POC-only submission?
     is_poc_only: {
         type: Boolean,
         default: false
@@ -44,7 +51,7 @@ const reportSchema = new Schema({
         type: Date,
         default: Date.now
     },
-    // Bonus information
+
     reputation_bonus: {
         type: Number,
         default: 0
@@ -52,7 +59,13 @@ const reportSchema = new Schema({
     preferred_vuln_bonus: {
         type: Number,
         default: 0
+    },
+
+    offered_amount: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
+
 
 module.exports = model('Report', reportSchema);

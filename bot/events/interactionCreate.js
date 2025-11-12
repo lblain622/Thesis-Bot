@@ -3,6 +3,7 @@ const User = require('../../models/Users');
 const Report = require('../../models/Reports');
 const Trade = require('../../models/Trades');
 const Vulnerability = require('../../models/Volunerabilies');
+const { announceVulnerabilityPatched } = require('../events/announcePatches');
 
 module.exports = {
     name: 'interactionCreate',
@@ -261,7 +262,7 @@ async function handleTrade(interaction, action, tradeId) {
             );
 
             await interaction.update({
-                content: 'Trade accepted successfully!',
+                content: '✅ Trade accepted successfully!',
                 components: []
             });
 
@@ -276,7 +277,7 @@ async function handleTrade(interaction, action, tradeId) {
         } catch (err) {
             console.error('Trade execution error:', err);
             await interaction.update({
-                content: ' Trade failed. Please ensure you have sufficient resources.',
+                content: 'Trade failed. Please ensure you have sufficient resources.',
                 components: []
             });
         }
