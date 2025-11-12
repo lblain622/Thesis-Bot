@@ -61,7 +61,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
             {
                 $inc: {
                     money_earned: finalAmount,
-                    reputation_earned: parseInt(offer.reputation_offered || 0),
+                   repuation_earned: parseInt(offer.reputation_offered || 0),
                 },
             }
         );
@@ -121,7 +121,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
                 {
                     $inc: {
                         money_earned: amount,
-                        reputation_earned: parseInt(offer.reputation_offered || 0),
+                        repuation_earned: parseInt(offer.reputation_offered || 0),
                     },
                 }
             );
@@ -180,7 +180,7 @@ async function handleDictatorGame(interaction, action, offerId) {
         {
             $inc: {
                 money_earned: finalMoney,
-                reputation_earned: selected.rep,
+                repuation_earned: selected.rep,
             },
         }
     );

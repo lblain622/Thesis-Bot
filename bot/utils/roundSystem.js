@@ -3,6 +3,7 @@ const Vulnerability = require('../../models/Volunerabilies');
 const Company = require('../../models/Company');
 const Round = require('../../models/Round');
 const Report = require('../../models/Reports');
+const User = require('../../models/Users')
 const { EmbedBuilder } = require('discord.js');
 
 /**
@@ -76,7 +77,7 @@ async function generateDailyVulnerabilities() {
                 round_id: round._id,
                 visibility: {
                     isGlobal: isGlobal,
-                    allowedUsers: isGlobal ? [] : [getRandomExclusiveUser()]
+                    allowedUsers: isGlobal ? [] : await getRandomExclusiveUser()
                 },
                 expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
             });
@@ -300,10 +301,23 @@ function generateVulnDescription(type, companyName) {
     return descriptions[type] || `Security vulnerability discovered in ${companyName}.`;
 }
 
-function getRandomExclusiveUser() {
-    // TODO: Get Random user for Db
-    //
-    return null;
+async function getRandomExclusiveUser() {
+    try {
+        const userCount = await User.countDocuments();
+        if (userCount === 0) return null;
+
+        // Get 2 random users
+        const randomUsers = await User.aggregate([
+            { $sample: { size: 2 } },
+            { $project: { _id: 1 } }
+        ]);
+
+        return randomUsers.map(user => user._id.toString());
+
+    } catch (error) {
+        console.error('Error getting random exclusive users:', error);
+        return null;
+    }
 }
 
 function formatDuration(start, end) {

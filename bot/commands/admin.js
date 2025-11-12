@@ -564,7 +564,7 @@ async function showLeaderboard(interaction) {
                 {
                     name: '⭐ Top Reputation',
                     value: topReputation.map((u, idx) =>
-                        `${['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`} ${u.discord_name} - ${u.reputation_earned} pts`
+                        `${['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`} ${u.discord_name} - ${u.repuation_earned} pts`
                     ).join('\n'),
                     inline: true
                 }
