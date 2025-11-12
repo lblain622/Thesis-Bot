@@ -98,7 +98,6 @@ const volunerabilitySchema = new Schema({
     }]
 }, { timestamps: true });
 
-volunerabilitySchema.index({ vuln_identifier: 1 });
 volunerabilitySchema.index({ company_id: 1, isReported: 1 });
 volunerabilitySchema.index({ 'visibility.allowedUsers': 1 });
 volunerabilitySchema.index({ 'reported_by.user_id': 1 });

@@ -6,7 +6,7 @@ const {
     ButtonStyle,
     ComponentType,
 } = require('discord.js');
-const Platform = require('../../models/Platform');
+const Platform = require('../../dashboard/Platform');
 const Company = require('../../models/Company');
 const Reports = require('../../models/Reports');
 const User = require('../../models/Users');

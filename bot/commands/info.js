@@ -11,7 +11,7 @@ const Company = require('../../models/Company');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('vulninfo')
+        .setName('info')
         .setDescription('View detailed information about a vulnerability')
         .addStringOption(option =>
             option.setName('identifier')

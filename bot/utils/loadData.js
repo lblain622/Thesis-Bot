@@ -2,7 +2,7 @@
 require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
 const mongoose = require('mongoose');
 const Company = require('../../models/Company');
-const Platform = require('../../models/Platform');
+const Platform = require('../../dashboard/Platform');
 //Setup
 async function setup() {
     try {

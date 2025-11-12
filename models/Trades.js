@@ -1,3 +1,5 @@
+const { Schema, model } = require('mongoose');
+
 const tradeSchema = new Schema({
     giving_user_id: {
         type: Schema.Types.ObjectId,
