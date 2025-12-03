@@ -1,10 +1,178 @@
-
 const Vulnerability = require('../../models/Volunerabilies');
 const Company = require('../../models/Company');
 const Round = require('../../models/Round');
 const Report = require('../../models/Reports');
 const User = require('../../models/Users')
 const { EmbedBuilder } = require('discord.js');
+
+/**
+ * Generate vulnerabilities with new field structure (for data loading)
+ */
+async function generateVulnerabilitiesForCompanies(companies, countPerCompany = 3) {
+    try {
+        const vulnerabilities = [];
+
+        // Vulnerability types with weights
+        const vulnTypes = [
+            { type: 'XSS', weight: 0.3 },
+            { type: 'SQLi', weight: 0.2 },
+            { type: 'CSRF', weight: 0.15 },
+            { type: 'IDOR', weight: 0.2 },
+            { type: 'RCE', weight: 0.05 },
+            { type: 'Authentication', weight: 0.1 }
+        ];
+
+        // Severity distribution
+        const severities = [
+            { severity: 'Low', weight: 0.4 },
+            { severity: 'Medium', weight: 0.35 },
+            { severity: 'High', weight: 0.2 },
+            { severity: 'Critical', weight: 0.05 }
+        ];
+
+        companies.forEach((company, companyIndex) => {
+            for (let i = 0; i < countPerCompany; i++) {
+                // Weighted random type selection
+                const type = weightedRandom(vulnTypes);
+                
+                // Weighted random severity selection
+                const severityConfig = weightedRandom(severities);
+                
+                // Determine visibility (80% global, 20% exclusive)
+                const isGlobal = Math.random() < 0.8;
+
+                // Generate field data based on vulnerability type and severity
+                const fieldData = generateFieldData(type.type, severityConfig.severity, company);
+
+                const vulnerability = {
+                    company_id: company._id,
+                    vuln_identifier: `VULN-${company.name.toUpperCase().replace(/\s+/g, '')}-${(i + 1).toString().padStart(3, '0')}`,
+                    volun_type: type.type,
+                    name: `${type.type} in ${company.name}`,
+                    severity: severityConfig.severity,
+                    description: generateVulnDescription(type.type, company.name, severityConfig.severity),
+                    isReported: Math.random() < 0.3, // 30% reported
+                    isResolved: Math.random() < 0.2, // 20% resolved
+                    reported_date: new Date(),
+                    expiration_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+                    visibility: {
+                        isGlobal: isGlobal,
+                        allowedUsers: []
+                    },
+                    // New Y/N question fields
+                    networkAccess: fieldData.networkAccess,
+                    arbitraryCodeExecution: fieldData.arbitraryCodeExecution,
+                    userInteraction: fieldData.userInteraction,
+                    automatable: fieldData.automatable,
+                    privilegesRequired: fieldData.privilegesRequired,
+                    confidentialityImpact: fieldData.confidentialityImpact,
+                    integrityImpact: fieldData.integrityImpact,
+                    availabilityImpact: fieldData.availabilityImpact,
+                    recoveryPotential: fieldData.recoveryPotential
+                };
+
+                // Set resolved date if resolved
+                if (vulnerability.isResolved) {
+                    vulnerability.is_resolved_date = new Date(Date.now() - Math.random() * 15 * 24 * 60 * 60 * 1000);
+                }
+
+                vulnerabilities.push(vulnerability);
+            }
+        });
+
+        return vulnerabilities;
+
+    } catch (error) {
+        console.error('Error generating vulnerabilities:', error);
+        throw error;
+    }
+}
+
+/**
+ * Generate field data based on vulnerability type and severity
+ */
+function generateFieldData(vulnType, severity, company) {
+    const fieldData = {};
+    
+    // Network Access - Most vulnerabilities are network accessible
+    fieldData.networkAccess = {
+        answer: Math.random() < 0.8 ? 'Yes' : 'No',
+        visibleTo: []
+    };
+
+    // Arbitrary Code Execution - Only for RCE and some high severity vulns
+    fieldData.arbitraryCodeExecution = {
+        answer: (vulnType === 'RCE' || (severity === 'Critical' && Math.random() < 0.3)) ? 'Yes' : 'No',
+        visibleTo: []
+    };
+
+    // User Interaction - CSRF and some XSS require user interaction
+    fieldData.userInteraction = {
+        answer: (vulnType === 'CSRF' || (vulnType === 'XSS' && Math.random() < 0.6)) ? 'Yes' : 'No',
+        visibleTo: []
+    };
+
+    // Automatable - Most can be automated except those requiring user interaction
+    fieldData.automatable = {
+        answer: fieldData.userInteraction.answer === 'Yes' ? 'No' : 'Yes',
+        visibleTo: []
+    };
+
+    // Privileges Required - Based on severity and type
+    const privilegeOptions = ['None', 'Low', 'High'];
+    const privilegeWeights = {
+        'Critical': [0.1, 0.3, 0.6],  // High privileges more likely for critical
+        'High': [0.2, 0.5, 0.3],
+        'Medium': [0.4, 0.4, 0.2],
+        'Low': [0.6, 0.3, 0.1]        // No privileges more likely for low
+    };
+    fieldData.privilegesRequired = {
+        answer: weightedRandomChoice(privilegeOptions, privilegeWeights[severity]),
+        visibleTo: []
+    };
+
+    // CIA Impacts - Based on severity
+    const impactLevels = ['None', 'Low', 'Medium', 'High'];
+    const impactWeights = {
+        'Critical': [0.0, 0.0, 0.2, 0.8],
+        'High': [0.0, 0.1, 0.4, 0.5],
+        'Medium': [0.1, 0.3, 0.5, 0.1],
+        'Low': [0.4, 0.4, 0.2, 0.0]
+    };
+
+    fieldData.confidentialityImpact = {
+        answer: weightedRandomChoice(impactLevels, impactWeights[severity]),
+        visibleTo: []
+    };
+
+    fieldData.integrityImpact = {
+        answer: weightedRandomChoice(impactLevels, impactWeights[severity]),
+        visibleTo: []
+    };
+
+    fieldData.availabilityImpact = {
+        answer: weightedRandomChoice(impactLevels, impactWeights[severity]),
+        visibleTo: []
+    };
+
+    // Recovery Potential - Based on impact levels
+    const recoveryOptions = ['Automatic', 'User', 'Irrecoverable'];
+    let recoveryWeights;
+    if (fieldData.availabilityImpact.answer === 'High') {
+        recoveryWeights = [0.1, 0.3, 0.6]; // More likely irrecoverable
+    } else if (fieldData.availabilityImpact.answer === 'Medium') {
+        recoveryWeights = [0.2, 0.5, 0.3];
+    } else {
+        recoveryWeights = [0.6, 0.3, 0.1]; // More likely automatic
+    }
+    
+    fieldData.recoveryPotential = {
+        answer: weightedRandomChoice(recoveryOptions, recoveryWeights),
+        visibleTo: []
+    };
+
+    return fieldData;
+}
 
 /**
  * Generate daily vulnerabilities for a new round
@@ -30,68 +198,19 @@ async function generateDailyVulnerabilities() {
             companies_involved: companies.map(c => c._id)
         });
 
-        const vulnerabilities = [];
-        const vulnCount = Math.min(companies.length * 2, 50); // Max 50 vulnerabilities
+        // Generate vulnerabilities for this round
+        const vulnerabilities = await generateVulnerabilitiesForCompanies(companies, 2); // 2 per company for daily rounds
 
-        // Vulnerability types with weights
-        const vulnTypes = [
-            { type: 'XSS', weight: 0.3 },
-            { type: 'SQLi', weight: 0.2 },
-            { type: 'CSRF', weight: 0.15 },
-            { type: 'IDOR', weight: 0.2 },
-            { type: 'RCE', weight: 0.05 },
-            { type: 'Authentication', weight: 0.1 }
-        ];
-
-        // Severity distribution
-        const severities = [
-            { severity: 'Low', weight: 0.4, cvssRange: [0.1, 3.9] },
-            { severity: 'Medium', weight: 0.35, cvssRange: [4.0, 6.9] },
-            { severity: 'High', weight: 0.2, cvssRange: [7.0, 8.9] },
-            { severity: 'Critical', weight: 0.05, cvssRange: [9.0, 10.0] }
-        ];
-
-        for (let i = 0; i < vulnCount; i++) {
-            const company = companies[Math.floor(Math.random() * companies.length)];
-
-            // Weighted random type selection
-            const type = weightedRandom(vulnTypes);
-
-            // Weighted random severity selection
-            const severityConfig = weightedRandom(severities);
-            const cvssScore = calculateRandomCVSS(severityConfig.cvssRange);
-
-            // Determine visibility (80% global, 20% exclusive)
-            const isGlobal = Math.random() < 0.8;
-
-            const vulnerability = await Vulnerability.create({
-                company_id: company._id,
-                vuln_identifier: generateVulnIdentifier(type, i + 1),
-                volun_type: type.type,
-                name: `${type.type} in ${company.name}`,
-                cvss_score: cvssScore,
-                severity: severityConfig.severity,
-                description: generateVulnDescription(type.type, company.name),
-                isReported: false,
-                isResolved: false,
-                round_id: round._id,
-                visibility: {
-                    isGlobal: isGlobal,
-                    allowedUsers: isGlobal ? [] : await getRandomExclusiveUser()
-                },
-                expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-            });
-
-            vulnerabilities.push(vulnerability);
-        }
+        // Insert vulnerabilities
+        const createdVulns = await Vulnerability.insertMany(vulnerabilities);
 
         // Update round with vulnerability count
         await Round.findByIdAndUpdate(round._id, {
-            vulnerabilities_generated: vulnerabilities.length
+            vulnerabilities_generated: createdVulns.length
         });
 
-        console.log(`Generated ${vulnerabilities.length} vulnerabilities for round ${roundNumber}`);
-        return vulnerabilities;
+        console.log(`Generated ${createdVulns.length} vulnerabilities for round ${roundNumber}`);
+        return createdVulns;
 
     } catch (error) {
         console.error('Error generating daily vulnerabilities:', error);
@@ -203,7 +322,6 @@ async function announceNewRound(client, channelId, vulnerabilities) {
             .addFields(
                 { name: 'New Vulnerabilities', value: `${vulnerabilities.length}`, inline: true },
                 { name: 'Global', value: `${globalVulns.length}`, inline: true },
-//                { name: 'Exclusive', value: `${exclusiveVulns.length}`, inline: true },
                 { name: 'Round Ends', value: `<t:${Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000)}:R>`, inline: false }
             )
             .setFooter({ text: `Use /report to submit your findings!` })
@@ -270,12 +388,20 @@ function weightedRandom(options) {
     return options[0];
 }
 
-function calculateRandomCVSS(range) {
-    const [min, max] = range;
-    return Math.round((Math.random() * (max - min) + min) * 10) / 10;
+function weightedRandomChoice(choices, weights) {
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+    let random = Math.random() * totalWeight;
+
+    for (let i = 0; i < choices.length; i++) {
+        random -= weights[i];
+        if (random <= 0) {
+            return choices[i];
+        }
+    }
+    return choices[0];
 }
 
-function generateVulnIdentifier(type, index) {
+function generateVulnIdentifier(type, companyName, index) {
     const prefixes = {
         'XSS': 'XSS',
         'SQLi': 'SQLI',
@@ -286,38 +412,19 @@ function generateVulnIdentifier(type, index) {
     };
     const prefix = prefixes[type] || 'VULN';
     const timestamp = Date.now().toString().slice(-4);
-    return `${prefix}-${timestamp}-${index}`;
+    return `${prefix}-${companyName.toUpperCase().replace(/\s+/g, '')}-${(index + 1).toString().padStart(3, '0')}`;
 }
 
-function generateVulnDescription(type, companyName) {
+function generateVulnDescription(type, companyName, severity) {
     const descriptions = {
-        'XSS': `Cross-site scripting vulnerability found in ${companyName}'s web application allowing arbitrary script execution.`,
-        'SQLi': `SQL injection vulnerability in ${companyName}'s database layer potentially exposing sensitive information.`,
-        'CSRF': `Cross-site request forgery vulnerability in ${companyName}'s authentication system.`,
-        'IDOR': `Insecure direct object reference allowing unauthorized access to user data in ${companyName}.`,
-        'RCE': `Remote code execution vulnerability in ${companyName}'s server infrastructure.`,
-        'Authentication': `Authentication bypass vulnerability in ${companyName}'s login system.`
+        'XSS': `${severity} severity cross-site scripting vulnerability found in ${companyName}'s web application.`,
+        'SQLi': `${severity} severity SQL injection vulnerability in ${companyName}'s database layer.`,
+        'CSRF': `${severity} severity cross-site request forgery vulnerability in ${companyName}'s authentication system.`,
+        'IDOR': `${severity} severity insecure direct object reference in ${companyName}'s access controls.`,
+        'RCE': `${severity} severity remote code execution vulnerability in ${companyName}'s infrastructure.`,
+        'Authentication': `${severity} severity authentication bypass vulnerability in ${companyName}'s security system.`
     };
-    return descriptions[type] || `Security vulnerability discovered in ${companyName}.`;
-}
-
-async function getRandomExclusiveUser() {
-    try {
-        const userCount = await User.countDocuments();
-        if (userCount === 0) return null;
-
-        // Get 2 random users
-        const randomUsers = await User.aggregate([
-            { $sample: { size: 2 } },
-            { $project: { _id: 1 } }
-        ]);
-
-        return randomUsers.map(user => user._id.toString());
-
-    } catch (error) {
-        console.error('Error getting random exclusive users:', error);
-        return null;
-    }
+    return descriptions[type] || `${severity} severity security vulnerability discovered in ${companyName}.`;
 }
 
 function formatDuration(start, end) {
@@ -355,6 +462,7 @@ async function initializeRoundSystem() {
 
 module.exports = {
     generateDailyVulnerabilities,
+    generateVulnerabilitiesForCompanies, 
     endRound,
     announceNewRound,
     getCurrentRound,

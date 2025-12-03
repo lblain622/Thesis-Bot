@@ -3,14 +3,20 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env'
 const mongoose = require('mongoose');
 const Company = require('../../models/Company');
 const Platform = require('../../models/Platform');
-const Volunerabilies = require('../../models/Volunerabilies'); // Add this import
-
-//Setup
+const Volunerabilies = require('../../models/Volunerabilies');
+const Reports = require('../../models/Reports');
+const CompanyOffers = require('../../models/CompanyOffers');
+const Trades = require('../../models/Trades');
+const { generateVulnerabilitiesForCompanies } = require('../utils/roundSystem');// Setup
 async function setup() {
     try {
         await mongoose.connect(process.env.MONGO_URI);
         console.log('MongoDB connected');
 
+        // Clear all collections
+        console.log('Clearing existing data...');
+        await clearCollections();
+        
         // Find or create platforms
         let ultimatumPlatform = await Platform.findOne({ name: 'Ultimatum Test Platform' });
         let dictatorPlatform = await Platform.findOne({ name: 'Dictator Test Platform' });
@@ -200,48 +206,29 @@ async function setup() {
             }
         ];
 
-        // Update or create companies
+        // Create companies
         const companies = [];
         for (const config of companyConfigs) {
-            const existing = await Company.findOne({
+            const company = await Company.create({
                 name: config.name,
-                platform_id: config.platform
+                description: config.description,
+                platform_id: config.platform,
+                product_type: config.product_type,
+                preferred_vulns: config.preferred_vulns,
+                reputation_tiers: config.reputation_tiers,
+                variants: [],
+                bounty_tiers: []
             });
-
-            let company;
-            if (existing) {
-                await Company.updateOne(
-                    { _id: existing._id },
-                    {
-                        $set: {
-                            product_type: config.product_type,
-                            preferred_vulns: config.preferred_vulns,
-                            reputation_tiers: config.reputation_tiers,
-                            description: config.description
-                        }
-                    }
-                );
-                company = existing;
-                console.log(`✓ Updated ${config.name}`);
-            } else {
-                company = await Company.create({
-                    name: config.name,
-                    description: config.description,
-                    platform_id: config.platform,
-                    product_type: config.product_type,
-                    preferred_vulns: config.preferred_vulns,
-                    reputation_tiers: config.reputation_tiers,
-                    variants: [],
-                    bounty_tiers: []
-                });
-                console.log(`✓ Created ${config.name}`);
-            }
             companies.push(company);
+            console.log(`✓ Created ${config.name}`);
         }
 
-        // Add vulnerabilities for each company
-        console.log('\nAdding vulnerabilities...');
-        await addVulnerabilities(companies);
+        // Add vulnerabilities for each company with new field structure
+        console.log('\nAdding vulnerabilities with new field structure...');
+        await generateVulnerabilitiesForCompanies(companies);
+
+        console.log('\n✅ Data load completed successfully!');
+        console.log(`📊 Created ${companies.length} companies with vulnerabilities`);
 
     } catch (err) {
         console.error('Error:', err);
@@ -250,91 +237,30 @@ async function setup() {
     }
 }
 
-// Function to add vulnerabilities without user-related fields
-async function addVulnerabilities(companies) {
+// Function to clear all collections
+async function clearCollections() {
     try {
-        // Clear existing vulnerabilities
+        await Company.deleteMany({});
+        console.log(' Cleared Company collection');
+        
         await Volunerabilies.deleteMany({});
-        console.log('Cleared existing vulnerabilities');
-
-        const vulnerabilities = [];
-
-        companies.forEach((company, index) => {
-            const companyVulns = [
-                {
-                    company_id: company._id,
-                    vuln_identifier: `VULN-${company.name.toUpperCase().replace(/\s+/g, '')}-001`,
-                    volun_type: company.preferred_vulns[0] || 'XSS',
-                    name: `${company.preferred_vulns[0] || 'XSS'} Vulnerability in ${company.product_type}`,
-                    description: `Critical ${company.preferred_vulns[0] || 'XSS'} vulnerability discovered in ${company.name}'s ${company.product_type} system.`,
-                    cvss_score: 8.5 + (index * 0.2),
-                    cvss_vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H',
-                    severity: 'Critical',
-                    isReported: true,
-                    isResolved: false,
-                    reported_date: new Date(),
-                    expiration_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                    visibility: {
-                        isGlobal: true,
-                        allowedUsers: []
-                    }
-                },
-                {
-                    company_id: company._id,
-                    vuln_identifier: `VULN-${company.name.toUpperCase().replace(/\s+/g, '')}-002`,
-                    volun_type: company.preferred_vulns[1] || 'SQLi',
-                    name: `${company.preferred_vulns[1] || 'SQLi'} Security Flaw`,
-                    description: ` ${company.preferred_vulns[1] || 'SQLi'} vulnerability affecting ${company.name}'s services.`,
-                    cvss_score: 6.2 + (index * 0.1),
-                    cvss_vector: 'CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N',
-                    severity: 'Medium',
-                    isReported: true,
-                    isResolved: true,
-                    is_resolved_date: new Date(),
-                    reported_date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
-                    expiration_date: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000),
-                    visibility: {
-                        isGlobal: false,
-                        allowedUsers: []
-                    }
-                },
-                {
-                    company_id: company._id,
-                    vuln_identifier: `VULN-${company.name.toUpperCase().replace(/\s+/g, '')}-003`,
-                    volun_type: company.preferred_vulns[2] || 'CSRF',
-                    name: `${company.preferred_vulns[2] || 'CSRF'} Protection Bypass`,
-                    description: ` ${company.preferred_vulns[2] || 'CSRF'} issue requiring user interaction.`,
-                    cvss_score: 4.5 + (index * 0.1),
-                    cvss_vector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N',
-                    severity: 'Low',
-                    isReported: false,
-                    isResolved: false,
-                    reported_date: new Date(),
-                    expiration_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
-                    visibility: {
-                        isGlobal: true,
-                        allowedUsers: []
-                    }
-                }
-            ];
-
-            vulnerabilities.push(...companyVulns);
-        });
-
-        // Insert all vulnerabilities
-        const result = await Volunerabilies.insertMany(vulnerabilities);
-        console.log(`✓ Successfully added ${result.length} vulnerabilities across ${companies.length} companies`);
-
-        // Log summary
-        companies.forEach(company => {
-            const companyVulns = vulnerabilities.filter(v => v.company_id.equals(company._id));
-            console.log(`  - ${company.name}: ${companyVulns.length} vulnerabilities`);
-        });
-
+        console.log(' Cleared Volunerabilies collection');
+        
+        await Reports.deleteMany({});
+        console.log(' Cleared Reports collection');
+        
+        await CompanyOffers.deleteMany({});
+        console.log('Cleared CompanyOffers collection');
+        
+        await Trades.deleteMany({});
+        console.log(' Cleared Trades collection');
+        
+        console.log('All collections cleared successfully\n');
     } catch (error) {
-        console.error('Error adding vulnerabilities:', error);
+        console.error('Error clearing collections:', error);
         throw error;
     }
 }
+
 
 setup();

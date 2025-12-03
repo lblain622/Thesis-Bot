@@ -284,7 +284,7 @@ async function startRound(interaction) {
         // Generate vulnerabilities
         const vulnerabilities = await generateDailyVulnerabilities();
 
-        // Announce new round
+        
         await announceNewRound(interaction.client, channel.id, vulnerabilities);
 
         await interaction.editReply({

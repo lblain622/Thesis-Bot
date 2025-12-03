@@ -42,7 +42,7 @@ module.exports = {
 
                 if (!vulnerability) {
                     return interaction.editReply({
-                        content: ` Vulnerability "${identifier}" not found.`,
+                        content: `Vulnerability "${identifier}" not found.`,
                         flags: 64
                     });
                 }
@@ -54,7 +54,7 @@ module.exports = {
 
                 if (!hasAccess) {
                     return interaction.editReply({
-                        content: ` You don't have access to this vulnerability.`,
+                        content: `You don't have access to this vulnerability.`,
                         flags: 64
                     });
                 }
@@ -106,7 +106,7 @@ module.exports = {
                 await response.update({ content: 'Loading vulnerability details...', components: [] });
             }
 
-            // Build detailed embed
+            // Build detailed embed with field visibility
             const embed = new EmbedBuilder()
                 .setTitle(`${vulnerability.vuln_identifier}`)
                 .setColor(getSeverityColor(vulnerability.severity))
@@ -114,96 +114,46 @@ module.exports = {
 
             // Basic Information
             embed.addFields({
-                name: '? Basic Information',
+                name: '📋 Basic Information',
                 value:
                     `**Company:** ${vulnerability.company_id?.name || 'Unknown'}\n` +
                     `**Type:** ${vulnerability.volun_type}\n` +
-                    `**Severity:** ${vulnerability.severity}\n` +
-                    `**CVSS Score:** ${vulnerability.cvss_score || 'N/A'}\n` +
-                    `**Status:** ${vulnerability.isResolved ? 'Resolved' : vulnerability.isReported ? ' Reported' : 'Unreported'}`
+                    `**Status:** ${vulnerability.isResolved ? '✅ Resolved' : vulnerability.isReported ? '📤 Reported' : '🕒 Unreported'}`
             });
 
-            // Discovery Information
-            const discoverers = vulnerability.discovered_by || [];
-            if (discoverers.length > 0) {
-                const discoverersList = discoverers.map((d, idx) => {
-                    const user = d.user_id;
-                    const isFirst = idx === 0;
-                    return `${isFirst ? '🏆 ' : ''}${user?.discord_name || 'Unknown'} (${new Date(d.discovered_at).toLocaleDateString()})`;
-                }).join('\n');
-
+            // Field Analysis Section
+            const fieldAnalysis = await buildFieldAnalysis(vulnerability, user._id);
+            if (fieldAnalysis) {
                 embed.addFields({
-                    name: 'Discovered By',
-                    value: discoverersList || 'Unknown',
-                    inline: true
+                    name: '🔍 Field Analysis',
+                    value: fieldAnalysis
                 });
             }
 
-            // POC Information
-            const pocCount = vulnerability.pocs_submitted?.length || 0;
-            if (pocCount > 0) {
-                const pocList = vulnerability.pocs_submitted.slice(0, 3).map(poc => {
-                    const user = poc.user_id;
-                    return `${user?.discord_name || 'Unknown'} (${new Date(poc.submitted_at).toLocaleDateString()})`;
-                }).join('\n');
-
-                embed.addFields({
-                    name: `POCs Submitted (${pocCount})`,
-                    value: pocList + (pocCount > 3 ? `\n...and ${pocCount - 3} more` : ''),
-                    inline: true
-                });
-            }
 
             // Report Information
             const reporters = vulnerability.reported_by || [];
             if (reporters.length > 0) {
                 const reportersList = reporters.slice(0, 3).map(r => {
-                    const user = r.user_id;
-                    const isFirst = vulnerability.first_reporter?.toString() === user?._id.toString();
-                    return `${isFirst ? '🏆 ' : ''}${user?.discord_name || 'Unknown'} (${new Date(r.reported_at).toLocaleDateString()})`;
+                    const reporterUser = r.user_id;
+                    const isFirst = vulnerability.first_reporter?.toString() === reporterUser?._id.toString();
+                    return `${isFirst ? '🏆 ' : ''}${reporterUser?.username || 'Unknown'} (${new Date(r.reported_at).toLocaleDateString()})`;
                 }).join('\n');
 
                 embed.addFields({
-                    name: `Reported By (${reporters.length})`,
+                    name: `📤 Reported By (${reporters.length})`,
                     value: reportersList + (reporters.length > 3 ? `\n...and ${reporters.length - 3} more` : '')
                 });
             }
 
             // Timeline
             const timeline = [];
-            if (vulnerability.first_reported_at) {
-                timeline.push(`**First Report:** ${new Date(vulnerability.first_reported_at).toLocaleDateString()}`);
-            }
-            if (vulnerability.reported_date) {
-                timeline.push(`**Last Report:** ${new Date(vulnerability.reported_date).toLocaleDateString()}`);
-            }
+         
             if (vulnerability.is_resolved_date) {
                 timeline.push(`**Resolved:** ${new Date(vulnerability.is_resolved_date).toLocaleDateString()}`);
             }
 
-            if (timeline.length > 0) {
-                embed.addFields({
-                    name: '📅 Timeline',
-                    value: timeline.join('\n')
-                });
-            }
-
-            // Access Information
-            const accessCount = vulnerability.visibility.allowedUsers?.length || 0;
-            embed.addFields({
-                name: ' Access',
-                value: vulnerability.visibility.isGlobal
-                    ? 'Global (Everyone can see)'
-                    : ` Private (${accessCount} user${accessCount !== 1 ? 's' : ''} have access)`
-            });
-
-            // CVSS Vector if available
-            if (vulnerability.cvss_vector) {
-                embed.addFields({
-                    name: ' CVSS Vector',
-                    value: `\`${vulnerability.cvss_vector}\``
-                });
-            }
+      
 
             embed.setFooter({ text: `Vulnerability ID: ${vulnerability._id}` });
             embed.setTimestamp(vulnerability.createdAt);
@@ -222,6 +172,111 @@ module.exports = {
         }
     },
 };
+
+async function buildFieldAnalysis(vulnerability, userId) {
+    const fields = [];
+    
+    // Check visibility for each field and build display
+    const fieldDefinitions = [
+        {
+            key: 'networkAccess',
+            question: 'Network Access',
+            description: 'Can this vulnerability be exploited over a network?'
+        },
+        {
+            key: 'arbitraryCodeExecution',
+            question: 'Arbitrary Code Execution',
+            description: 'Does this vulnerability lead to untrusted code execution?'
+        },
+        {
+            key: 'userInteraction',
+            question: 'User Interaction',
+            description: 'Does the exploit require victim action?'
+        },
+        {
+            key: 'automatable',
+            question: 'Exploit Automation',
+            description: 'Can exploitation be automated across targets?'
+        },
+        {
+            key: 'privilegesRequired',
+            question: 'Privileges Required',
+            description: 'What level of privileges are needed?'
+        },
+        {
+            key: 'confidentialityImpact',
+            question: 'Confidentiality Impact',
+            description: 'Impact on data confidentiality'
+        },
+        {
+            key: 'integrityImpact',
+            question: 'Integrity Impact',
+            description: 'Impact on data integrity'
+        },
+        {
+            key: 'availabilityImpact',
+            question: 'Availability Impact',
+            description: 'Impact on system availability'
+        },
+        {
+            key: 'recoveryPotential',
+            question: 'Recovery Potential',
+            description: 'How easily can the system recover?'
+        }
+    ];
+
+    for (const field of fieldDefinitions) {
+        const fieldData = vulnerability[field.key];
+        if (fieldData) {
+            const canSeeField = fieldData.visibleTo?.some(
+                user => user.toString() === userId.toString()
+            ) || vulnerability.visibility.isGlobal;
+
+            if (canSeeField && fieldData.answer && fieldData.answer !== 'Unknown') {
+                // User can see the actual answer
+                let displayValue;
+                
+                // Format the answer based on field type
+                if (field.key === 'privilegesRequired') {
+                    const privilegeMap = {
+                        'None': '🟢 None',
+                        'Low': '🟡 Low',
+                        'High': '🔴 High'
+                    };
+                    displayValue = privilegeMap[fieldData.answer] || fieldData.answer;
+                } else if (field.key === 'recoveryPotential') {
+                    const recoveryMap = {
+                        'Automatic': '🟢 Automatic',
+                        'User': '🟡 User Intervention',
+                        'Irrecoverable': '🔴 Irrecoverable'
+                    };
+                    displayValue = recoveryMap[fieldData.answer] || fieldData.answer;
+                } else if (['confidentialityImpact', 'integrityImpact', 'availabilityImpact'].includes(field.key)) {
+                    const impactMap = {
+                        'None': '⚪ None',
+                        'Low': '🟡 Low',
+                        'Medium': '🟠 Medium',
+                        'High': '🔴 High'
+                    };
+                    displayValue = impactMap[fieldData.answer] || fieldData.answer;
+                } else {
+                    // Y/N fields
+                    displayValue = fieldData.answer === 'Yes' ? '✅ Yes' : '❌ No';
+                }
+                
+                fields.push(`**${field.question}:** ${displayValue}`);
+            } else {
+                // User cannot see this field or answer is unknown
+                fields.push(`**${field.question}:** 🔒 Unknown`);
+            }
+        } else {
+            // Field data doesn't exist
+            fields.push(`**${field.question}:** 🔒 Unknown`);
+        }
+    }
+
+    return fields.length > 0 ? fields.join('\n') : null;
+}
 
 function getSeverityColor(severity) {
     const colors = {

@@ -21,23 +21,47 @@ const volunerabilitySchema = new Schema({
     name: String,
     description: String,
 
-    cvss_score: {
-        type: Number,
-        min: 0,
-        max: 10
+    
+    networkAccess: {
+        answer: { type: String, enum: ['Yes', 'No'], default: 'Unknown' },
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
-    cvss_vector: String,
-    severity: {
-        type: String,
-        enum: ['None', 'Low', 'Medium', 'High', 'Critical'],
-        required: true
+    arbitraryCodeExecution: {
+        answer: { type: String, enum: ['Yes', 'No'], default: 'Unknown' },
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
+    },
+    userInteraction: {
+        answer: { type: String, enum: ['Yes', 'No'], default: 'Unknown' },
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
+    },
+    automatable: {
+        answer: { type: String, enum: ['Yes', 'No'], default: 'Unknown' },
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
+    },
+    confidentialityImpact: {
+        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'], default: 'Unknown' },
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
+    },
+    integrityImpact: {
+        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'], default: 'Unknown' },
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
+    },
+    availabilityImpact: {
+        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'], default: 'Unknown' },
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
+    },
+    privilegesRequired: {
+        answer: { type: String, enum: ['None', 'Low', 'High'], default: 'Unknown' },
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
+    },
+    recoveryPotential: {
+        answer: { type: String, enum: ['Automatic', 'User', 'Irrecoverable'], default: 'Unknown' },
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
 
+    
     pocs_submitted: [{
-        user_id: {
-            type: Schema.Types.ObjectId,
-            ref: 'Users'
-        },
+        user_id: { type: Schema.Types.ObjectId, ref: 'Users' },
         submitted_at: Date,
         poc_data: {
             steps: [String],
@@ -47,59 +71,28 @@ const volunerabilitySchema = new Schema({
     }],
 
     reported_by: [{
-        user_id: {
-            type: Schema.Types.ObjectId,
-            ref: 'Users'
-        },
+        user_id: { type: Schema.Types.ObjectId, ref: 'Users' },
         reported_at: Date,
-        report_id: {
-            type: Schema.Types.ObjectId,
-            ref: 'Report'
-        }
+        report_id: { type: Schema.Types.ObjectId, ref: 'Report' }
     }],
 
-    first_reporter: {
-        type: Schema.Types.ObjectId,
-        ref: 'Users'
-    },
+    first_reporter: { type: Schema.Types.ObjectId, ref: 'Users' },
     first_reported_at: Date,
-    isReported: {
-        type: Boolean,
-        default: false
-    },
-    isResolved: {
-        type: Boolean,
-        default: false
-    },
+    isReported: { type: Boolean, default: false },
+    isResolved: { type: Boolean, default: false },
     is_resolved_date: Date,
     reported_date: Date,
     expiration_date: Date,
 
     visibility: {
-        isGlobal: {
-            type: Boolean,
-            default: false
-        },
-        allowedUsers: [{
-            type: Schema.Types.ObjectId,
-            ref: 'Users'
-        }]
+        isGlobal: { type: Boolean, default: false },
+        allowedUsers: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
 
     discovered_by: [{
-        user_id: {
-            type: Schema.Types.ObjectId,
-            ref: 'Users'
-        },
-        discovered_at: {
-            type: Date,
-            default: Date.now
-        }
+        user_id: { type: Schema.Types.ObjectId, ref: 'Users' },
+        discovered_at: { type: Date, default: Date.now }
     }]
 }, { timestamps: true });
-
-volunerabilitySchema.index({ company_id: 1, isReported: 1 });
-volunerabilitySchema.index({ 'visibility.allowedUsers': 1 });
-volunerabilitySchema.index({ 'reported_by.user_id': 1 });
 
 module.exports = model('Volunerabilies', volunerabilitySchema);
