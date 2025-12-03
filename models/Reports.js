@@ -1,33 +1,71 @@
 const { Schema, model } = require('mongoose');
 
+
+
 const reportSchema = new Schema({
     user_id: {
         type: Schema.Types.ObjectId,
-        ref: 'User'
+        ref: 'Users',
+        required: true
     },
     platform_id: {
         type: Schema.Types.ObjectId,
-        ref: 'Platform'
+        ref: 'Platform',
+        required: true
     },
     company_id: {
         type: Schema.Types.ObjectId,
-        ref: 'Company'
+        ref: 'Company',
+        required: true
     },
-    vulnerability_id: { type: Schema.Types.ObjectId, ref: 'Volunerabilies' },
-
+    vulnerability_id: {
+        type: Schema.Types.ObjectId,
+        ref: 'Volunerabilies'
+    },
+    // Report can reference existing vuln or create new one
+    vuln_identifier: String,
     volunerablity_sev: {
         type: String,
-        enum: ['Low', 'Medium', 'High', 'Critical'],
+        enum: ['None', 'Low', 'Medium', 'High', 'Critical'],
         required: true
+    },
+    // CVSS information
+    cvss_score: Number,
+    cvss_vector: String,
+    // HackerOne-style fields
+    report_title: String,
+    report_description: String,
+    impact_description: String,
+    poc_steps: [String],
+    // Is this a POC-only submission?
+    is_poc_only: {
+        type: Boolean,
+        default: false
     },
     status: {
         type: String,
-        enum: ['open', 'in_progress', 'resolved', 'closed'],
+        enum: ['open', 'in_progress', 'resolved', 'closed', 'poc_submitted'],
         default: 'open'
     },
     submitted_at: {
-        type: String
+        type: Date,
+        default: Date.now
+    },
+
+    reputation_bonus: {
+        type: Number,
+        default: 0
+    },
+    preferred_vuln_bonus: {
+        type: Number,
+        default: 0
+    },
+
+    offered_amount: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
+
 
 module.exports = model('Report', reportSchema);

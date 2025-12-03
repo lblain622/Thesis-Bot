@@ -10,55 +10,78 @@ const Platform = require('../../models/Platform');
 const Company = require('../../models/Company');
 const Reports = require('../../models/Reports');
 const User = require('../../models/Users');
+const Vulnerability = require('../../models/Volunerabilies');
 const generateOffer = require('../utils/generateOffer');
-const generateDictatorOffer = require('../utils/generateDicOffer')
+const generateDictatorOffer = require('../utils/generateDicOffer');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('report')
-        .setDescription('Submit a vulnerability report to a company'),
+        .setDescription('Submit a vulnerability report or POC'),
 
     async execute(interaction) {
         await interaction.deferReply({ flags: 64 });
 
         try {
-            //TODO: ADD New Users UPSERT
-            const platformRes = await selectPlatform(interaction);
-            const platformId = platformRes.id;
+
+            const reportType = await selectReportType(interaction);
+            if (!reportType) return;
+
+            const platformId = await selectPlatform(interaction);
             if (!platformId) return;
 
             const companyId = await selectCompany(interaction, platformId);
-            console.log(companyId)
             if (!companyId) return;
-            //TODO: Hide severity
-            const severity = await selectSeverity(interaction);
-            if (!severity) return;
 
-            // Get platform and company names for summary
-            const platform = await Platform.findById(platformId);
-            const company = await Company.findById(companyId);
+            const vulnerabilityId = await selectVulnerability(interaction, companyId);
+            if (!vulnerabilityId) return;
 
-            const submitted = await showSummary(interaction, platform, company, severity);
-            if (!submitted) return;
+            const confirmed = await confirmSubmission(
+                interaction,
+                platformId,
+                companyId,
+                vulnerabilityId,
+                reportType
+            );
+            if (!confirmed) return;
 
+            // Step 5: Save report
             const report = await saveReport(
                 interaction,
-                platform.id,
+                platformId,
                 companyId,
-                severity,
-                "No description provided" // Default description
+                vulnerabilityId,
+                reportType === 'poc'
             );
 
+            const typeLabel = reportType === 'poc' ? 'POC' : 'Report';
             await interaction.followUp({
-                content: `**Report Submitted Successfully!**\n\n**Platform:** ${platform.name}\n**Company:** ${company.name}\n**Severity:** ${severity.toUpperCase()}\n**Report ID:** \`${report._id}\``,
+                content: `**${typeLabel} Submitted Successfully!**\n\n` +
+                    `**Report ID:** \`${report._id}\`\n` +
+                    `Your ${typeLabel.toLowerCase()} has been submitted to the company.`,
                 flags: 64,
             });
 
-            if (platformRes.name === 'Ultimatum Test Platform') {
-                await generateOffer(interaction.client, report, interaction.user);
-            } else if (platformRes.name === 'Dictator Test Platform') {
-                await generateDictatorOffer(interaction.client, report, interaction.user);
-            }
+            // Generate offer after delay
+//            const offerDelayMs = process.env.OFFER_DELAY_MINUTES
+//                ? parseInt(process.env.OFFER_DELAY_MINUTES) * 60 * 1000
+//                : 5 * 60 * 1000;
+const offerDelayMs = 30*1000; // 30 seconds
+
+            setTimeout(async () => {
+                try {
+                    const platform = await Platform.findById(platformId);
+                    await Company.findById(companyId);
+                    if (platform.name.includes('Ultimatum')) {
+                        await generateOffer(interaction.client, report, interaction.user);
+                    } else if (platform.name.includes('Dictator')) {
+                        await generateDictatorOffer(interaction.client, report, interaction.user);
+                    }
+                } catch (err) {
+                    console.error('Error generating delayed offer:', err);
+                }
+            }, offerDelayMs);
+
         } catch (err) {
             console.error(err);
             await interaction.followUp({
@@ -68,6 +91,74 @@ module.exports = {
         }
     },
 };
+
+async function waitForSelect(message, userId, allowedCustomIds) {
+    try {
+        return await message.awaitMessageComponent({
+            componentType: ComponentType.StringSelect,
+            filter: i => i.user.id === userId && allowedCustomIds.includes(i.customId),
+            time: 300_000
+        });
+    } catch (err) {
+        return null;
+    }
+}
+
+async function waitForButton(message, userId, allowedCustomIds) {
+    if (typeof allowedCustomIds === 'string') {
+        allowedCustomIds = [allowedCustomIds];
+    }
+
+    try {
+        return await message.awaitMessageComponent({
+            componentType: ComponentType.Button,
+            filter: i => i.user.id === userId && allowedCustomIds.includes(i.customId),
+            time: 300_000
+        });
+    } catch (err) {
+        return null;
+    }
+}
+
+async function selectReportType(interaction) {
+    const buttons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('full_report')
+            .setLabel('Full Report')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId('poc_only')
+            .setLabel('POC Only')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId('close')
+            .setLabel('Cancel')
+            .setStyle(ButtonStyle.Danger),
+    );
+
+    const message = await interaction.editReply({
+        content: '**Select Report Type:**\n\n' +
+            '📋 **Full Report** - Complete vulnerability report\n' +
+            '🔬 **POC Only** - Just proof-of-concept for a vulnerability',
+        components: [buttons],
+        fetchReply: true
+    });
+
+    const response = await waitForButton(message, interaction.user.id, ['full_report', 'poc_only', 'close']);
+    if (!response) return null;
+
+    if (response.customId === 'close') {
+        await response.update({ content: 'Report canceled.', components: [] });
+        return null;
+    }
+
+    await response.update({
+        content: `Selected: **${response.customId === 'full_report' ? 'Full Report' : 'POC Only'}**`,
+        components: []
+    });
+
+    return response.customId === 'full_report' ? 'full' : 'poc';
+}
 
 async function selectPlatform(interaction) {
     const platforms = await Platform.find({});
@@ -96,7 +187,7 @@ async function selectPlatform(interaction) {
     );
 
     const message = await interaction.editReply({
-        content: 'Select a Platform to report under:',
+        content: 'Select a Platform:',
         components: [row, buttons],
         fetchReply: true
     });
@@ -108,11 +199,9 @@ async function selectPlatform(interaction) {
         await response.update({ content: 'Report canceled.', components: [] });
         return null;
     }
-    const selectedId = response.values[0];
-    const selectedPlatform = platforms.find((p) => p._id.toString() === selectedId);
 
     await response.update({ content: 'Platform selected.', components: [] });
-    return {id:selectedId,name:selectedPlatform.name};
+    return response.values[0];
 }
 
 async function selectCompany(interaction, platformId) {
@@ -168,21 +257,33 @@ async function selectCompany(interaction, platformId) {
     }
 
     await response.update({ content: 'Company selected.', components: [] });
-    return response.values[0];;
+    return response.values[0];
 }
 
-async function selectSeverity(interaction) {
-    const severities = [
-        { label: 'Low', value: 'Low', description: 'Minor issue' },
-        { label: 'Medium', value: 'Medium', description: 'Moderate issue' },
-        { label: 'High', value: 'High', description: 'Severe issue' },
-        { label: 'Critical', value: 'Critical', description: 'Extremely severe' },
-    ];
+async function selectVulnerability(interaction, companyId) {
+    const vulnerabilities = await Vulnerability.find({
+        company_id: companyId,
+        isResolved: false
+    });
+
+    if (!vulnerabilities.length) {
+        await interaction.followUp({
+            content: 'No vulnerabilities found for this company.',
+            flags: 64,
+        });
+        return null;
+    }
 
     const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('select_severity')
-        .setPlaceholder('Select Severity Level')
-        .addOptions(severities);
+        .setCustomId('select_vulnerability')
+        .setPlaceholder('Select a vulnerability')
+        .addOptions(
+            vulnerabilities.map(v => ({
+                label: v.vuln_identifier,
+                description: `${v.volun_type}`,
+                value: v._id.toString(),
+            }))
+        );
 
     const row = new ActionRowBuilder().addComponents(selectMenu);
     const buttons = new ActionRowBuilder().addComponents(
@@ -197,17 +298,17 @@ async function selectSeverity(interaction) {
     );
 
     const message = await interaction.editReply({
-        content: 'Select the Severity level:',
+        content: 'Select a Vulnerability:',
         components: [row, buttons],
         fetchReply: true
     });
 
-    const response = await waitForSelect(message, interaction.user.id, ['select_severity', 'back', 'close']);
+    const response = await waitForSelect(message, interaction.user.id, ['select_vulnerability', 'back', 'close']);
     if (!response) return null;
 
     if (response.customId === 'back') {
         await response.update({ content: 'Returning to company selection...', components: [] });
-        return await selectCompany(interaction, response.values[0]);
+        return await selectCompany(interaction, companyId);
     }
 
     if (response.customId === 'close') {
@@ -215,33 +316,35 @@ async function selectSeverity(interaction) {
         return null;
     }
 
-    await response.update({
-        content: `Severity selected: ${response.values[0].toUpperCase()}`,
-        components: [],
-    });
-
+    await response.update({ content: 'Vulnerability selected.', components: [] });
     return response.values[0];
 }
 
-async function showSummary(interaction, platform, company, severity) {
-    const summaryContent = `
-**Report Summary**
+async function confirmSubmission(interaction, platformId, companyId, vulnerabilityId, reportType) {
+    const platform = await Platform.findById(platformId);
+    const company = await Company.findById(companyId);
+    const vulnerability = await Vulnerability.findById(vulnerabilityId);
 
-**Platform:** ${platform.name}
-**Company:** ${company.name}
-**Severity:** ${severity.toUpperCase()}
-
-Please review your report and click **Submit** to finalize.
-    `.trim();
+    let summaryContent;
+    if (reportType === 'full') {
+        summaryContent = `**Full Report Summary**\n\n` +
+            `**Platform:** ${platform.name}\n` +
+            `**Company:** ${company.name}\n` +
+            `**Vulnerability:** ${vulnerability.vuln_identifier}\n` +
+            `**Type:** ${vulnerability.volun_type}\n\n` +
+            `Click **Submit Report** to confirm.`;
+    } else {
+        summaryContent = `**POC Submission Summary**\n\n` +
+            `**Platform:** ${platform.name}\n` +
+            `**Company:** ${company.name}\n` +
+            `**Vulnerability:** ${vulnerability.vuln_identifier}\n\n` +
+            `Click **Submit POC** to confirm and earn a company offer.`;
+    }
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('back')
-            .setLabel('Back')
-            .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
             .setCustomId('submit')
-            .setLabel('Submit Report')
+            .setLabel(reportType === 'full' ? 'Submit Report' : 'Submit POC')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
             .setCustomId('close')
@@ -255,36 +358,32 @@ Please review your report and click **Submit** to finalize.
         fetchReply: true
     });
 
-    const response = await waitForButton(message, interaction.user.id, ['back', 'submit', 'close']);
+    const response = await waitForButton(message, interaction.user.id, ['submit', 'close']);
     if (!response) return null;
 
-    if (response.customId === 'back') {
-        await response.update({ content: 'Returning to severity selection...', components: [] });
-        return await selectSeverity(interaction);
-    }
-
     if (response.customId === 'close') {
-        await response.update({ content: 'Report canceled.', components: [] });
+        await response.update({ content: 'Submission canceled.', components: [] });
         return null;
     }
 
-    if (response.customId === 'submit') {
-        await response.update({
-            content: 'Submitting your report...',
-            components: []
-        });
-        return true;
-    }
-
-    return null;
+    await response.update({
+        content: `Submitting ${reportType === 'full' ? 'report' : 'POC'}...`,
+        components: []
+    });
+    return true;
 }
 
-async function saveReport(interaction, platformId, companyId, severity, description) {
+async function saveReport(interaction, platformId, companyId, vulnerabilityId, isPOCOnly) {
     const discordId = interaction.user.id;
     const discordName = interaction.user.username;
+
     let user = await User.findOne({ discord_id: discordId });
     if (!user) {
-        user = await User.create({ discord_id: discordId, username: discordName, reports_made: 0 });
+        user = await User.create({
+            discord_id: discordId,
+            username: discordName,
+            reports_made: 0
+        });
     }
 
     await User.updateOne(
@@ -292,58 +391,125 @@ async function saveReport(interaction, platformId, companyId, severity, descript
         { $inc: { reports_made: 1 } }
     );
 
-    return await Reports.create({
+    const vulnerability = await Vulnerability.findById(vulnerabilityId);
+
+    const reportDoc = {
         user_id: user._id,
         platform_id: platformId,
         company_id: companyId,
-        volunerablity_sev: severity,
-        description,
-    });
+        vulnerability_id: vulnerabilityId,
+        is_poc_only: isPOCOnly,
+        status: isPOCOnly ? 'poc_submitted' : 'open',
+        volunerablity_sev: vulnerability.severity || 'Medium'
+    };
 
-}
+    const report = await Reports.create(reportDoc);
 
-async function waitForSelect(message, userId, customIds) {
-    try {
-        return await message.awaitMessageComponent({
-            componentType: ComponentType.StringSelect,
-            filter: i => {
-                const isCorrectUser = i.user.id === userId;
-                const isCorrectComponent = Array.isArray(customIds)
-                    ? customIds.includes(i.customId)
-                    : i.customId === customIds;
-                return isCorrectUser && isCorrectComponent;
+    // Update vulnerability - mark as reported and add to reported_by
+    await Vulnerability.updateOne(
+        { _id: vulnerabilityId },
+        {
+            $push: {
+                reported_by: {
+                    user_id: user._id,
+                    reported_at: new Date(),
+                    report_id: report._id
+                }
             },
-            time: 120_000
+            $set: {
+                isReported: true,
+                reported_date: new Date()
+            },
+            $setOnInsert: {
+                first_reporter: user._id,
+                first_reported_at: new Date()
+            }
+        },
+        { upsert: false }
+    );
+
+    // Grant user access to vulnerability fields after report/POC submission
+    if(isPOCOnly){
+        await Vulnerability.updateOne(
+            { _id: vulnerabilityId },
+            { $addToSet: { 'visibility.allowedUsers': user._id } }
+        );
+
+        // Add user to all field visibility lists
+        const fieldNames = [
+            'networkAccess',
+            'arbitraryCodeExecution',
+            'userInteraction',
+            'automatable',
+            'privilegesRequired',
+            'confidentialityImpact',
+            'integrityImpact',
+            'availabilityImpact',
+            'recoveryPotential'
+        ];
+
+        const updateObj = {};
+        fieldNames.forEach(field => {
+            updateObj[`${field}.visibleTo`] = user._id;
         });
-    } catch (error) {
-        console.error('Error in waitForSelect:', error);
-        await message.edit({
-            content: 'Selection timed out or encountered an error.',
-            components: []
-        }).catch(console.error);
-        return null;
+
+        await Vulnerability.updateOne(
+            { _id: vulnerabilityId },
+            { $addToSet: updateObj }
+        );
     }
+    checkExploitsAfterReport(vulnerabilityId);
+        return report;
+
 }
 
-async function waitForButton(message, userId, customIds) {
+async function checkExploitsAfterReport(vulnerabilityId) {
     try {
-        return await message.awaitMessageComponent({
-            componentType: ComponentType.Button,
-            filter: i => {
-                const isCorrectUser = i.user.id === userId;
-                const isCorrectComponent = Array.isArray(customIds)
-                    ? customIds.includes(i.customId)
-                    : i.customId === customIds;
-                return isCorrectUser && isCorrectComponent;
-            },
-            time: 120_000
+        const Exploit = require('../../models/Expoits');
+        const affectedExploits = await Exploit.find({
+            volunerability_id: vulnerabilityId,
+            is_caught: false
         });
-    } catch (error) {
-        console.error('Error in waitForButton:', error);
-        await message.edit({
-            content: 'Selection timed out or encountered an error.',
-            components: []
-        }).catch(console.error);
+
+        if (affectedExploits.length > 0) {
+            const caughtExploits = [];
+            const safeExploits = [];
+
+            for (const exploit of affectedExploits) {
+                const randomChance = Math.random();
+
+                if (randomChance <= exploit.exposure_chance) {
+                    exploit.is_caught = true;
+                    await exploit.save();
+
+                    caughtExploits.push({
+                        exploit_id: exploit._id,
+                        user_id: exploit.user_id,
+                        exposure_chance: exploit.exposure_chance,
+                        cycles_completed: exploit.cycles_completed,
+                        caught_at: new Date()
+                    });
+                } else {
+                    safeExploits.push({
+                        exploit_id: exploit._id,
+                        user_id: exploit.user_id
+                    });
+                }
+            }
+
+            console.log(`Vulnerability reported: ${caughtExploits.length}/${affectedExploits.length} exploits caught.`);
+
+            return {
+                caughtExploits,
+                safeExploits,
+                totalAffected: affectedExploits.length,
+                caughtCount: caughtExploits.length
+            };
+        }
+
         return null;
+    } catch (err) {
+        console.error('Error checking exploits after report:', err);
+        throw err;
     }
 }
