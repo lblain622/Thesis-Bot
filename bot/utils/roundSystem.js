@@ -36,7 +36,8 @@ async function generateVulnerabilitiesForCompanies(companies, countPerCompany = 
         }
 
 
-        companies.forEach((company, companyIndex) => {
+        for (const company of companies) {
+            const companyIndex = companies.indexOf(company);
             for (let i = 0; i < countPerCompany; i++) {
                 // Weighted random type selection
                 const type = weightedRandom(vulnTypes);
@@ -49,7 +50,9 @@ async function generateVulnerabilitiesForCompanies(companies, countPerCompany = 
 
                 const allowedUsers = selectAllowedUsers(allUsers, isGlobal);
                 // Generate field data based on vulnerability type and severity
-                const fieldData = generateFieldData(type.type, severityConfig.severity, company,allowedUsers);
+                const fieldData = await generateFieldData(type.type, severityConfig.severity, company,allowedUsers);
+
+
 
                 const vulnerability = {
                     company_id: company._id,
@@ -85,7 +88,7 @@ async function generateVulnerabilitiesForCompanies(companies, countPerCompany = 
 
                 vulnerabilities.push(vulnerability);
             }
-        });
+        }
 
         return vulnerabilities;
 
@@ -98,63 +101,66 @@ async function generateVulnerabilitiesForCompanies(companies, countPerCompany = 
 /**
  * Generate field data based on vulnerability type and severity
  */
-async function generateFieldData(vulnType, severity, company,allowedUsers) {
+async function generateFieldData(vulnType, severity, company, allowedUsers) {
     const fieldData = {};
-    
-    let allUsers = allowedUsers;
 
-    // Function to randomly select 0-3 users for a field
+    // Randomly select 1–4 users (IDs only)
     const getRandomUsers = () => {
-        if (allUsers.length === 0) return [];
-        const numUsers = Math.floor(Math.random() * 4); // 0-3 users
-        const shuffled = [...allUsers].sort(() => 0.5 - Math.random());
-        return shuffled.slice(0, numUsers).map(u => u._id);
+        if (!Array.isArray(allowedUsers) || allowedUsers.length === 0) return [];
+
+
+        const numUsers = Math.floor(Math.random() * 4) + 1;
+        const shuffled = [...allowedUsers].sort(() => Math.random() - 0.5);
+
+        // Return the ObjectIds AS IS
+        return shuffled.slice(0, numUsers);
     };
 
-    // Network Access - Most vulnerabilities are network accessible
+    // NETWORK ACCESS
     fieldData.networkAccess = {
-        answer: Math.random() < 0.8 ? 'Yes' : 'No',
+        answer: Math.random() < 0.8 ? "Yes" : "No",
         visibleTo: getRandomUsers()
     };
 
-    // Arbitrary Code Execution - Only for RCE and some high severity vulns
+    // ARBITRARY CODE EXECUTION
     fieldData.arbitraryCodeExecution = {
-        answer: (vulnType === 'RCE' || (severity === 'Critical' && Math.random() < 0.3)) ? 'Yes' : 'No',
+        answer: (vulnType === "RCE" || (severity === "Critical" && Math.random() < 0.3)) ? "Yes" : "No",
         visibleTo: getRandomUsers()
     };
 
-    // User Interaction - CSRF and some XSS require user interaction
+    // USER INTERACTION
     fieldData.userInteraction = {
-        answer: (vulnType === 'CSRF' || (vulnType === 'XSS' && Math.random() < 0.6)) ? 'Yes' : 'No',
+        answer: (vulnType === "CSRF" || (vulnType === "XSS" && Math.random() < 0.6)) ? "Yes" : "No",
         visibleTo: getRandomUsers()
     };
 
-    // Automatable - Most can be automated except those requiring user interaction
+    // AUTOMATABLE
     fieldData.automatable = {
-        answer: fieldData.userInteraction.answer === 'Yes' ? 'No' : 'Yes',
+        answer: fieldData.userInteraction.answer === "Yes" ? "No" : "Yes",
         visibleTo: getRandomUsers()
     };
 
-    // Privileges Required - Based on severity and type
-    const privilegeOptions = ['None', 'Low', 'High'];
+    // PRIVILEGES REQUIRED
+    const privilegeOptions = ["None", "Low", "High"];
     const privilegeWeights = {
-        'Critical': [0.1, 0.3, 0.6],
-        'High': [0.2, 0.5, 0.3],
-        'Medium': [0.4, 0.4, 0.2],
-        'Low': [0.6, 0.3, 0.1]
+        Critical: [0.1, 0.3, 0.6],
+        High: [0.2, 0.5, 0.3],
+        Medium: [0.4, 0.4, 0.2],
+        Low: [0.6, 0.3, 0.1]
     };
+
     fieldData.privilegesRequired = {
         answer: weightedRandomChoice(privilegeOptions, privilegeWeights[severity]),
         visibleTo: getRandomUsers()
     };
 
-    // CIA Impacts - Based on severity
-    const impactLevels = ['None', 'Low', 'Medium', 'High'];
+    // CIA IMPACTS
+    const impactLevels = ["None", "Low", "Medium", "High"];
     const impactWeights = {
-        'Critical': [0.0, 0.0, 0.2, 0.8],
-        'High': [0.0, 0.1, 0.4, 0.5],
-        'Medium': [0.1, 0.3, 0.5, 0.1],
-        'Low': [0.4, 0.4, 0.2, 0.0]
+        Critical: [0.0, 0.0, 0.2, 0.8],
+        High: [0.0, 0.1, 0.4, 0.5],
+        Medium: [0.1, 0.3, 0.5, 0.1],
+        Low: [0.4, 0.4, 0.2, 0.0]
     };
 
     fieldData.confidentialityImpact = {
@@ -172,12 +178,13 @@ async function generateFieldData(vulnType, severity, company,allowedUsers) {
         visibleTo: getRandomUsers()
     };
 
-    // Recovery Potential - Based on impact levels
-    const recoveryOptions = ['Automatic', 'User', 'Irrecoverable'];
+    // RECOVERY POTENTIAL
+    const recoveryOptions = ["Automatic", "User", "Irrecoverable"];
     let recoveryWeights;
-    if (fieldData.availabilityImpact.answer === 'High') {
+
+    if (fieldData.availabilityImpact.answer === "High") {
         recoveryWeights = [0.1, 0.3, 0.6];
-    } else if (fieldData.availabilityImpact.answer === 'Medium') {
+    } else if (fieldData.availabilityImpact.answer === "Medium") {
         recoveryWeights = [0.2, 0.5, 0.3];
     } else {
         recoveryWeights = [0.6, 0.3, 0.1];
@@ -192,6 +199,7 @@ async function generateFieldData(vulnType, severity, company,allowedUsers) {
 }
 
 
+
 function selectAllowedUsers(allUsers, isGlobal) {
     if (isGlobal) {
         // For global vulnerabilities, all users can access basic info
@@ -204,25 +212,6 @@ function selectAllowedUsers(allUsers, isGlobal) {
     }
 }
 
-/**
- * Assign users to a specific field's visibleTo
- */
-function assignUsersToField(allUsers, count) {
-    // Ensure allUsers is an array
-    if (!Array.isArray(allUsers)) {
-        console.error('allUsers is not an array:', allUsers);
-        return [];
-    }
-
-    if (allUsers.length === 0) {
-        return [];
-    }
-
-    // Shuffle users and select the specified number
-    const shuffledUsers = [...allUsers].sort(() => 0.5 - Math.random());
-    const selectedCount = Math.min(count, allUsers.length);
-    return shuffledUsers.slice(0, selectedCount);
-}
 
 /**
  * Generate daily vulnerabilities with user assignments

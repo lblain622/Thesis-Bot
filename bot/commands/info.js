@@ -187,9 +187,16 @@ function buildFieldAnalysis(vulnerability,user) {
 
     for (const field of fieldDefinitions) {
         const fieldData = vulnerability[field.key];
-        const canView = field.visibleTo.some(
-            u => u.toString() === user._id.toString())
-        let displayValue =""
+        console.log(field);
+        console.log(fieldData);
+        let canView = false;
+        try{
+            canView = field.visibleTo.some(
+                u => u.toString() === user._id.toString())
+        }catch(e){
+            console.log(e)
+        }
+        let displayValue ="";
         if (canView===false ){
            displayValue = formatFieldAnswer(field.key, 'Unknown');
         }else{
