@@ -86,6 +86,16 @@ async function handleUltimatumGame(interaction, action, offerId) {
                 components: []
             });
         }
+         const vulnerability = await Vulnerability.findById(report.vulnerability_id);
+        if (vulnerability && interaction.guild) {
+            // Pass the server ID (guild ID) to the announcement function
+            await announceVulnerabilityPatched(
+                interaction.client,
+                vulnerability,
+                offer,
+                interaction.guild.id
+            );
+        }
     }
 
     if (action === 'reject') {
@@ -201,6 +211,16 @@ async function handleDictatorGame(interaction, action, offerId) {
                 `**Reputation:** ${selected.rep}`,
             components: [],
         });
+    }
+    const vulnerability = await Vulnerability.findById(report.vulnerability_id);
+    if (vulnerability && interaction.guild) {
+        // Pass the server ID (guild ID) to the announcement function
+        await announceVulnerabilityPatched(
+            interaction.client,
+            vulnerability,
+            offer,
+            interaction.guild.id
+        );
     }
 }
 

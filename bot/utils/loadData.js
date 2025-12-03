@@ -7,7 +7,7 @@ const Volunerabilies = require('../../models/Volunerabilies');
 const Reports = require('../../models/Reports');
 const CompanyOffers = require('../../models/CompanyOffers');
 const Trades = require('../../models/Trades');
-const { generateVulnerabilitiesForCompanies } = require('../utils/roundSystem');// Setup
+const Expoits = require('../../models/Expoits')
 async function setup() {
     try {
         await mongoose.connect(process.env.MONGO_URI);
@@ -253,6 +253,10 @@ async function clearCollections() {
         await Trades.deleteMany({});
         console.log(' Cleared Trades collection');
         
+        await Expoits.deleteMany({});
+        console.log(' Cleared Exploits collection');
+
+
         console.log('All collections cleared successfully\n');
     } catch (error) {
         console.error('Error clearing collections:', error);

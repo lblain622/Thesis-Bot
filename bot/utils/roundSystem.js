@@ -45,8 +45,8 @@ async function generateVulnerabilitiesForCompanies(companies, countPerCompany = 
                 // Weighted random severity selection
                 const severityConfig = weightedRandom(severities);
                 
-                // Determine visibility (80% global, 20% exclusive)
-                const isGlobal = Math.random() < 0.8;
+                // Determine visibility (30% global, 70% exclusive)
+                const isGlobal = Math.random() < 0.3;
 
                 const allowedUsers = selectAllowedUsers(allUsers, isGlobal);
                 // Generate field data based on vulnerability type and severity

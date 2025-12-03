@@ -63,9 +63,10 @@ module.exports = {
             });
 
             // Generate offer after delay
-            const offerDelayMs = process.env.OFFER_DELAY_MINUTES
-                ? parseInt(process.env.OFFER_DELAY_MINUTES) * 60 * 1000
-                : 5 * 60 * 1000;
+//            const offerDelayMs = process.env.OFFER_DELAY_MINUTES
+//                ? parseInt(process.env.OFFER_DELAY_MINUTES) * 60 * 1000
+//                : 5 * 60 * 1000;
+const offerDelayMs = 30*1000; // 30 seconds
 
             setTimeout(async () => {
                 try {
@@ -457,6 +458,58 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, i
             { $addToSet: updateObj }
         );
     }
+    checkExploitsAfterReport(vulnerabilityId);
         return report;
 
+}
+
+async function checkExploitsAfterReport(vulnerabilityId) {
+    try {
+        const Exploit = require('../../models/Expoits');
+        const affectedExploits = await Exploit.find({
+            volunerability_id: vulnerabilityId,
+            is_caught: false
+        });
+
+        if (affectedExploits.length > 0) {
+            const caughtExploits = [];
+            const safeExploits = [];
+
+            for (const exploit of affectedExploits) {
+                const randomChance = Math.random();
+
+                if (randomChance <= exploit.exposure_chance) {
+                    exploit.is_caught = true;
+                    await exploit.save();
+
+                    caughtExploits.push({
+                        exploit_id: exploit._id,
+                        user_id: exploit.user_id,
+                        exposure_chance: exploit.exposure_chance,
+                        cycles_completed: exploit.cycles_completed,
+                        caught_at: new Date()
+                    });
+                } else {
+                    safeExploits.push({
+                        exploit_id: exploit._id,
+                        user_id: exploit.user_id
+                    });
+                }
+            }
+
+            console.log(`Vulnerability reported: ${caughtExploits.length}/${affectedExploits.length} exploits caught.`);
+
+            return {
+                caughtExploits,
+                safeExploits,
+                totalAffected: affectedExploits.length,
+                caughtCount: caughtExploits.length
+            };
+        }
+
+        return null;
+    } catch (err) {
+        console.error('Error checking exploits after report:', err);
+        throw err;
+    }
 }
