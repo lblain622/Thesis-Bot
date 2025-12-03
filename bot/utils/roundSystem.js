@@ -49,7 +49,7 @@ async function generateVulnerabilitiesForCompanies(companies, countPerCompany = 
 
                 const allowedUsers = selectAllowedUsers(allUsers, isGlobal);
                 // Generate field data based on vulnerability type and severity
-                const fieldData = generateFieldData(type.type, severityConfig.severity, company);
+                const fieldData = generateFieldData(type.type, severityConfig.severity, company,allowedUsers);
 
                 const vulnerability = {
                     company_id: company._id,
@@ -98,36 +98,42 @@ async function generateVulnerabilitiesForCompanies(companies, countPerCompany = 
 /**
  * Generate field data based on vulnerability type and severity
  */
-function generateFieldData(vulnType, severity, company, allUsers) {
+async function generateFieldData(vulnType, severity, company,allowedUsers) {
     const fieldData = {};
     
-    // Define all fields with their default visibility settings
-    const fieldDefinitions = [
-        { key: 'networkAccess', usersToAssign: 3 },
-        { key: 'arbitraryCodeExecution', usersToAssign: 2 },
-        { key: 'userInteraction', usersToAssign: 3 },
-        { key: 'automatable', usersToAssign: 4 },
-        { key: 'privilegesRequired', usersToAssign: 2 },
-        { key: 'confidentialityImpact', usersToAssign: 3 },
-        { key: 'integrityImpact', usersToAssign: 3 },
-        { key: 'availabilityImpact', usersToAssign: 2 },
-        { key: 'recoveryPotential', usersToAssign: 4 }
-    ];
+    let allUsers = allowedUsers;
 
-    // Generate answers for each field first
-    const answers = {};
+    // Function to randomly select 0-3 users for a field
+    const getRandomUsers = () => {
+        if (allUsers.length === 0) return [];
+        const numUsers = Math.floor(Math.random() * 4); // 0-3 users
+        const shuffled = [...allUsers].sort(() => 0.5 - Math.random());
+        return shuffled.slice(0, numUsers).map(u => u._id);
+    };
 
     // Network Access - Most vulnerabilities are network accessible
-    answers.networkAccess = Math.random() < 0.8 ? 'Yes' : 'No';
+    fieldData.networkAccess = {
+        answer: Math.random() < 0.8 ? 'Yes' : 'No',
+        visibleTo: getRandomUsers()
+    };
 
     // Arbitrary Code Execution - Only for RCE and some high severity vulns
-    answers.arbitraryCodeExecution = (vulnType === 'RCE' || (severity === 'Critical' && Math.random() < 0.3)) ? 'Yes' : 'No';
+    fieldData.arbitraryCodeExecution = {
+        answer: (vulnType === 'RCE' || (severity === 'Critical' && Math.random() < 0.3)) ? 'Yes' : 'No',
+        visibleTo: getRandomUsers()
+    };
 
     // User Interaction - CSRF and some XSS require user interaction
-    answers.userInteraction = (vulnType === 'CSRF' || (vulnType === 'XSS' && Math.random() < 0.6)) ? 'Yes' : 'No';
+    fieldData.userInteraction = {
+        answer: (vulnType === 'CSRF' || (vulnType === 'XSS' && Math.random() < 0.6)) ? 'Yes' : 'No',
+        visibleTo: getRandomUsers()
+    };
 
     // Automatable - Most can be automated except those requiring user interaction
-    answers.automatable = answers.userInteraction === 'Yes' ? 'No' : 'Yes';
+    fieldData.automatable = {
+        answer: fieldData.userInteraction.answer === 'Yes' ? 'No' : 'Yes',
+        visibleTo: getRandomUsers()
+    };
 
     // Privileges Required - Based on severity and type
     const privilegeOptions = ['None', 'Low', 'High'];
@@ -137,7 +143,10 @@ function generateFieldData(vulnType, severity, company, allUsers) {
         'Medium': [0.4, 0.4, 0.2],
         'Low': [0.6, 0.3, 0.1]
     };
-    answers.privilegesRequired = weightedRandomChoice(privilegeOptions, privilegeWeights[severity]);
+    fieldData.privilegesRequired = {
+        answer: weightedRandomChoice(privilegeOptions, privilegeWeights[severity]),
+        visibleTo: getRandomUsers()
+    };
 
     // CIA Impacts - Based on severity
     const impactLevels = ['None', 'Low', 'Medium', 'High'];
@@ -148,31 +157,36 @@ function generateFieldData(vulnType, severity, company, allUsers) {
         'Low': [0.4, 0.4, 0.2, 0.0]
     };
 
-    answers.confidentialityImpact = weightedRandomChoice(impactLevels, impactWeights[severity]);
-    answers.integrityImpact = weightedRandomChoice(impactLevels, impactWeights[severity]);
-    answers.availabilityImpact = weightedRandomChoice(impactLevels, impactWeights[severity]);
-    
+    fieldData.confidentialityImpact = {
+        answer: weightedRandomChoice(impactLevels, impactWeights[severity]),
+        visibleTo: getRandomUsers()
+    };
+
+    fieldData.integrityImpact = {
+        answer: weightedRandomChoice(impactLevels, impactWeights[severity]),
+        visibleTo: getRandomUsers()
+    };
+
+    fieldData.availabilityImpact = {
+        answer: weightedRandomChoice(impactLevels, impactWeights[severity]),
+        visibleTo: getRandomUsers()
+    };
+
     // Recovery Potential - Based on impact levels
     const recoveryOptions = ['Automatic', 'User', 'Irrecoverable'];
     let recoveryWeights;
-    if (answers.availabilityImpact === 'High') {
+    if (fieldData.availabilityImpact.answer === 'High') {
         recoveryWeights = [0.1, 0.3, 0.6];
-    } else if (answers.availabilityImpact === 'Medium') {
+    } else if (fieldData.availabilityImpact.answer === 'Medium') {
         recoveryWeights = [0.2, 0.5, 0.3];
     } else {
         recoveryWeights = [0.6, 0.3, 0.1];
     }
-    answers.recoveryPotential = weightedRandomChoice(recoveryOptions, recoveryWeights);
 
-    // Now assign users to each field's visibleTo
-    fieldDefinitions.forEach(fieldDef => {
-        const assignedUsers = assignUsersToField(allUsers, fieldDef.usersToAssign);
-
-        fieldData[fieldDef.key] = {
-            answer: answers[fieldDef.key],
-            visibleTo: assignedUsers.map(user => user._id)
-        };
-    });
+    fieldData.recoveryPotential = {
+        answer: weightedRandomChoice(recoveryOptions, recoveryWeights),
+        visibleTo: getRandomUsers()
+    };
 
     return fieldData;
 }

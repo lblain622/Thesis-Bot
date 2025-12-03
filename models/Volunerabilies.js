@@ -23,39 +23,39 @@ const volunerabilitySchema = new Schema({
 
     
     networkAccess: {
-        answer: { type: String, enum: ['Yes', 'No'], default: 'Unknown' },
+        answer: { type: String, enum: ['Yes', 'No'], default: 'No' },
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
     arbitraryCodeExecution: {
-        answer: { type: String, enum: ['Yes', 'No'], default: 'Unknown' },
+        answer: { type: String, enum: ['Yes', 'No'], default: 'No' },
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
     userInteraction: {
-        answer: { type: String, enum: ['Yes', 'No'], default: 'Unknown' },
+        answer: { type: String, enum: ['Yes', 'No'], default: 'No' },
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
     automatable: {
-        answer: { type: String, enum: ['Yes', 'No'], default: 'Unknown' },
+        answer: { type: String, enum: ['Yes', 'No'], default: 'No' },
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
     confidentialityImpact: {
-        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'], default: 'Unknown' },
+        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'], default: 'None' },
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
     integrityImpact: {
-        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'], default: 'Unknown' },
+        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'], default: 'None' },
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
     availabilityImpact: {
-        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'], default: 'Unknown' },
+        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'], default: 'None' },
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
     privilegesRequired: {
-        answer: { type: String, enum: ['None', 'Low', 'High'], default: 'Unknown' },
+        answer: { type: String, enum: ['None', 'Low', 'High'], default: 'None' },
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
     recoveryPotential: {
-        answer: { type: String, enum: ['Automatic', 'User', 'Irrecoverable'], default: 'Unknown' },
+        answer: { type: String, enum: ['Automatic', 'User', 'Irrecoverable','Unknown'], default: 'Unknown' },
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
 
