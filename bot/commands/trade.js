@@ -98,18 +98,33 @@ module.exports = {
 
             // Send DM to target user
             try {
-                const offerText = formatTradeOffer(offerType, givingValue, requestType, receivingValue);
+                const givingVulnDoc = offerType === 'vulnerability'
+                    ? await Vulnerability.findById(givingValue)
+                    : null;
+
+                const receivingVulnDoc = requestType === 'vulnerability'
+                    ? await Vulnerability.findById(receivingValue)
+                    : null;
+
+                // Notify User B
                 await targetUser.send({
-                    content: `**Trade Offer from ${interaction.user.username}**\n\n${offerText}`,
+                    content: `**Trade Offer from ${interaction.user.username}**\n\n${formatTradeOffer(
+                        offerType,
+                        givingValue,
+                        requestType,
+                        receivingValue,
+                        givingVulnDoc,
+                        receivingVulnDoc
+                    )}`,
                     components: [
                         new ActionRowBuilder().addComponents(
                             new ButtonBuilder()
                                 .setCustomId(`trade_accept_${trade._id}`)
-                                .setLabel('Accept')
+                                .setLabel('Accept Trade')
                                 .setStyle(ButtonStyle.Success),
                             new ButtonBuilder()
                                 .setCustomId(`trade_reject_${trade._id}`)
-                                .setLabel('Reject')
+                                .setLabel('Reject Trade')
                                 .setStyle(ButtonStyle.Danger)
                         )
                     ]
@@ -264,24 +279,26 @@ async function confirmTrade(interaction, tradeData) {
     await response.update({ content: 'Creating trade offer...', components: [] });
     return true;
 }
-
-function formatTradeOffer(givingType, givingValue, requestType, receivingValue) {
+function formatTradeOffer(givingType, givingValue, requestType, receivingValue, givingVuln, receivingVuln) {
     let offerStr = '**You offer:** ';
+
     if (givingType === 'money') {
         offerStr += `$${givingValue}`;
     } else {
-        offerStr += `Vulnerability ID: \`${givingValue}\``;
+        offerStr += `${givingVuln.name} (\`${givingVuln.vuln_identifier}\`)`;
     }
 
     offerStr += '\n**For:** ';
+
     if (requestType === 'money') {
         offerStr += `$${receivingValue}`;
     } else {
-        offerStr += `Vulnerability ID: \`${receivingValue}\``;
+        offerStr += `${receivingVuln.name} (\`${receivingVuln.vuln_identifier}\`)`;
     }
 
     return offerStr;
 }
+
 
 async function waitForComponent(message, userId, componentType, customIds, time) {
     try {

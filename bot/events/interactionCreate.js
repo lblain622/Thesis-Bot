@@ -213,96 +213,103 @@ async function handleTrade(interaction, action, tradeId) {
         return interaction.reply({ content: 'Trade not found.', ephemeral: true });
     }
 
-    // Verify the user is the receiving user
-    const receivingUser = await User.findOne({ discord_id: interaction.user.id });
-    if (!receivingUser || receivingUser._id.toString() !== trade.receiving_user_id._id.toString()) {
-        return interaction.reply({ content: 'This trade is not for you.', ephemeral: true });
+    const user = await User.findOne({ discord_id: interaction.user.id });
+    if (!user) {
+        return interaction.reply({ content: 'User not found.', ephemeral: true });
     }
 
-    if (action === 'accept') {
-        // Execute the trade
-        try {
-            // Transfer items from giving user to receiving user
-            if (trade.gu_item_type === 'vulnerability') {
-                await Vulnerability.updateOne(
-                    { _id: trade.gu_value },
-                    { $addToSet: { 'visibility.allowedUsers': receivingUser._id } }
-                );
-            } else if (trade.gu_item_type === 'money') {
-                await User.updateOne(
-                    { _id: trade.giving_user_id._id },
-                    { $inc: { money_earned: -trade.gu_value } }
-                );
-                await User.updateOne(
-                    { _id: receivingUser._id },
-                    { $inc: { money_earned: trade.gu_value } }
-                );
-            }
+    const isGiver = trade.giving_user_id._id.toString() === user._id.toString();
+    const isReceiver = trade.receiving_user_id._id.toString() === user._id.toString();
 
-            // Transfer items from receiving user to giving user
-            if (trade.ru_item_type === 'vulnerability') {
-                await Vulnerability.updateOne(
-                    { _id: trade.ru_value },
-                    { $addToSet: { 'visibility.allowedUsers': trade.giving_user_id._id } }
-                );
-            } else if (trade.ru_item_type === 'money') {
-                await User.updateOne(
-                    { _id: receivingUser._id },
-                    { $inc: { money_earned: -trade.ru_value } }
-                );
-                await User.updateOne(
-                    { _id: trade.giving_user_id._id },
-                    { $inc: { money_earned: trade.ru_value } }
-                );
-            }
-
-            await Trade.updateOne(
-                { _id: tradeId },
-                { $set: { status: 'accepted', resolved_at: new Date() } }
-            );
-
-            await interaction.update({
-                content: '✅ Trade accepted successfully!',
-                components: []
-            });
-
-            // Notify the giving user
-            try {
-                const givingDiscordUser = await interaction.client.users.fetch(trade.giving_user_id.discord_id);
-                await givingDiscordUser.send(`Your trade with ${interaction.user.username} was accepted!`);
-            } catch (err) {
-                console.error('Could not notify giving user:', err);
-            }
-
-        } catch (err) {
-            console.error('Trade execution error:', err);
-            await interaction.update({
-                content: 'Trade failed. Please ensure you have sufficient resources.',
-                components: []
-            });
-        }
+    if (!isGiver && !isReceiver) {
+        return interaction.reply({ content: 'You are not part of this trade.', ephemeral: true });
     }
 
+    // --- HANDLE REJECTIONS --- //
     if (action === 'reject') {
         await Trade.updateOne(
             { _id: tradeId },
-            { $set: { status: 'rejected', resolved_at: new Date() } }
+            { status: 'rejected', resolved_at: new Date() }
         );
 
         await interaction.update({
-            content: 'Trade rejected.',
+            content: '❌ Trade rejected.',
             components: []
         });
 
-        // Notify the giving user
+        // Notify other user
+        const other = isGiver ? trade.receiving_user_id : trade.giving_user_id;
         try {
-            const givingDiscordUser = await interaction.client.users.fetch(trade.giving_user_id.discord_id);
-            await givingDiscordUser.send(`Your trade with ${interaction.user.username} was rejected.`);
+            const discordOther = await interaction.client.users.fetch(other.discord_id);
+            await discordOther.send(` Your trade was rejected by ${interaction.user.username}.`);
+        } catch {}
+
+        return;
+    }
+
+    // --- HANDLE ACCEPTANCE --- //
+
+    // Receiver accepts first
+    if (isReceiver && action === 'accept' && trade.status === 'pending') {
+        await Trade.updateOne({ _id: tradeId }, { status: 'receiver_accepted' });
+
+        await interaction.update({
+            content: 'You accepted the trade. Waiting for the other user…',
+            components: []
+        });
+
+        // Notify giver for final confirmation
+        const giverDiscord = await interaction.client.users.fetch(trade.giving_user_id.discord_id);
+        await giverDiscord.send({
+            content: `**${interaction.user.username} accepted your trade!**\n\nPlease confirm the trade:`,
+            components: [
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`trade_accept_final_${trade._id}`)
+                        .setLabel('Accept Trade')
+                        .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId(`trade_reject_${trade._id}`)
+                        .setLabel('Reject Trade')
+                        .setStyle(ButtonStyle.Danger)
+                )
+            ]
+        });
+
+        return;
+    }
+
+    // Giver accepts second → finalize trade
+    if (isGiver && action === 'accept_final' && trade.status === 'receiver_accepted') {
+        try {
+            // Run exchange
+            await executeTrade(trade);
+
+            await Trade.updateOne(
+                { _id: tradeId },
+                { status: 'completed', resolved_at: new Date() }
+            );
+
+            await interaction.update({
+                content: ' Trade completed successfully!',
+                components: []
+            });
+
+            // Notify receiver
+            const recvDiscord = await interaction.client.users.fetch(trade.receiving_user_id.discord_id);
+            await recvDiscord.send(`🎉 The trade with ${interaction.user.username} is complete!`);
+
         } catch (err) {
-            console.error('Could not notify giving user:', err);
+            console.error('Final trade error:', err);
+
+            await interaction.update({
+                content: ' Trade failed (insufficient funds or missing items).',
+                components: []
+            });
         }
     }
 }
+
 
 async function updateCompanyReputation(userId, companyId, change) {
     const user = await User.findById(userId);
