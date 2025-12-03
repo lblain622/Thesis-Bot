@@ -223,9 +223,7 @@ async function setup() {
             console.log(`✓ Created ${config.name}`);
         }
 
-        // Add vulnerabilities for each company with new field structure
-        console.log('\nAdding vulnerabilities with new field structure...');
-        await generateVulnerabilitiesForCompanies(companies);
+
 
         console.log('\n✅ Data load completed successfully!');
         console.log(`📊 Created ${companies.length} companies with vulnerabilities`);

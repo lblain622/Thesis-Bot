@@ -29,16 +29,13 @@ module.exports = {
             }
 
             const identifier = interaction.options.getString('identifier');
-
             let vulnerability;
+
             if (identifier) {
-                // Look up specific vulnerability
+
                 vulnerability = await Vulnerability.findOne({ vuln_identifier: identifier })
                     .populate('company_id')
-                    .populate('first_reporter')
-                    .populate('reported_by.user_id')
-                    .populate('pocs_submitted.user_id')
-                    .populate('discovered_by.user_id');
+                    .populate('reported_by.user_id');
 
                 if (!vulnerability) {
                     return interaction.editReply({
@@ -60,12 +57,13 @@ module.exports = {
                 }
 
             } else {
-                // Show list of user's vulnerabilities
+
                 const vulnerabilities = await Vulnerability.find({
                     $or: [
                         { 'visibility.allowedUsers': user._id },
                         { 'visibility.isGlobal': true }
-                    ]
+                    ],
+                    $and:[{'isResolved':false}]
                 }).populate('company_id');
 
                 if (!vulnerabilities.length) {
@@ -81,7 +79,7 @@ module.exports = {
                     .addOptions(
                         vulnerabilities.slice(0, 25).map(v => ({
                             label: v.vuln_identifier,
-                            description: `${v.severity} - ${v.volun_type} - ${v.isReported ? 'Reported' : 'Unreported'}`,
+                            description: `${v.volun_type} - ${v.isReported ? 'Reported' : 'Unreported'}`,
                             value: v._id.toString()
                         }))
                     );
@@ -98,62 +96,61 @@ module.exports = {
 
                 vulnerability = await Vulnerability.findById(response.values[0])
                     .populate('company_id')
-                    .populate('first_reporter')
-                    .populate('reported_by.user_id')
-                    .populate('pocs_submitted.user_id')
-                    .populate('discovered_by.user_id');
+                    .populate('reported_by.user_id');
 
                 await response.update({ content: 'Loading vulnerability details...', components: [] });
             }
 
-            // Build detailed embed with field visibility
+            // Check if user can see fields (has submitted report/POC)
+            const canSeeFields = vulnerability.visibility.allowedUsers.some(
+                u => u.toString() === user._id.toString()
+            );
+
+            // Build embed
             const embed = new EmbedBuilder()
                 .setTitle(`${vulnerability.vuln_identifier}`)
-                .setColor(getSeverityColor(vulnerability.severity))
+                .setColor(canSeeFields ? getSeverityColor(vulnerability.severity) : '#808080')
                 .setDescription(vulnerability.description || 'No description provided');
 
             // Basic Information
             embed.addFields({
                 name: '📋 Basic Information',
-                value:
-                    `**Company:** ${vulnerability.company_id?.name || 'Unknown'}\n` +
+                value: `**Company:** ${vulnerability.company_id?.name || 'Unknown'}\n` +
                     `**Type:** ${vulnerability.volun_type}\n` +
                     `**Status:** ${vulnerability.isResolved ? '✅ Resolved' : vulnerability.isReported ? '📤 Reported' : '🕒 Unreported'}`
             });
 
-            // Field Analysis Section
-            const fieldAnalysis = await buildFieldAnalysis(vulnerability, user._id);
-            if (fieldAnalysis) {
-                embed.addFields({
-                    name: '🔍 Field Analysis',
-                    value: fieldAnalysis
-                });
-            }
+            // Field Analysis - only show if user can see
+            if (canSeeFields) {
+                const fieldAnalysis = buildFieldAnalysis(vulnerability,user);
+                if (fieldAnalysis) {
+                    embed.addFields({
+                        name: '🔍 Field Analysis',
+                        value: fieldAnalysis
+                    });
+                }
 
+                embed.addFields({
+                    name: 'Fields Unknown',
+                    value: 'Submit a **Report** or **POC** to reveal vulnerability details and field analysis.'
+                });
+
+            }
 
             // Report Information
             const reporters = vulnerability.reported_by || [];
-            if (reporters.length > 0) {
+            if (reporters.length > 0 && canSeeFields) {
                 const reportersList = reporters.slice(0, 3).map(r => {
                     const reporterUser = r.user_id;
                     const isFirst = vulnerability.first_reporter?.toString() === reporterUser?._id.toString();
-                    return `${isFirst ? '🏆 ' : ''}${reporterUser?.username || 'Unknown'} (${new Date(r.reported_at).toLocaleDateString()})`;
+                    return `${isFirst ? '🏆 ' : ''}${reporterUser?.discord_name || 'Unknown'}`;
                 }).join('\n');
 
                 embed.addFields({
-                    name: `📤 Reported By (${reporters.length})`,
+                    name: ` Reported By (${reporters.length})`,
                     value: reportersList + (reporters.length > 3 ? `\n...and ${reporters.length - 3} more` : '')
                 });
             }
-
-            // Timeline
-            const timeline = [];
-         
-            if (vulnerability.is_resolved_date) {
-                timeline.push(`**Resolved:** ${new Date(vulnerability.is_resolved_date).toLocaleDateString()}`);
-            }
-
-      
 
             embed.setFooter({ text: `Vulnerability ID: ${vulnerability._id}` });
             embed.setTimestamp(vulnerability.createdAt);
@@ -162,6 +159,7 @@ module.exports = {
                 embeds: [embed],
                 flags: 64
             });
+
 
         } catch (err) {
             console.error(err);
@@ -172,115 +170,79 @@ module.exports = {
         }
     },
 };
-
-async function buildFieldAnalysis(vulnerability, userId) {
+function buildFieldAnalysis(vulnerability,user) {
     const fields = [];
     
-    // Check visibility for each field and build display
     const fieldDefinitions = [
-        {
-            key: 'networkAccess',
-            question: 'Network Access',
-            description: 'Can this vulnerability be exploited over a network?'
-        },
-        {
-            key: 'arbitraryCodeExecution',
-            question: 'Arbitrary Code Execution',
-            description: 'Does this vulnerability lead to untrusted code execution?'
-        },
-        {
-            key: 'userInteraction',
-            question: 'User Interaction',
-            description: 'Does the exploit require victim action?'
-        },
-        {
-            key: 'automatable',
-            question: 'Exploit Automation',
-            description: 'Can exploitation be automated across targets?'
-        },
-        {
-            key: 'privilegesRequired',
-            question: 'Privileges Required',
-            description: 'What level of privileges are needed?'
-        },
-        {
-            key: 'confidentialityImpact',
-            question: 'Confidentiality Impact',
-            description: 'Impact on data confidentiality'
-        },
-        {
-            key: 'integrityImpact',
-            question: 'Integrity Impact',
-            description: 'Impact on data integrity'
-        },
-        {
-            key: 'availabilityImpact',
-            question: 'Availability Impact',
-            description: 'Impact on system availability'
-        },
-        {
-            key: 'recoveryPotential',
-            question: 'Recovery Potential',
-            description: 'How easily can the system recover?'
-        }
+        { key: 'networkAccess', label: 'Network Access', icon: '🌐' },
+        { key: 'arbitraryCodeExecution', label: 'Arbitrary Code Execution', icon: '⚙️' },
+        { key: 'userInteraction', label: 'User Interaction Required', icon: '👤' },
+        { key: 'automatable', label: 'Exploit Automation', icon: '🤖' },
+        { key: 'privilegesRequired', label: 'Privileges Required', icon: '🔐' },
+        { key: 'confidentialityImpact', label: 'Confidentiality Impact', icon: '📖' },
+        { key: 'integrityImpact', label: 'Integrity Impact', icon: '✏️' },
+        { key: 'availabilityImpact', label: 'Availability Impact', icon: '🛑' },
+        { key: 'recoveryPotential', label: 'Recovery Potential', icon: '♻️' }
     ];
 
     for (const field of fieldDefinitions) {
         const fieldData = vulnerability[field.key];
-        if (fieldData) {
-            const canSeeField = fieldData.visibleTo?.some(
-                user => user.toString() === userId.toString()
-            ) || vulnerability.visibility.isGlobal;
-
-            if (canSeeField && fieldData.answer && fieldData.answer !== 'Unknown') {
-                // User can see the actual answer
-                let displayValue;
-                
-                // Format the answer based on field type
-                if (field.key === 'privilegesRequired') {
-                    const privilegeMap = {
-                        'None': '🟢 None',
-                        'Low': '🟡 Low',
-                        'High': '🔴 High'
-                    };
-                    displayValue = privilegeMap[fieldData.answer] || fieldData.answer;
-                } else if (field.key === 'recoveryPotential') {
-                    const recoveryMap = {
-                        'Automatic': '🟢 Automatic',
-                        'User': '🟡 User Intervention',
-                        'Irrecoverable': '🔴 Irrecoverable'
-                    };
-                    displayValue = recoveryMap[fieldData.answer] || fieldData.answer;
-                } else if (['confidentialityImpact', 'integrityImpact', 'availabilityImpact'].includes(field.key)) {
-                    const impactMap = {
-                        'None': '⚪ None',
-                        'Low': '🟡 Low',
-                        'Medium': '🟠 Medium',
-                        'High': '🔴 High'
-                    };
-                    displayValue = impactMap[fieldData.answer] || fieldData.answer;
-                } else {
-                    // Y/N fields
-                    displayValue = fieldData.answer === 'Yes' ? '✅ Yes' : '❌ No';
-                }
-                
-                fields.push(`**${field.question}:** ${displayValue}`);
-            } else {
-                // User cannot see this field or answer is unknown
-                fields.push(`**${field.question}:** 🔒 Unknown`);
-            }
-        } else {
-            // Field data doesn't exist
-            fields.push(`**${field.question}:** 🔒 Unknown`);
+        const canView = field.visibleTo.some(
+            u => u.toString() === user._id.toString())
+        let displayValue =""
+        if (canView===false ){
+           displayValue = formatFieldAnswer(field.key, 'Unknown');
+        }else{
+            displayValue = formatFieldAnswer(field.key, fieldData.answer);
         }
+        fields.push(`${field.icon} **${field.label}:** ${displayValue}`);
     }
 
     return fields.length > 0 ? fields.join('\n') : null;
 }
 
+function formatFieldAnswer(fieldKey, answer) {
+    // Y/N fields
+    if (['networkAccess', 'arbitraryCodeExecution', 'userInteraction', 'automatable'].includes(fieldKey)) {
+        return answer === 'Yes' ? '✅ Yes' : '❌ No';
+    }
+
+    // Privileges Required
+    if (fieldKey === 'privilegesRequired') {
+        const map = {
+            'None': '🟢 None',
+            'Low': '🟡 Low',
+            'High': '🔴 High'
+        };
+        return map[answer] || answer;
+    }
+
+    // Recovery Potential
+    if (fieldKey === 'recoveryPotential') {
+        const map = {
+            'Automatic': '🟢 Automatic',
+            'User': '🟡 User Intervention',
+            'Irrecoverable': '🔴 Irrecoverable'
+        };
+        return map[answer] || answer;
+    }
+
+    // CIA Impacts
+    if (['confidentialityImpact', 'integrityImpact', 'availabilityImpact'].includes(fieldKey)) {
+        const map = {
+            'None': '⚪ None',
+            'Low': '🟡 Low',
+            'Medium': '🟠 Medium',
+            'High': '🔴 High'
+        };
+        return map[answer] || answer;
+    }
+
+    return answer;
+}
+
 function getSeverityColor(severity) {
     const colors = {
-        'None': '#808080',
         'Low': '#0D9373',
         'Medium': '#FFA500',
         'High': '#FF6347',
