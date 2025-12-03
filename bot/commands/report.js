@@ -428,33 +428,35 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, i
     );
 
     // Grant user access to vulnerability fields after report/POC submission
-    await Vulnerability.updateOne(
-        { _id: vulnerabilityId },
-        { $addToSet: { 'visibility.allowedUsers': user._id } }
-    );
+    if(isPOCOnly){
+        await Vulnerability.updateOne(
+            { _id: vulnerabilityId },
+            { $addToSet: { 'visibility.allowedUsers': user._id } }
+        );
 
-    // Add user to all field visibility lists
-    const fieldNames = [
-        'networkAccess',
-        'arbitraryCodeExecution',
-        'userInteraction',
-        'automatable',
-        'privilegesRequired',
-        'confidentialityImpact',
-        'integrityImpact',
-        'availabilityImpact',
-        'recoveryPotential'
-    ];
+        // Add user to all field visibility lists
+        const fieldNames = [
+            'networkAccess',
+            'arbitraryCodeExecution',
+            'userInteraction',
+            'automatable',
+            'privilegesRequired',
+            'confidentialityImpact',
+            'integrityImpact',
+            'availabilityImpact',
+            'recoveryPotential'
+        ];
 
-    const updateObj = {};
-    fieldNames.forEach(field => {
-        updateObj[`${field}.visibleTo`] = user._id;
-    });
+        const updateObj = {};
+        fieldNames.forEach(field => {
+            updateObj[`${field}.visibleTo`] = user._id;
+        });
 
-    await Vulnerability.updateOne(
-        { _id: vulnerabilityId },
-        { $addToSet: updateObj }
-    );
+        await Vulnerability.updateOne(
+            { _id: vulnerabilityId },
+            { $addToSet: updateObj }
+        );
+    }
+        return report;
 
-    return report;
 }

@@ -170,9 +170,9 @@ module.exports = {
         }
     },
 };
-function buildFieldAnalysis(vulnerability,user) {
+function buildFieldAnalysis(vulnerability, user) {
     const fields = [];
-    
+
     const fieldDefinitions = [
         { key: 'networkAccess', label: 'Network Access', icon: '🌐' },
         { key: 'arbitraryCodeExecution', label: 'Arbitrary Code Execution', icon: '⚙️' },
@@ -187,21 +187,18 @@ function buildFieldAnalysis(vulnerability,user) {
 
     for (const field of fieldDefinitions) {
         const fieldData = vulnerability[field.key];
-        console.log(field);
-        console.log(fieldData);
-        let canView = false;
-        try{
-            canView = field.visibleTo.some(
-                u => u.toString() === user._id.toString())
-        }catch(e){
-            console.log(e)
-        }
-        let displayValue ="";
-        if (canView===false ){
-           displayValue = formatFieldAnswer(field.key, 'Unknown');
-        }else{
-            displayValue = formatFieldAnswer(field.key, fieldData.answer);
-        }
+
+        if (!fieldData) continue;
+
+        //  Use the actual visibleTo array inside the vulnerability
+        const canView = fieldData.visibleTo?.some(
+            u => u.toString() === user._id.toString()
+        ) || false;
+
+        const displayValue = canView
+            ? formatFieldAnswer(field.key, fieldData.answer)
+            : formatFieldAnswer(field.key, 'Unknown');
+
         fields.push(`${field.icon} **${field.label}:** ${displayValue}`);
     }
 

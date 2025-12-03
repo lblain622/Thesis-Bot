@@ -109,7 +109,7 @@ async function generateFieldData(vulnType, severity, company, allowedUsers) {
         if (!Array.isArray(allowedUsers) || allowedUsers.length === 0) return [];
 
 
-        const numUsers = Math.floor(Math.random() * 4) + 1;
+        const numUsers = Math.floor(Math.random() * 4);
         const shuffled = [...allowedUsers].sort(() => Math.random() - 0.5);
 
         // Return the ObjectIds AS IS
