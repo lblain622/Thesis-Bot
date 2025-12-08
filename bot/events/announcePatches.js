@@ -8,6 +8,8 @@ const Report = require('../../models/Reports');
 /**
  * Announce when a vulnerability is discovered and patched
  */
+
+//TODO: Fix issue with patches not being announced correctly to the chat
 async function announceVulnerabilityPatched(client, vulnerability, acceptedOffer, serverId) {
     try {
         // Find the server/guild
@@ -16,7 +18,7 @@ async function announceVulnerabilityPatched(client, vulnerability, acceptedOffer
             console.error('Guild not found:', serverId);
             return;
         }
-
+        //TODO: add a setup command that predefinies channels
         // Find the general channel (usually named "general")
         let channel = guild.channels.cache.find(ch =>
             ch.type === 0 && // GuildText type

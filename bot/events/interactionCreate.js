@@ -5,6 +5,7 @@ const Trade = require('../../models/Trades');
 const Vulnerability = require('../../models/Volunerabilies');
 const { announceVulnerabilityPatched } = require('../events/announcePatches');
 
+//TODO: If user does any command with the bot, add them as a user if not exists
 module.exports = {
     name: 'interactionCreate',
     async execute(interaction) {

@@ -6,6 +6,8 @@ const fs = require('fs');
 const path = require('path');
 require('../models/Users');
 
+//Some db interactions wont work based upon user privacy settings
+//look iinto have the private dms function inside through different channels  (see how much of a delay it might cause in the sever when many ppl interact)
 
 const client = new Client({
     intents:

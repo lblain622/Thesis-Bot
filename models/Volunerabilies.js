@@ -6,12 +6,13 @@ const volunerabilitySchema = new Schema({
         ref: 'Company',
         required: true
     },
-  
+  //TODO: make more creatuive name for volun
     vuln_identifier: {
         type: String,
         required: true,
         unique: true
     },
+    //TODO: add more types for more diversity
     volun_type: {
         type: String,
         enum: ['XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR', 'Authentication', 'Authorization',

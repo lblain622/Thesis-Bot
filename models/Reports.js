@@ -22,7 +22,7 @@ const reportSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Volunerabilies'
     },
-    // Report can reference existing vuln or create new one
+   
     vuln_identifier: String,
     volunerablity_sev: {
         type: String,
@@ -32,12 +32,12 @@ const reportSchema = new Schema({
     // CVSS information
     cvss_score: Number,
     cvss_vector: String,
-    // HackerOne-style fields
+
     report_title: String,
     report_description: String,
     impact_description: String,
     poc_steps: [String],
-    // Is this a POC-only submission?
+
     is_poc_only: {
         type: Boolean,
         default: false

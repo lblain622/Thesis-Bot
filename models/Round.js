@@ -19,6 +19,7 @@ const roundSchema = new Schema({
         enum: ['active', 'ended'],
         default: 'active'
     },
+    //relpace with volun resolved?
     vulnerabilities_generated: {
         type: Number,
         default: 0
@@ -27,6 +28,7 @@ const roundSchema = new Schema({
         type: Number,
         default: 0
     },
+
     total_payout: {
         type: Number,
         default: 0

@@ -13,6 +13,10 @@ const Company = require('../../models/Company');
 const Round = require('../../models/Round');
 const Exploit = require('../../models/Expoits');
 
+
+//hmmm admin command works to make it easier to modify everything without modify the database too much
+//TODO: Remove some commands I dont need anymore
+// helps to stop admin abuse 101
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('admin')
@@ -578,6 +582,7 @@ async function showLeaderboard(interaction) {
     }
 }
 
+//TODO: remove this for when agent is connected
 function calculateRandomCVSS(severity) {
     const ranges = {
         'Low': [0.1, 3.9],

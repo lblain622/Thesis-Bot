@@ -8,6 +8,15 @@ const { EmbedBuilder } = require('discord.js');
 /**
  * Generate vulnerabilities with new field structure (for data loading)
  */
+//TODO: Update system to be more automated
+//TODO: Update time system for all time based reponsoes
+// Lets assume that each 'round' is 2 hours as a baseline
+//TODO: Add a game reset,so status off all players can be reset
+// When game reset happens maybe make a new db on mongo, and make a new collections
+//if we do several iterations, I could also manually connect to a new db in the env
+//lets see what easier
+//TODO: Once agent is connect, we can modify this generation to call the agent instead or connect to the google sheets and add to hte mongo db
+
 async function generateVulnerabilitiesForCompanies(companies, countPerCompany = 3) {
     try {
         const vulnerabilities = [];
@@ -499,6 +508,7 @@ function formatDuration(start, end) {
 }
 
 // Auto-round management (run on bot startup)
+//TODO: Modify time/round period
 async function initializeRoundSystem() {
     try {
         // Check if we need to start a new round

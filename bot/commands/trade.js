@@ -10,6 +10,12 @@ const User = require('../../models/Users');
 const Vulnerability = require('../../models/Volunerabilies');
 const Trade = require('../../models/Trades');
 
+//TODO: Ensure Trading works correctly
+//the main flow seems tobe working,but it hard to keep track of what vuln is being traded
+//no errors happened when trading either,but still hard to check if when throguht without going into db
+// this could be a ui improvement
+//maybe after trade is complete should ifo of the voln that was traded
+//maybe add trade history as well
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('trade')

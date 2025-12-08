@@ -14,6 +14,10 @@ const Vulnerability = require('../../models/Volunerabilies');
 const generateOffer = require('../utils/generateOffer');
 const generateDictatorOffer = require('../utils/generateDicOffer');
 
+//TODO: add limit to reporting,so users dont spam command
+// maybe limit of 3 reports max (could get more info and report again)
+// only 1 poc can be submitted per voluneribiltiy
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('report')
@@ -45,7 +49,7 @@ module.exports = {
             );
             if (!confirmed) return;
 
-            // Step 5: Save report
+
             const report = await saveReport(
                 interaction,
                 platformId,
@@ -428,6 +432,10 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, i
         { upsert: false }
     );
 
+    //TODO: modify this so that we give access to volun after offer is made as wel
+    //since offer and amount is based upon how much info is given, and there is a delay in submission now,
+    //we need to make sure that we can check before giving a the info
+    //maybe range all users access to voln. once resovled
     // Grant user access to vulnerability fields after report/POC submission
     if(isPOCOnly){
         await Vulnerability.updateOne(
@@ -458,11 +466,12 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, i
             { $addToSet: updateObj }
         );
     }
-    checkExploitsAfterReport(vulnerabilityId);
+    await checkExploitsAfterReport(vulnerabilityId);
         return report;
 
 }
 
+//TODO: lets now check explosits after the voln is resolved instead!
 async function checkExploitsAfterReport(vulnerabilityId) {
     try {
         const Exploit = require('../../models/Expoits');

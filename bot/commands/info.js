@@ -9,6 +9,9 @@ const Vulnerability = require('../../models/Volunerabilies');
 const User = require('../../models/Users');
 const Company = require('../../models/Company');
 
+//TODO: looking into UI improvements with this
+// info works as intened but I feel like it could work better for a better user experience
+// maybe filetering such as reported/reolved vs unreport/unresolved
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('info')
