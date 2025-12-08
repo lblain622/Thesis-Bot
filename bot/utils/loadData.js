@@ -225,8 +225,8 @@ async function setup() {
 
 
 
-        console.log('\n✅ Data load completed successfully!');
-        console.log(`📊 Created ${companies.length} companies with vulnerabilities`);
+        console.log('\n Data load completed successfully!');
+        console.log(` Created ${companies.length} companies with vulnerabilities`);
 
     } catch (err) {
         console.error('Error:', err);

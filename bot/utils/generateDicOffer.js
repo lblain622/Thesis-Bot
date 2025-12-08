@@ -31,7 +31,7 @@ async function generateDictatorOffer(client, report, discordUser) {
 
   await discordUser.send({
     content:
-      `Offer from ${company.name}\n for a Severity: ${report.volunerablity_sev} Report\n` +
+      `Offer from ${company.name}\n Report\n` +
       `Option 1: $${options.option1.money} + ${options.option1.rep} reputation\n` +
       `Option 2: $${options.option2.money} + ${options.option2.rep} reputation\n\n` +
       `Please choose one:`,

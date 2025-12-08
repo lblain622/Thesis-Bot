@@ -101,23 +101,20 @@ module.exports = {
                 await response.update({ content: 'Loading vulnerability details...', components: [] });
             }
 
-            // Check if user can see fields (has submitted report/POC)
             const canSeeFields = vulnerability.visibility.allowedUsers.some(
                 u => u.toString() === user._id.toString()
             );
-
-            // Build embed
             const embed = new EmbedBuilder()
                 .setTitle(`${vulnerability.vuln_identifier}`)
                 .setColor(canSeeFields ? getSeverityColor(vulnerability.severity) : '#808080')
                 .setDescription(vulnerability.description || 'No description provided');
 
-            // Basic Information
+
             embed.addFields({
                 name: '📋 Basic Information',
                 value: `**Company:** ${vulnerability.company_id?.name || 'Unknown'}\n` +
                     `**Type:** ${vulnerability.volun_type}\n` +
-                    `**Status:** ${vulnerability.isResolved ? '✅ Resolved' : vulnerability.isReported ? '📤 Reported' : '🕒 Unreported'}`
+                    `**Status:** ${vulnerability.isResolved ? '✅ Resolved' : vulnerability.isReported ? ' Reported' : 'Unreported'}`
             });
 
             // Field Analysis - only show if user can see

@@ -60,7 +60,7 @@ async function announceVulnerabilityPatched(client, vulnerability, acceptedOffer
                 { name: 'Type', value: vulnerability.volun_type, inline: true },
                 { name: 'Reward', value: `$${acceptedOffer.offered_amount || '0'}`, inline: true },
                 { name: 'Reporter', value: reporterMention, inline: true },
-                { name: 'Status', value: 'atched', inline: true }
+                { name: 'Status', value: 'Patched', inline: true }
             )
             .setFooter({ text: 'Keep hunting for vulnerabilities! Use /report to submit your findings.' })
             .setTimestamp();
@@ -99,7 +99,7 @@ async function announceBatchPatches(client, vulnerabilities, channelId) {
             const company = await Company.findById(vuln.company_id);
             embed.addFields({
                 name: `${vuln.vuln_identifier}`,
-                value: `${company?.name || 'Unknown'} - ${vuln.severity} - $${vuln.reward || 0}`,
+                value: `${company?.name || 'Unknown'} - - $${vuln.reward || 0}`,
                 inline: true
             });
         }
