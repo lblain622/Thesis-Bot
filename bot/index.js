@@ -4,7 +4,7 @@ const { Client, GatewayIntentBits,Collection,REST, Routes } = require('discord.j
 const { connectDB } = require('../config/database');
 const fs = require('fs');
 const path = require('path');
-require('../models/Users');
+const User = require('../models/Users');
 
 //Some db interactions wont work based upon user privacy settings
 //look iinto have the private dms function inside through different channels  (see how much of a delay it might cause in the sever when many ppl interact)
@@ -52,6 +52,29 @@ for (const file of eventFiles) {
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 connectDB();
 
+// Ensure a Discord user exists in the database; create if not, update last_active/name if yes
+async function ensureUserExists(discordUser) {
+    try {
+        if (!discordUser) return;
+        await User.findOneAndUpdate(
+            { discord_id: discordUser.id },
+            {
+                $setOnInsert: {
+                    discord_id: discordUser.id,
+                },
+                $set: {
+                    discord_name: discordUser.tag,
+                    last_active: new Date(),
+                },
+            },
+            { upsert: true, new: true }
+        );
+    } catch (e) {
+        // Non-fatal: bot should continue even if we fail to upsert user
+        console.error('ensureUserExists error:', e);
+    }
+}
+
 client.once('clientReady', async () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
 
@@ -69,10 +92,15 @@ client.once('clientReady', async () => {
 client.on('messageCreate', async (msg) => {
     if (msg.author.bot) return;
 
+    // Add/Update user on any message usage (acts as a command usage tracker too)
+    await ensureUserExists(msg.author);
+
     if (msg.content === '!ping') return msg.reply('pong');
 });
 
 client.on('interactionCreate', async interaction => {
+    await ensureUserExists(interaction.user);
+
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;

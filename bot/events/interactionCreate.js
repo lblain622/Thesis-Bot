@@ -12,8 +12,9 @@ module.exports = {
         if (!interaction.isButton()) return;
 
         const [prefix, action, id] = interaction.customId.split('_');
-
+        
         try {
+
             // ============= ULTIMATUM GAME =============
             if (prefix === 'offer') {
                 await handleUltimatumGame(interaction, action, id);
