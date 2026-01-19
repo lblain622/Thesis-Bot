@@ -2,212 +2,27 @@ const Vulnerability = require('../../models/Volunerabilies');
 const Company = require('../../models/Company');
 const Round = require('../../models/Round');
 const Report = require('../../models/Reports');
-const Users = require('../../models/Users')
+const Users = require('../../models/Users');
+const Exploit = require('../../models/Expoits');
 const { EmbedBuilder } = require('discord.js');
 
 /**
  * Generate vulnerabilities with new field structure (for data loading)
  */
-//TODO: Update system to be more automated
-//TODO: Update time system for all time based reponsoes
-// Lets assume that each 'round' is 2 hours as a baseline
-//TODO: Add a game reset,so status off all players can be reset
+// Round timing (defaults) — can be overridden via env
+const ROUND_MS = Number(process.env.ROUND_MS || 30 * 60 * 1000);   // 30 minutes
+const COOLDOWN_MS = Number(process.env.COOLDOWN_MS || 2 * 60 * 1000); // 2 minutes
+const TICK_MS = Number(process.env.TICK_MS || 5 * 60 * 1000);      // 5 minutes
+
+// scheduler state (per-process, not persisted)
+let tickInterval = null;
+let roundTimeout = null;
+let cooldownTimeout = null;
+let autoRunEnabled = false; // becomes true after an admin starts the first round (per user request)
+
 // When game reset happens maybe make a new db on mongo, and make a new collections
 //if we do several iterations, I could also manually connect to a new db in the env
 //lets see what easier
-//TODO: Once agent is connect, we can modify this generation to call the agent instead or connect to the google sheets and add to hte mongo db
-
-async function generateVulnerabilitiesForCompanies(companies, countPerCompany = 3) {
-    try {
-        const vulnerabilities = [];
-
-        // Vulnerability types with weights
-        const vulnTypes = [
-            { type: 'XSS', weight: 0.3 },
-            { type: 'SQLi', weight: 0.2 },
-            { type: 'CSRF', weight: 0.15 },
-            { type: 'IDOR', weight: 0.2 },
-            { type: 'RCE', weight: 0.05 },
-            { type: 'Authentication', weight: 0.1 }
-        ];
-
-        // Severity distribution
-        const severities = [
-            { severity: 'Low', weight: 0.4 },
-            { severity: 'Medium', weight: 0.35 },
-            { severity: 'High', weight: 0.2 },
-            { severity: 'Critical', weight: 0.05 }
-        ];
-
-        const allUsers = await Users.find({});
-        if (!allUsers.length) {
-            throw new Error('No users found in database');
-        }
-
-
-        for (const company of companies) {
-            const companyIndex = companies.indexOf(company);
-            for (let i = 0; i < countPerCompany; i++) {
-                // Weighted random type selection
-                const type = weightedRandom(vulnTypes);
-                
-                // Weighted random severity selection
-                const severityConfig = weightedRandom(severities);
-                
-                // Determine visibility (30% global, 70% exclusive)
-                const isGlobal = Math.random() < 0.3;
-
-                const allowedUsers = selectAllowedUsers(allUsers, isGlobal);
-                // Generate field data based on vulnerability type and severity
-                const fieldData = await generateFieldData(type.type, severityConfig.severity, company,allowedUsers);
-
-
-
-                const vulnerability = {
-                    company_id: company._id,
-                    vuln_identifier: `VULN-${company.name.toUpperCase().replace(/\s+/g, '')}-${(i + 1).toString().padStart(3, '0')}`,
-                    volun_type: type.type,
-                    name: `${type.type} in ${company.name}`,
-                    severity: severityConfig.severity,
-                    description: generateVulnDescription(type.type, company.name, severityConfig.severity),
-                    isReported: false,
-                    isResolved: false,
-                    reported_date: new Date(),
-                    expiration_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-                    visibility: {
-                        isGlobal: isGlobal,
-                        allowedUsers: allowedUsers
-                    },
-                    // New Y/N question fields
-                    networkAccess: fieldData.networkAccess,
-                    arbitraryCodeExecution: fieldData.arbitraryCodeExecution,
-                    userInteraction: fieldData.userInteraction,
-                    automatable: fieldData.automatable,
-                    privilegesRequired: fieldData.privilegesRequired,
-                    confidentialityImpact: fieldData.confidentialityImpact,
-                    integrityImpact: fieldData.integrityImpact,
-                    availabilityImpact: fieldData.availabilityImpact,
-                    recoveryPotential: fieldData.recoveryPotential
-                };
-
-                // Set resolved date if resolved
-                if (vulnerability.isResolved) {
-                    vulnerability.is_resolved_date = new Date(Date.now() - Math.random() * 15 * 24 * 60 * 60 * 1000);
-                }
-
-                vulnerabilities.push(vulnerability);
-            }
-        }
-
-        return vulnerabilities;
-
-    } catch (error) {
-        console.error('Error generating vulnerabilities:', error);
-        throw error;
-    }
-}
-
-/**
- * Generate field data based on vulnerability type and severity
- */
-async function generateFieldData(vulnType, severity, company, allowedUsers) {
-    const fieldData = {};
-
-    // Randomly select 1–4 users (IDs only)
-    const getRandomUsers = () => {
-        if (!Array.isArray(allowedUsers) || allowedUsers.length === 0) return [];
-
-
-        const numUsers = Math.floor(Math.random() * 4);
-        const shuffled = [...allowedUsers].sort(() => Math.random() - 0.5);
-
-        // Return the ObjectIds AS IS
-        return shuffled.slice(0, numUsers);
-    };
-
-    // NETWORK ACCESS
-    fieldData.networkAccess = {
-        answer: Math.random() < 0.8 ? "Yes" : "No",
-        visibleTo: getRandomUsers()
-    };
-
-    // ARBITRARY CODE EXECUTION
-    fieldData.arbitraryCodeExecution = {
-        answer: (vulnType === "RCE" || (severity === "Critical" && Math.random() < 0.3)) ? "Yes" : "No",
-        visibleTo: getRandomUsers()
-    };
-
-    // USER INTERACTION
-    fieldData.userInteraction = {
-        answer: (vulnType === "CSRF" || (vulnType === "XSS" && Math.random() < 0.6)) ? "Yes" : "No",
-        visibleTo: getRandomUsers()
-    };
-
-    // AUTOMATABLE
-    fieldData.automatable = {
-        answer: fieldData.userInteraction.answer === "Yes" ? "No" : "Yes",
-        visibleTo: getRandomUsers()
-    };
-
-    // PRIVILEGES REQUIRED
-    const privilegeOptions = ["None", "Low", "High"];
-    const privilegeWeights = {
-        Critical: [0.1, 0.3, 0.6],
-        High: [0.2, 0.5, 0.3],
-        Medium: [0.4, 0.4, 0.2],
-        Low: [0.6, 0.3, 0.1]
-    };
-
-    fieldData.privilegesRequired = {
-        answer: weightedRandomChoice(privilegeOptions, privilegeWeights[severity]),
-        visibleTo: getRandomUsers()
-    };
-
-    // CIA IMPACTS
-    const impactLevels = ["None", "Low", "Medium", "High"];
-    const impactWeights = {
-        Critical: [0.0, 0.0, 0.2, 0.8],
-        High: [0.0, 0.1, 0.4, 0.5],
-        Medium: [0.1, 0.3, 0.5, 0.1],
-        Low: [0.4, 0.4, 0.2, 0.0]
-    };
-
-    fieldData.confidentialityImpact = {
-        answer: weightedRandomChoice(impactLevels, impactWeights[severity]),
-        visibleTo: getRandomUsers()
-    };
-
-    fieldData.integrityImpact = {
-        answer: weightedRandomChoice(impactLevels, impactWeights[severity]),
-        visibleTo: getRandomUsers()
-    };
-
-    fieldData.availabilityImpact = {
-        answer: weightedRandomChoice(impactLevels, impactWeights[severity]),
-        visibleTo: getRandomUsers()
-    };
-
-    // RECOVERY POTENTIAL
-    const recoveryOptions = ["Automatic", "User", "Irrecoverable"];
-    let recoveryWeights;
-
-    if (fieldData.availabilityImpact.answer === "High") {
-        recoveryWeights = [0.1, 0.3, 0.6];
-    } else if (fieldData.availabilityImpact.answer === "Medium") {
-        recoveryWeights = [0.2, 0.5, 0.3];
-    } else {
-        recoveryWeights = [0.6, 0.3, 0.1];
-    }
-
-    fieldData.recoveryPotential = {
-        answer: weightedRandomChoice(recoveryOptions, recoveryWeights),
-        visibleTo: getRandomUsers()
-    };
-
-    return fieldData;
-}
-
-
 
 function selectAllowedUsers(allUsers, isGlobal) {
     if (isGlobal) {
@@ -222,73 +37,90 @@ function selectAllowedUsers(allUsers, isGlobal) {
 }
 
 
-/**
- * Generate daily vulnerabilities with user assignments
- */
-async function generateDailyVulnerabilities() {
-    try {
-        // Get all companies
-        const companies = await Company.find({});
-        if (!companies.length) {
-            throw new Error('No companies found in database');
-        }
-
-        // Get all users
-        const allUsers = await Users.find({});
-        if (!allUsers.length) {
-            throw new Error('No users found in database');
-        }
-
-        // End previous active round if exists
-        await endPreviousRound();
-
-        // Get next round number
-        const lastRound = await Round.findOne().sort({ round_number: -1 });
-        const roundNumber = lastRound ? lastRound.round_number + 1 : 1;
-
-        // Create new round
-        const round = await Round.create({
-            round_number: roundNumber,
-            companies_involved: companies.map(c => c._id),
-            users_involved: allUsers.map(u => u._id)
-        });
-
-        // Generate vulnerabilities with user assignments
-        const vulnerabilities = await generateVulnerabilitiesForCompanies(companies, 2);
-
-        // Insert vulnerabilities
-        const createdVulns = await Vulnerability.insertMany(vulnerabilities);
-
-        // Log user assignments for debugging
-        createdVulns.forEach(vuln => {
-            console.log(`Vulnerability ${vuln.vuln_identifier}:`);
-            console.log(`  Global: ${vuln.visibility.isGlobal}`);
-            console.log(`  Allowed Users: ${vuln.visibility.allowedUsers.length}`);
-
-            const fieldKeys = ['networkAccess', 'arbitraryCodeExecution', 'userInteraction',
-                             'automatable', 'privilegesRequired', 'confidentialityImpact',
-                             'integrityImpact', 'availabilityImpact', 'recoveryPotential'];
-
-            fieldKeys.forEach(key => {
-                if (vuln[key] && vuln[key].visibleTo) {
-                    console.log(`  ${key}: ${vuln[key].visibleTo.length} users can view`);
-                }
-            });
-        });
-
-        // Update round with vulnerability count
-        await Round.findByIdAndUpdate(round._id, {
-            vulnerabilities_generated: createdVulns.length
-        });
-
-        console.log(`Generated ${createdVulns.length} vulnerabilities for round ${roundNumber}`);
-        return createdVulns;
-
-    } catch (error) {
-        console.error('Error generating daily vulnerabilities:', error);
-        throw error;
-    }
+// Utility: format human-readable duration between two dates
+function formatDuration(start, end) {
+    const ms = Math.max(0, end.getTime() - new Date(start).getTime());
+    const minutes = Math.floor(ms / 60000);
+    const seconds = Math.floor((ms % 60000) / 1000);
+    const parts = [];
+    if (minutes) parts.push(`${minutes}m`);
+    parts.push(`${seconds}s`);
+    return parts.join(' ');
 }
+
+// Utility: resolve an announcements channel: prefer #announcements, else create, else fallback to #general or first text channel
+async function resolveAnnouncementsChannel(client) {
+    // Try all guilds the bot is in and pick a suitable channel in the first guild
+    const guilds = client.guilds.cache;
+    const guild = guilds.first() || (await client.guilds.fetch().then(col => col.first()).catch(() => null));
+    if (!guild) return null;
+    await guild.channels.fetch();
+
+    let channel = guild.channels.cache.find(ch => ch.type === 0 && ch.name.toLowerCase() === 'announcements');
+    if (!channel) {
+        channel = guild.channels.cache.find(ch => ch.type === 0 && ch.name.toLowerCase() === 'announcements');
+    }
+    if (!channel) {
+        channel = guild.channels.cache.find(ch => ch.type === 0 && ch.name.toLowerCase().includes('general'));
+    }
+    if (!channel) {
+        // try to create announcements channel
+        try {
+            // create with preferred name
+            channel = await guild.channels.create({ name: 'announcements', type: 0 });
+        } catch (_) {
+            // fallback: first text channel
+            channel = guild.channels.cache.find(ch => ch.type === 0) || null;
+        }
+    }
+    return channel;
+}
+
+// Vulnerability generation (placeholder simple generator if not provided elsewhere)
+async function generateDailyVulnerabilities() {
+    // Determine round number
+    const lastRound = await Round.findOne({}).sort({ round_number: -1 });
+    const roundNumber = (lastRound?.round_number || 0) + 1;
+
+    const companies = await Company.find({});
+    const users = await Users.find({});
+    const isGlobal = true; // simple mix: half global, half exclusive
+
+    // Create or reuse active round
+    let round = await Round.findOne({ status: 'active' });
+    if (!round) {
+        round = await Round.create({ round_number: roundNumber, start_date: new Date(), status: 'active' });
+    }
+
+    const vulns = [];
+    for (const company of companies.slice(0, 5)) { // limit to avoid spam
+        const severityOptions = [
+            { value: 'Low', weight: 3 },
+            { value: 'Medium', weight: 5 },
+            { value: 'High', weight: 2 },
+            { value: 'Critical', weight: 1 }
+        ];
+        const chosen = weightedRandom(severityOptions).value;
+        const visibilityGlobal = Math.random() < 0.5;
+        const allowedUsers = selectAllowedUsers(users, visibilityGlobal);
+        const vuln = await Vulnerability.create({
+            company_id: company._id,
+            vuln_identifier: `VULN-${company._id.toString().slice(-4)}-${Math.floor(Math.random()*10000)}`,
+            severity: chosen,
+            volun_type: 'Generic',
+            round_id: round._id,
+            visibility: { isGlobal: visibilityGlobal, allowedUsers },
+            isResolved: false
+        });
+        vulns.push(vuln);
+    }
+
+    // Update round counters
+    await Round.findByIdAndUpdate(round._id, { $inc: { vulnerabilities_generated: vulns.length } });
+    return vulns;
+}
+
+
 
 
 /**
@@ -303,7 +135,7 @@ async function endRound(client, channelId) {
 
         // Get round statistics
         const roundReports = await Report.find({
-            created_at: { $gte: currentRound.start_date }
+            createdAt: { $gte: currentRound.start_date }
         });
 
         const roundVulns = await Vulnerability.find({
@@ -322,37 +154,40 @@ async function endRound(client, channelId) {
         });
 
         // Send summary embed
-        const channel = await client.channels.fetch(channelId);
-        if (!channel) {
-            throw new Error('Announcement channel not found');
+        let channel = null;
+        if (channelId) {
+            try { channel = await client.channels.fetch(channelId); } catch (_) { channel = null; }
         }
+        if (!channel) channel = await resolveAnnouncementsChannel(client);
+        if (!channel) throw new Error('Announcement channel not found');
 
         const embed = new EmbedBuilder()
-            .setTitle(`🏁 Day ${currentRound.round_number} Ended!`)
+            .setTitle(`Round ${currentRound.round_number} Ended`)
             .setColor('#FF6B6B')
-            .setDescription('The round has concluded. Here are the results:')
+            .setDescription(`The round has concluded. Here are the results. Next round starts after cooldown (~${Math.floor(COOLDOWN_MS/60000)}m).`)
             .addFields(
                 { name: 'Duration', value: `${formatDuration(currentRound.start_date, new Date())}`, inline: true },
                 { name: 'Vulnerabilities', value: `${roundVulns.length}`, inline: true },
                 { name: 'Resolved', value: `${resolvedVulns.length}`, inline: true },
                 { name: 'Reports Submitted', value: `${roundReports.length}`, inline: true },
                 { name: 'Total Payout', value: `$${totalPayout}`, inline: true },
-                { name: 'Companies', value: `${currentRound.companies_involved.length}`, inline: true }
             )
-            .setFooter({ text: 'Next round starting soon...' })
+            .setFooter({ text: 'Cooldown in effect' })
             .setTimestamp();
 
         await channel.send({ embeds: [embed] });
 
-        // Auto-start next round after 1 hour
-        setTimeout(async () => {
+        // Schedule next round after cooldown if auto-run is enabled
+        if (cooldownTimeout) clearTimeout(cooldownTimeout);
+        cooldownTimeout = setTimeout(async () => {
             try {
-                const nextRoundVulns = await generateDailyVulnerabilities();
-                await announceNewRound(client, channelId, nextRoundVulns);
+                if (autoRunEnabled) {
+                    await startRound(client, channelId);
+                }
             } catch (error) {
                 console.error('Error auto-starting next round:', error);
             }
-        }, 60 * 60 * 1000); // 1 hour delay
+        }, COOLDOWN_MS);
 
         return {
             round: currentRound,
@@ -375,10 +210,12 @@ async function endRound(client, channelId) {
  */
 async function announceNewRound(client, channelId, vulnerabilities) {
     try {
-        const channel = await client.channels.fetch(channelId);
-        if (!channel) {
-            throw new Error('Announcement channel not found');
+        let channel = null;
+        if (channelId) {
+            try { channel = await client.channels.fetch(channelId); } catch (_) { channel = null; }
         }
+        if (!channel) channel = await resolveAnnouncementsChannel(client);
+        if (!channel) throw new Error('Announcement channel not found');
 
         const currentRound = await Round.findOne({ status: 'active' });
         if (!currentRound) {
@@ -389,15 +226,15 @@ async function announceNewRound(client, channelId, vulnerabilities) {
         const exclusiveVulns = vulnerabilities.filter(v => !v.visibility.isGlobal);
 
         const embed = new EmbedBuilder()
-            .setTitle(`Day ${currentRound.round_number} Started!`)
+            .setTitle(`Round ${currentRound.round_number} Started`)
             .setColor('#4CAF50')
-            .setDescription('A new day has begun! Hunt for vulnerabilities and earn rewards!')
+            .setDescription('A new round has begun. Hunt for vulnerabilities and earn rewards!')
             .addFields(
                 { name: 'New Vulnerabilities', value: `${vulnerabilities.length}`, inline: true },
                 { name: 'Global', value: `${globalVulns.length}`, inline: true },
-                { name: 'Round Ends', value: `<t:${Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000)}:R>`, inline: false }
+                { name: 'Round Ends', value: `<t:${Math.floor((Date.now() + Math.floor(ROUND_MS/1000)*1000) / 1000)}:R>`, inline: false }
             )
-            .setFooter({ text: `Use /report to submit your findings!` })
+            .setFooter({ text: `Use /report to submit your findings` })
             .setTimestamp();
 
         await channel.send({ embeds: [embed] });
@@ -405,6 +242,99 @@ async function announceNewRound(client, channelId, vulnerabilities) {
     } catch (error) {
         console.error('Error announcing new round:', error);
         throw error;
+    }
+}
+
+// periodic evaluator: payouts, exposure checks, and cumulative summary
+async function evaluateTick(client) {
+    const currentRound = await Round.findOne({ status: 'active' });
+    if (!currentRound) return;
+
+    // cumulative counts
+    const [reports, resolvedReports] = await Promise.all([
+        Report.find({ createdAt: { $gte: currentRound.start_date } }),
+        Report.find({ status: 'resolved', createdAt: { $gte: currentRound.start_date } })
+    ]);
+    const totalPayout = reports.reduce((sum, r) => sum + (r.offered_amount || 0), 0);
+
+    // process exploits: pay passive income and roll exposure
+    const activeExploits = await Exploit.find({ is_caught: false });
+    let caughtCount = 0;
+    for (const ex of activeExploits) {
+        try {
+            const user = await Users.findById(ex.user_id);
+            const vuln = await Vulnerability.findById(ex.volunerability_id);
+            if (!user || !vuln) continue;
+
+            // credit passive earnings
+            const credit = ex.money_per_cycle;
+            await Users.findByIdAndUpdate(user._id, { $inc: { money_earned: credit } });
+            await Exploit.findByIdAndUpdate(ex._id, { $inc: { cycles_completed: 1 }, $set: { last_rewarded: new Date() } });
+
+            // compute exposure probability scaled by duration
+            const base = Math.min(1, Math.max(0, ex.exposure_chance));
+            const durationBoost = Math.min(0.5, (ex.cycles_completed + 1) * 0.02); // up to +50%
+            const exposureProb = Math.min(1, base + durationBoost);
+            if (Math.random() < exposureProb) {
+                // caught: apply penalty scaled by trust and duration
+                const companyId = vuln.company_id;
+                const repEntry = (user.reputation_breakdown || []).find(r => r.company_id?.toString() === companyId?.toString());
+                const trust = repEntry?.trust_score || 0; // lower trust => harsher
+                const trustFactor = 1 + Math.max(0, -trust) / 50; // trust -50 => +2x
+                const durationFactor = 1 + Math.min(1, ex.cycles_completed / 12); // up to +2x around 1 hour
+                const fineBase = 500;
+                const fine = Math.floor(fineBase * trustFactor * durationFactor);
+
+                // subtract fine (not below 0)
+                const newMoney = Math.max(0, (user.money_earned || 0) - fine);
+                await Users.findByIdAndUpdate(user._id, { $set: { money_earned: newMoney } });
+
+                // reduce trust further
+                const penaltyTrust = Math.ceil(10 * durationFactor);
+                // ensure entry exists
+                if (!repEntry) {
+                    await Users.updateOne({ _id: user._id }, {
+                        $push: { reputation_breakdown: { company_id: companyId, trust_score: -penaltyTrust } }
+                    });
+                } else {
+                    await Users.updateOne({ _id: user._id, 'reputation_breakdown.company_id': companyId }, {
+                        $inc: { 'reputation_breakdown.$.trust_score': -penaltyTrust }
+                    });
+                }
+
+                // mark as caught
+                await Exploit.findByIdAndUpdate(ex._id, { $set: { is_caught: true } });
+                caughtCount += 1;
+
+                // DM user
+                if (user.discord_id) {
+                    try {
+                        const duser = await client.users.fetch(user.discord_id);
+                        await duser.send(`You have been detected exploiting a vulnerability at ${new Date().toLocaleString()}. Penalty applied: fine $${fine}, trust -${penaltyTrust}.`);
+                    } catch (_) { /* ignore DM failures */ }
+                }
+            }
+        } catch (err) {
+            console.error('Error processing exploit tick:', err);
+        }
+    }
+
+
+    const channel = await resolveAnnouncementsChannel(client);
+    if (channel) {
+        const embed = new EmbedBuilder()
+            .setTitle(`Round ${currentRound.round_number} Update`)
+            .setColor('#2E86AB')
+            .setDescription('Periodic update for the current round')
+            .addFields(
+                { name: 'Reports Submitted', value: String(reports.length), inline: true },
+                { name: 'Reports Resolved', value: String(resolvedReports.length), inline: true },
+                { name: 'Total Payout Offered', value: `$${totalPayout}`, inline: true },
+                { name: 'Active Exploits', value: String(Math.max(0, activeExploits.length - caughtCount)), inline: true },
+                { name: 'Exploits Detected', value: String(caughtCount), inline: true }
+            )
+            .setTimestamp();
+        try { await channel.send({ embeds: [embed] }); } catch (_) { /* ignore */ }
     }
 }
 
@@ -461,73 +391,51 @@ function weightedRandom(options) {
     return options[0];
 }
 
-function weightedRandomChoice(choices, weights) {
-    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-    let random = Math.random() * totalWeight;
 
-    for (let i = 0; i < choices.length; i++) {
-        random -= weights[i];
-        if (random <= 0) {
-            return choices[i];
-        }
+// Start a new round (admin triggered). Enables auto-run loop after the first start.
+async function startRound(client, channelId) {
+    // clear previous intervals if any
+    if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+    if (roundTimeout) { clearTimeout(roundTimeout); roundTimeout = null; }
+
+    autoRunEnabled = true; // after first manual start, rounds autorun per user request
+
+    // end any leftover active round
+    const active = await Round.findOne({ status: 'active' });
+    if (active) {
+        await Round.findByIdAndUpdate(active._id, { status: 'ended', end_date: new Date() });
     }
-    return choices[0];
-}
 
-function generateVulnIdentifier(type, companyName, index) {
-    const prefixes = {
-        'XSS': 'XSS',
-        'SQLi': 'SQLI',
-        'CSRF': 'CSRF',
-        'IDOR': 'IDOR',
-        'RCE': 'RCE',
-        'Authentication': 'AUTH'
-    };
-    const prefix = prefixes[type] || 'VULN';
-    const timestamp = Date.now().toString().slice(-4);
-    return `${prefix}-${companyName.toUpperCase().replace(/\s+/g, '')}-${(index + 1).toString().padStart(3, '0')}`;
-}
+    // create new active round and generate vulns
+    const vulns = await generateDailyVulnerabilities();
+    await announceNewRound(client, channelId, vulns);
 
-function generateVulnDescription(type, companyName, severity) {
-    const descriptions = {
-        'XSS': `${severity} severity cross-site scripting vulnerability found in ${companyName}'s web application.`,
-        'SQLi': `${severity} severity SQL injection vulnerability in ${companyName}'s database layer.`,
-        'CSRF': `${severity} severity cross-site request forgery vulnerability in ${companyName}'s authentication system.`,
-        'IDOR': `${severity} severity insecure direct object reference in ${companyName}'s access controls.`,
-        'RCE': `${severity} severity remote code execution vulnerability in ${companyName}'s infrastructure.`,
-        'Authentication': `${severity} severity authentication bypass vulnerability in ${companyName}'s security system.`
-    };
-    return descriptions[type] || `${severity} severity security vulnerability discovered in ${companyName}.`;
-}
-
-function formatDuration(start, end) {
-    const diff = end.getTime() - start.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${minutes}m`;
+    // schedule periodic tick and round end
+    tickInterval = setInterval(() => { evaluateTick(client).catch(() => {}); }, TICK_MS);
+    roundTimeout = setTimeout(async () => {
+        try { await endRound(client, channelId); } catch (e) { console.error(e); }
+    }, ROUND_MS);
 }
 
 // Auto-round management (run on bot startup)
-//TODO: Modify time/round period
-async function initializeRoundSystem() {
+// Resumes active round if present; does not auto-start if none.
+async function initializeRoundSystem(client) {
     try {
-        // Check if we need to start a new round
         const activeRound = await Round.findOne({ status: 'active' });
-
-        if (!activeRound) {
-            console.log('No active round found. Starting new round...');
-            await generateDailyVulnerabilities();
-        } else {
-            // Check if current round is expired
+        if (activeRound) {
             const roundAge = Date.now() - activeRound.start_date.getTime();
-            if (roundAge > 24 * 60 * 60 * 1000) {
-                console.log('Current round expired. Starting new round...');
-                await endPreviousRound();
-                await generateDailyVulnerabilities();
-            } else {
-                const remaining = 24 * 60 * 60 * 1000 - roundAge;
-                console.log(`Round ${activeRound.round_number} active. Ends in ${Math.floor(remaining / (1000 * 60 * 60))} hours.`);
-            }
+            const remaining = Math.max(0, ROUND_MS - roundAge);
+            console.log(`Round ${activeRound.round_number} active. Ends in ${Math.ceil(remaining / 60000)} minutes.`);
+
+            // schedule timers
+            if (tickInterval) clearInterval(tickInterval);
+            tickInterval = setInterval(() => { evaluateTick(client).catch(() => {}); }, TICK_MS);
+            if (roundTimeout) clearTimeout(roundTimeout);
+            roundTimeout = setTimeout(async () => {
+                try { await endRound(client); } catch (e) { console.error(e); }
+            }, remaining);
+        } else {
+            console.log('No active round. Waiting for admin to start the game.');
         }
     } catch (error) {
         console.error('Error initializing round system:', error);
@@ -536,11 +444,14 @@ async function initializeRoundSystem() {
 
 module.exports = {
     generateDailyVulnerabilities,
-    generateVulnerabilitiesForCompanies, 
     endRound,
     announceNewRound,
     getCurrentRound,
     getRoundHistory,
     initializeRoundSystem,
-    endPreviousRound
+    endPreviousRound,
+    startRound,
+    // controls
+    enableAutoRun: () => { autoRunEnabled = true; },
+    disableAutoRun: () => { autoRunEnabled = false; }
 };
