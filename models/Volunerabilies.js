@@ -93,7 +93,11 @@ const volunerabilitySchema = new Schema({
     discovered_by: [{
         user_id: { type: Schema.Types.ObjectId, ref: 'Users' },
         discovered_at: { type: Date, default: Date.now }
-    }]
+    }],
+
+    // Auto-offer scheduler helpers
+    offer_wait_started_at: { type: Date, default: null },
+    last_offer_report_id: { type: Schema.Types.ObjectId, ref: 'Report', default: null }
 }, { timestamps: true });
 
 module.exports = model('Volunerabilies', volunerabilitySchema);

@@ -5,6 +5,8 @@ const Report = require('../../models/Reports');
 const Users = require('../../models/Users');
 const Exploit = require('../../models/Expoits');
 const { EmbedBuilder } = require('discord.js');
+const generateOffer = require('./generateOffer');
+const CompanyOffer = require('../../models/CompanyOffers');
 
 /**
  * Generate vulnerabilities with new field structure (for data loading)
@@ -319,6 +321,12 @@ async function evaluateTick(client) {
         }
     }
 
+    // Auto-offer evaluation every tick (5 minutes)
+    try {
+        await evaluateAutoOffers(client);
+    } catch (e) {
+        console.error('Auto-offer evaluation failed:', e);
+    }
 
     const channel = await resolveAnnouncementsChannel(client);
     if (channel) {
@@ -391,6 +399,121 @@ function weightedRandom(options) {
     return options[0];
 }
 
+
+// ===== Auto-offer evaluation helpers =====
+const VISIBILITY_FIELDS = [
+    'networkAccess',
+    'arbitraryCodeExecution',
+    'userInteraction',
+    'automatable',
+    'confidentialityImpact',
+    'integrityImpact',
+    'availabilityImpact',
+    'privilegesRequired',
+    'recoveryPotential',
+];
+
+function countVisibleFieldsForUser(vuln, userId) {
+    if (!vuln) return 0;
+    const uid = userId?.toString();
+    let count = 0;
+    for (const f of VISIBILITY_FIELDS) {
+        const node = vuln[f];
+        const list = node?.visibleTo || [];
+        if (list.some(x => x?.toString() === uid)) count += 1;
+    }
+    return count;
+}
+
+async function evaluateAutoOffers(client) {
+    // Fetch all non-POC reports with a linked vulnerability
+    const reports = await Report.find({ is_poc_only: { $ne: true }, vulnerability_id: { $ne: null } });
+    if (!reports.length) return;
+
+    // Group by vulnerability_id
+    const byVuln = new Map();
+    for (const r of reports) {
+        const key = r.vulnerability_id?.toString();
+        if (!key) continue;
+        if (!byVuln.has(key)) byVuln.set(key, []);
+        byVuln.get(key).push(r);
+    }
+
+    const now = new Date();
+    for (const [vulnId, vulnReports] of byVuln.entries()) {
+        const vuln = await Vulnerability.findById(vulnId);
+        if (!vuln) continue;
+
+        // Skip if there is already a pending offer for any report on this vulnerability
+        const pendingForVuln = await CompanyOffer.findOne({ report_id: { $in: vulnReports.map(r => r._id) }, status: 'pending' });
+        if (pendingForVuln) continue;
+
+        // Build per-user stats
+        const perUser = new Map(); // userId -> { visibleCount, earliestReport, earliestAt }
+        for (const r of vulnReports) {
+            const uid = r.user_id?.toString();
+            if (!uid) continue;
+            const visible = countVisibleFieldsForUser(vuln, r.user_id);
+            const entry = perUser.get(uid) || { visibleCount: visible, earliestReport: r, earliestAt: r.submitted_at || r.createdAt };
+            // Update visible count in case multiple reports exist; keep max visibility
+            if (visible > entry.visibleCount) entry.visibleCount = visible;
+            const ts = r.submitted_at || r.createdAt;
+            if (!entry.earliestAt || (ts && ts < entry.earliestAt)) {
+                entry.earliestAt = ts;
+                entry.earliestReport = r;
+            }
+            perUser.set(uid, entry);
+        }
+
+        if (!perUser.size) continue;
+
+        const totalFields = VISIBILITY_FIELDS.length;
+        // Find users with full visibility
+        const fullUsers = Array.from(perUser.entries())
+            .filter(([, v]) => v.visibleCount >= totalFields)
+            .sort((a, b) => (a[1].earliestAt || now) - (b[1].earliestAt || now));
+
+        let chosenReport = null;
+        if (fullUsers.length) {
+            // Immediate offer to the earliest full-visibility user
+            chosenReport = fullUsers[0][1].earliestReport;
+            await Vulnerability.updateOne({ _id: vuln._id }, { $set: { offer_wait_started_at: null, last_offer_report_id: chosenReport._id } });
+        } else {
+            // No full visibility. Wait exactly one additional cycle; if already waited, pick the highest visible count, earliest.
+            if (!vuln.offer_wait_started_at) {
+                await Vulnerability.updateOne({ _id: vuln._id }, { $set: { offer_wait_started_at: now } });
+                continue;
+            }
+            const waitedMs = now.getTime() - new Date(vuln.offer_wait_started_at).getTime();
+            if (waitedMs < TICK_MS) continue; // wait one more cycle
+
+            const ranked = Array.from(perUser.entries())
+                .sort((a, b) => {
+                    // Desc by visibleCount, then asc by earliestAt
+                    if (b[1].visibleCount !== a[1].visibleCount) return b[1].visibleCount - a[1].visibleCount;
+                    return (a[1].earliestAt || now) - (b[1].earliestAt || now);
+                });
+            chosenReport = ranked[0][1].earliestReport;
+            await Vulnerability.updateOne({ _id: vuln._id }, { $set: { offer_wait_started_at: null, last_offer_report_id: chosenReport._id } });
+        }
+
+        if (!chosenReport) continue;
+
+        // Ensure we are not duplicating an offer for this report
+        const existing = await CompanyOffer.findOne({ report_id: chosenReport._id, status: 'pending' });
+        if (existing) continue;
+
+        // Fetch Discord user and generate offer
+        try {
+            const user = await Users.findById(chosenReport.user_id);
+            if (!user?.discord_id) continue;
+            const duser = await client.users.fetch(user.discord_id);
+            await generateOffer(client, chosenReport, duser);
+        } catch (e) {
+            console.error('Failed to send auto-offer:', e);
+        }
+    }
+}
 
 // Start a new round (admin triggered). Enables auto-run loop after the first start.
 async function startRound(client, channelId) {

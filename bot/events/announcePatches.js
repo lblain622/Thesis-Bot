@@ -18,8 +18,7 @@ async function announceVulnerabilityPatched(client, vulnerability, acceptedOffer
             console.error('Guild not found:', serverId);
             return;
         }
-        //TODO: add a setup command that predefined channels
-        // Find the general channel (usually named "general")
+
         let channel = guild.channels.cache.find(ch =>
             ch.type === 0 && // GuildText type
             ch.name.toLowerCase().includes('general')
