@@ -5,7 +5,7 @@ const { connectDB } = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 const User = require('../models/Users');
-const roundSystem = require('../models/RoundSystem');
+const roundSystem = require('../utils/roundSystem');
 
 //Some db interactions wont work based upon user privacy settings
 //look iinto have the private dms function inside through different channels  (see how much of a delay it might cause in the sever when many ppl interact)
