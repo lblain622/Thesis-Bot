@@ -5,6 +5,7 @@ const { connectDB } = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 const User = require('../models/Users');
+const roundSystem = require('../models/RoundSystem');
 
 //Some db interactions wont work based upon user privacy settings
 //look iinto have the private dms function inside through different channels  (see how much of a delay it might cause in the sever when many ppl interact)
@@ -74,15 +75,61 @@ async function ensureUserExists(discordUser) {
         console.error('ensureUserExists error:', e);
     }
 }
+function setupGracefulShutdown() {
+    const shutdownSignals = ['SIGINT', 'SIGTERM', 'SIGQUIT'];
+
+    shutdownSignals.forEach(signal => {
+        process.on(signal, async () => {
+            console.log(`\n${signal} received. Shutting down gracefully...`);
+
+            try {
+                // Clean up round system timers
+                if (typeof roundSystem.cleanupTimers === 'function') {
+                    roundSystem.cleanupTimers();
+                    console.log('Cleaned up round system timers');
+                }
+
+                // End any active round properly
+                const activeRound = await roundSystem.getCurrentRound();
+                if (activeRound) {
+                    console.log(`Ending active round ${activeRound.round_number} before shutdown...`);
+                    try {
+                        await roundSystem.endRound(client);
+                    } catch (e) {
+                        console.error('Error ending round on shutdown:', e);
+                    }
+                }
+
+                // Destroy Discord client
+                if (client && !client.destroyed) {
+                    client.destroy();
+                    console.log('Discord client destroyed');
+                }
+
+                console.log('Shutdown complete.');
+                process.exit(0);
+            } catch (error) {
+                console.error('Error during graceful shutdown:', error);
+                process.exit(1);
+            }
+        });
+    });
+}
 
 client.once('clientReady', async () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
 
     try {
+     roundSystem.cleanupTimers();
+
+            // Initialize the round system (this will resume any active round)
+            await roundSystem.initializeRoundSystem(client);
+    await recoverRoundSystem(client);
         const data = await rest.put(
             Routes.applicationCommands(process.env.DISCORD_APP_ID),
             { body: commands }
         );
+        setupGracefulShutdown();
         console.log("Registered Commands");
     } catch (err) {
         console.error('Error with commands:', err);

@@ -9,9 +9,6 @@ const testVulnData = require('../../data/test-data.json');
 const generateOffer = require('./generateOffer');
 const CompanyOffer = require('../../models/CompanyOffers');
 
-/**
- * Generate vulnerabilities with new field structure (for data loading)
- */
 // Round timing (defaults) — can be overridden via env
 const ROUND_MS = Number(process.env.ROUND_MS || 30 * 60 * 1000);   // 30 minutes
 const COOLDOWN_MS = Number(process.env.COOLDOWN_MS || 2 * 60 * 1000); // 2 minutes
@@ -21,26 +18,19 @@ const TICK_MS = Number(process.env.TICK_MS || 5 * 60 * 1000);      // 5 minutes
 let tickInterval = null;
 let roundTimeout = null;
 let cooldownTimeout = null;
-let autoRunEnabled = false; // becomes true after an admin starts the first round (per user request)
+let autoRunEnabled = false;
 
-// When game reset happens maybe make a new db on mongo, and make a new collections
-//if we do several iterations, I could also manually connect to a new db in the env
-//lets see what easier
-
+// ===== UTILITY FUNCTIONS =====
 function selectAllowedUsers(allUsers, isGlobal) {
     if (isGlobal) {
-        // For global vulnerabilities, all users can access basic info
         return allUsers.map(user => user._id);
     } else {
-        // For exclusive vulnerabilities, select 1-3 users
         const userCount = Math.floor(Math.random() * 3) + 1;
         const shuffledUsers = [...allUsers].sort(() => 0.5 - Math.random());
         return shuffledUsers.slice(0, userCount).map(user => user._id);
     }
 }
 
-
-// Utility: format human-readable duration between two dates
 function formatDuration(start, end) {
     const ms = Math.max(0, end.getTime() - new Date(start).getTime());
     const minutes = Math.floor(ms / 60000);
@@ -51,9 +41,7 @@ function formatDuration(start, end) {
     return parts.join(' ');
 }
 
-// Utility: resolve an announcements channel: prefer #announcements, else create, else fallback to #general or first text channel
 async function resolveAnnouncementsChannel(client) {
-    // Try all guilds the bot is in and pick a suitable channel in the first guild
     const guilds = client.guilds.cache;
     const guild = guilds.first() || (await client.guilds.fetch().then(col => col.first()).catch(() => null));
     if (!guild) return null;
@@ -67,40 +55,38 @@ async function resolveAnnouncementsChannel(client) {
         channel = guild.channels.cache.find(ch => ch.type === 0 && ch.name.toLowerCase().includes('general'));
     }
     if (!channel) {
-        // try to create announcements channel
         try {
-            // create with preferred name
             channel = await guild.channels.create({ name: 'announcements', type: 0 });
         } catch (_) {
-            // fallback: first text channel
             channel = guild.channels.cache.find(ch => ch.type === 0) || null;
         }
     }
     return channel;
 }
 
-// Vulnerability generation (placeholder simple generator if not provided elsewhere)
+// ===== TIMER MANAGEMENT =====
+function cleanupTimers() {
+    if (tickInterval) {
+        clearInterval(tickInterval);
+        tickInterval = null;
+    }
+    if (roundTimeout) {
+        clearTimeout(roundTimeout);
+        roundTimeout = null;
+    }
+    if (cooldownTimeout) {
+        clearTimeout(cooldownTimeout);
+        cooldownTimeout = null;
+    }
+}
+
+// ===== VULNERABILITY GENERATION =====
 async function generateDailyVulnerabilities() {
-
-//    sheetsData =[]
-//    fetch('https://sheetdb.io/api/v1/58f61be4dda40')
-//        .then(async (response) => {
-//                response.json();
-//                sheetsData = await response
-//
-//            }
-//        )
-//        .then((data) => console.log(data));
-//
-//
-
-
     const lastRound = await Round.findOne({}).sort({ round_number: -1 });
     const roundNumber = (lastRound?.round_number || 0) + 1;
 
     const companies = await Company.find({});
     const users = await Users.find({});
-    const isGlobal = true; // simple mix: half global, half exclusive
 
     // Create or reuse active round
     let round = await Round.findOne({ status: 'active' });
@@ -109,16 +95,14 @@ async function generateDailyVulnerabilities() {
     }
 
     const vulns = [];
-    const companiesToUse = companies.slice(0, 5); // limit to avoid spam
+    const companiesToUse = companies.slice(0, 5);
     for (let i = 0; i < companiesToUse.length; i++) {
         const company = companiesToUse[i];
-        // pick corresponding test data entry (cycle if fewer entries than companies)
         const data = testVulnData[i % testVulnData.length];
 
         const visibilityGlobal = Math.random() < 0.5;
         const allowedUsers = selectAllowedUsers(users, visibilityGlobal);
 
-        // Map fields from test data to schema (support both normalized strings and legacy {answer} objects)
         const pickAnswer = (val) => {
             if (val == null) return undefined;
             if (typeof val === 'string') return val;
@@ -126,12 +110,8 @@ async function generateDailyVulnerabilities() {
             return undefined;
         };
 
+        const severity = typeof data.severity === 'string' ? data.severity : pickAnswer(data.severity) || 'LOW';
 
-
-        const severity =
-            typeof data.severity === 'string' ? data.severity : pickAnswer(data.severity) || 'LOW';
-
-        // Normalize field structures to match schema: { answer: <value>, visibleTo: [] }
         const toField = (val) => ({ answer: val, visibleTo: [] });
         const networkAccess = toField(data?.networkAccess);
         const arbitraryCodeExecution = toField(data?.arbitraryCodeExecution);
@@ -143,11 +123,9 @@ async function generateDailyVulnerabilities() {
         const privilegesRequired = toField(data?.privilegesRequired);
         const recoveryPotential = toField(data?.recoveryPotential);
 
-
         const vuln = await Vulnerability.create({
             company_id: company._id,
             round_id: round._id,
-            // keep unique across companies while preserving test id
             vuln_identifier: `${data.id}-${company._id.toString().slice(-4)}`,
             name: data.id,
             description: data.description,
@@ -168,19 +146,15 @@ async function generateDailyVulnerabilities() {
         vulns.push(vuln);
     }
 
-    // Update round counters
     await Round.findByIdAndUpdate(round._id, { $inc: { vulnerabilities_generated: vulns.length } });
     return vulns;
 }
 
-
-
-
-/**
- * End current round and show summary
- */
+// ===== ROUND END =====
 async function endRound(client, channelId) {
     try {
+        cleanupTimers(); // Clear existing timers first
+
         const currentRound = await Round.findOne({ status: 'active' });
         if (!currentRound) {
             throw new Error('No active round found');
@@ -235,7 +209,10 @@ async function endRound(client, channelId) {
         cooldownTimeout = setTimeout(async () => {
             try {
                 if (autoRunEnabled) {
+                    console.log(`Cooldown ended, starting next round automatically`);
                     await startRound(client, channelId);
+                } else {
+                    console.log(`Cooldown ended but auto-run disabled, waiting for manual start`);
                 }
             } catch (error) {
                 console.error('Error auto-starting next round:', error);
@@ -254,13 +231,12 @@ async function endRound(client, channelId) {
 
     } catch (error) {
         console.error('Error ending round:', error);
+        cleanupTimers();
         throw error;
     }
 }
 
-/**
- * Announce new round
- */
+// ===== ANNOUNCE NEW ROUND =====
 async function announceNewRound(client, channelId, vulnerabilities) {
     try {
         let channel = null;
@@ -278,6 +254,9 @@ async function announceNewRound(client, channelId, vulnerabilities) {
         const globalVulns = vulnerabilities.filter(v => v.visibility.isGlobal);
         const exclusiveVulns = vulnerabilities.filter(v => !v.visibility.isGlobal);
 
+        // FIXED: Correct timestamp calculation
+        const roundEndTimestamp = Math.floor((Date.now() + ROUND_MS) / 1000);
+
         const embed = new EmbedBuilder()
             .setTitle(`Round ${currentRound.round_number} Started`)
             .setColor('#4CAF50')
@@ -285,7 +264,8 @@ async function announceNewRound(client, channelId, vulnerabilities) {
             .addFields(
                 { name: 'New Vulnerabilities', value: `${vulnerabilities.length}`, inline: true },
                 { name: 'Global', value: `${globalVulns.length}`, inline: true },
-                { name: 'Round Ends', value: `<t:${Math.floor((Date.now() + Math.floor(ROUND_MS/1000)*1000) / 1000)}:R>`, inline: false }
+                { name: 'Exclusive', value: `${exclusiveVulns.length}`, inline: true },
+                { name: 'Round Ends', value: `<t:${roundEndTimestamp}:R>`, inline: false }
             )
             .setFooter({ text: `Use /report to submit your findings` })
             .setTimestamp();
@@ -298,160 +278,230 @@ async function announceNewRound(client, channelId, vulnerabilities) {
     }
 }
 
-// periodic evaluator: payouts, exposure checks, and cumulative summary
+// ===== TICK EVALUATION =====
 async function evaluateTick(client) {
     const currentRound = await Round.findOne({ status: 'active' });
     if (!currentRound) return;
 
-    // cumulative counts
-    const [reports, resolvedReports] = await Promise.all([
-        Report.find({ createdAt: { $gte: currentRound.start_date } }),
-        Report.find({ status: 'resolved', createdAt: { $gte: currentRound.start_date } })
-    ]);
-    const totalPayout = reports.reduce((sum, r) => sum + (r.offered_amount || 0), 0);
+    try {
+        // cumulative counts
+        const [reports, resolvedReports] = await Promise.all([
+            Report.find({ createdAt: { $gte: currentRound.start_date } }),
+            Report.find({ status: 'resolved', createdAt: { $gte: currentRound.start_date } })
+        ]);
+        const totalPayout = reports.reduce((sum, r) => sum + (r.offered_amount || 0), 0);
 
-    // process exploits: pay passive income and roll exposure
-    const activeExploits = await Exploit.find({ is_caught: false });
-    let caughtCount = 0;
-    for (const ex of activeExploits) {
-        try {
-            const user = await Users.findById(ex.user_id);
-            const vuln = await Vulnerability.findById(ex.volunerability_id);
-            if (!user || !vuln) continue;
+        // process exploits
+        const activeExploits = await Exploit.find({ is_caught: false });
+        let caughtCount = 0;
+        for (const ex of activeExploits) {
+            try {
+                const user = await Users.findById(ex.user_id);
+                const vuln = await Vulnerability.findById(ex.volunerability_id);
+                if (!user || !vuln) continue;
 
-            // credit passive earnings
-            const credit = ex.money_per_cycle;
-            await Users.findByIdAndUpdate(user._id, { $inc: { money_earned: credit } });
-            await Exploit.findByIdAndUpdate(ex._id, { $inc: { cycles_completed: 1 }, $set: { last_rewarded: new Date() } });
+                // credit passive earnings
+                const credit = ex.money_per_cycle;
+                await Users.findByIdAndUpdate(user._id, { $inc: { money_earned: credit } });
+                await Exploit.findByIdAndUpdate(ex._id, { $inc: { cycles_completed: 1 }, $set: { last_rewarded: new Date() } });
 
-            // compute exposure probability scaled by duration
-            const base = Math.min(1, Math.max(0, ex.exposure_chance));
-            const durationBoost = Math.min(0.5, (ex.cycles_completed + 1) * 0.02); // up to +50%
-            const exposureProb = Math.min(1, base + durationBoost);
-            if (Math.random() < exposureProb) {
-                // caught: apply penalty scaled by trust and duration
-                const companyId = vuln.company_id;
-                const repEntry = (user.reputation_breakdown || []).find(r => r.company_id?.toString() === companyId?.toString());
-                const trust = repEntry?.trust_score || 0; // lower trust => harsher
-                const trustFactor = 1 + Math.max(0, -trust) / 50; // trust -50 => +2x
-                const durationFactor = 1 + Math.min(1, ex.cycles_completed / 12); // up to +2x around 1 hour
-                const fineBase = 500;
-                const fine = Math.floor(fineBase * trustFactor * durationFactor);
+                // compute exposure probability
+                const base = Math.min(1, Math.max(0, ex.exposure_chance));
+                const durationBoost = Math.min(0.5, (ex.cycles_completed + 1) * 0.02);
+                const exposureProb = Math.min(1, base + durationBoost);
+                if (Math.random() < exposureProb) {
+                    // caught logic
+                    const companyId = vuln.company_id;
+                    const repEntry = (user.reputation_breakdown || []).find(r => r.company_id?.toString() === companyId?.toString());
+                    const trust = repEntry?.trust_score || 0;
+                    const trustFactor = 1 + Math.max(0, -trust) / 50;
+                    const durationFactor = 1 + Math.min(1, ex.cycles_completed / 12);
+                    const fineBase = 500;
+                    const fine = Math.floor(fineBase * trustFactor * durationFactor);
 
-                // subtract fine (not below 0)
-                const newMoney = Math.max(0, (user.money_earned || 0) - fine);
-                await Users.findByIdAndUpdate(user._id, { $set: { money_earned: newMoney } });
+                    const newMoney = Math.max(0, (user.money_earned || 0) - fine);
+                    await Users.findByIdAndUpdate(user._id, { $set: { money_earned: newMoney } });
 
-                // reduce trust further
-                const penaltyTrust = Math.ceil(10 * durationFactor);
-                // ensure entry exists
-                if (!repEntry) {
-                    await Users.updateOne({ _id: user._id }, {
-                        $push: { reputation_breakdown: { company_id: companyId, trust_score: -penaltyTrust } }
-                    });
-                } else {
-                    await Users.updateOne({ _id: user._id, 'reputation_breakdown.company_id': companyId }, {
-                        $inc: { 'reputation_breakdown.$.trust_score': -penaltyTrust }
-                    });
+                    const penaltyTrust = Math.ceil(10 * durationFactor);
+                    if (!repEntry) {
+                        await Users.updateOne({ _id: user._id }, {
+                            $push: { reputation_breakdown: { company_id: companyId, trust_score: -penaltyTrust } }
+                        });
+                    } else {
+                        await Users.updateOne({ _id: user._id, 'reputation_breakdown.company_id': companyId }, {
+                            $inc: { 'reputation_breakdown.$.trust_score': -penaltyTrust }
+                        });
+                    }
+
+                    await Exploit.findByIdAndUpdate(ex._id, { $set: { is_caught: true } });
+                    caughtCount += 1;
+
+                    if (user.discord_id) {
+                        try {
+                            const duser = await client.users.fetch(user.discord_id);
+                            await duser.send(`You have been detected exploiting a vulnerability at ${new Date().toLocaleString()}. Penalty applied: fine $${fine}, trust -${penaltyTrust}.`);
+                        } catch (_) { }
+                    }
                 }
-
-                // mark as caught
-                await Exploit.findByIdAndUpdate(ex._id, { $set: { is_caught: true } });
-                caughtCount += 1;
-
-                // DM user
-                if (user.discord_id) {
-                    try {
-                        const duser = await client.users.fetch(user.discord_id);
-                        await duser.send(`You have been detected exploiting a vulnerability at ${new Date().toLocaleString()}. Penalty applied: fine $${fine}, trust -${penaltyTrust}.`);
-                    } catch (_) { /* ignore DM failures */ }
-                }
+            } catch (err) {
+                console.error('Error processing exploit tick:', err);
             }
-        } catch (err) {
-            console.error('Error processing exploit tick:', err);
         }
-    }
 
-    // Auto-offer evaluation every tick (5 minutes)
-    try {
-        await evaluateAutoOffers(client);
-    } catch (e) {
-        console.error('Auto-offer evaluation failed:', e);
-    }
+        // Auto-offer evaluation
+        try {
+            await evaluateAutoOffers(client);
+        } catch (e) {
+            console.error('Auto-offer evaluation failed:', e);
+        }
 
-    const channel = await resolveAnnouncementsChannel(client);
-    if (channel) {
-        const embed = new EmbedBuilder()
-            .setTitle(`Round ${currentRound.round_number} Update`)
-            .setColor('#2E86AB')
-            .setDescription('Periodic update for the current round')
-            .addFields(
-                { name: 'Reports Submitted', value: String(reports.length), inline: true },
-                { name: 'Reports Resolved', value: String(resolvedReports.length), inline: true },
-                { name: 'Total Payout Offered', value: `$${totalPayout}`, inline: true },
-                { name: 'Active Exploits', value: String(Math.max(0, activeExploits.length - caughtCount)), inline: true },
-                { name: 'Exploits Detected', value: String(caughtCount), inline: true }
-            )
-            .setTimestamp();
-        try { await channel.send({ embeds: [embed] }); } catch (_) { /* ignore */ }
-    }
-}
-
-/**
- * End previous active round (cleanup function)
- */
-async function endPreviousRound() {
-    try {
-        const activeRound = await Round.findOne({ status: 'active' });
-        if (activeRound) {
-            // Check if round is older than 24 hours (auto-end)
-            const roundAge = Date.now() - activeRound.start_date.getTime();
-            if (roundAge > 24 * 60 * 60 * 1000) {
-                await Round.findByIdAndUpdate(activeRound._id, {
-                    end_date: new Date(),
-                    status: 'ended'
-                });
-                console.log(`Auto-ended round ${activeRound.round_number} (expired)`);
-            }
+        // Send periodic update
+        const channel = await resolveAnnouncementsChannel(client);
+        if (channel) {
+            const embed = new EmbedBuilder()
+                .setTitle(`Round ${currentRound.round_number} Update`)
+                .setColor('#2E86AB')
+                .setDescription('Periodic update for the current round')
+                .addFields(
+                    { name: 'Reports Submitted', value: String(reports.length), inline: true },
+                    { name: 'Reports Resolved', value: String(resolvedReports.length), inline: true },
+                    { name: 'Total Payout Offered', value: `$${totalPayout}`, inline: true },
+                    { name: 'Active Exploits', value: String(Math.max(0, activeExploits.length - caughtCount)), inline: true },
+                    { name: 'Exploits Detected', value: String(caughtCount), inline: true }
+                )
+                .setTimestamp();
+            try { await channel.send({ embeds: [embed] }); } catch (_) { }
         }
     } catch (error) {
-        console.error('Error ending previous round:', error);
+        console.error('Error in evaluateTick:', error);
     }
 }
 
-/**
- * Get current round info
- */
-async function getCurrentRound() {
-    return await Round.findOne({ status: 'active' });
-}
+// ===== START ROUND =====
+async function startRound(client, channelId) {
+    try {
+        // Clear all previous timers
+        cleanupTimers();
 
-/**
- * Get round history
- */
-async function getRoundHistory(limit = 10) {
-    return await Round.find({})
-        .sort({ round_number: -1 })
-        .limit(limit)
-        .populate('companies_involved');
-}
+        // Enable auto-run if not already
+        autoRunEnabled = true;
 
-// Helper functions
-function weightedRandom(options) {
-    const totalWeight = options.reduce((sum, option) => sum + option.weight, 0);
-    let random = Math.random() * totalWeight;
-
-    for (const option of options) {
-        random -= option.weight;
-        if (random <= 0) {
-            return option;
+        // End any leftover active round
+        const active = await Round.findOne({ status: 'active' });
+        if (active) {
+            console.log(`Ending existing round ${active.round_number} before starting new one`);
+            await Round.findByIdAndUpdate(active._id, {
+                status: 'ended',
+                end_date: new Date(),
+                auto_ended: true
+            });
         }
+
+        // Create new round and generate vulnerabilities
+        console.log('Generating vulnerabilities for new round...');
+        const vulns = await generateDailyVulnerabilities();
+
+        if (!vulns || vulns.length === 0) {
+            throw new Error('Failed to generate vulnerabilities');
+        }
+
+        await announceNewRound(client, channelId, vulns);
+
+        // Schedule periodic ticks
+        tickInterval = setInterval(() => {
+            evaluateTick(client).catch(e => console.error('Tick error:', e));
+        }, TICK_MS);
+
+        // Schedule round end
+        roundTimeout = setTimeout(async () => {
+            try {
+                console.log(`Round timeout reached, ending round...`);
+                await endRound(client, channelId);
+            } catch (e) {
+                console.error('Auto-end round error:', e);
+                // Emergency recovery
+                try {
+                    const currentRound = await Round.findOne({ status: 'active' });
+                    if (currentRound) {
+                        await Round.findByIdAndUpdate(currentRound._id, {
+                            status: 'ended',
+                            end_date: new Date(),
+                            auto_ended: true
+                        });
+                        cleanupTimers();
+                    }
+                } catch (innerError) {
+                    console.error('Emergency recovery failed:', innerError);
+                }
+            }
+        }, ROUND_MS);
+
+        console.log(`Round started successfully. Next tick in ${TICK_MS/60000} minutes, round ends in ${ROUND_MS/60000} minutes`);
+
+        return { success: true, vulnerabilities: vulns.length };
+
+    } catch (error) {
+        console.error('Error starting round:', error);
+        cleanupTimers();
+        throw error;
     }
-    return options[0];
 }
 
+// ===== INITIALIZE SYSTEM =====
+async function initializeRoundSystem(client) {
+    try {
+        cleanupTimers(); // Clear any existing timers first
 
-// ===== Auto-offer evaluation helpers =====
+        const activeRound = await Round.findOne({ status: 'active' });
+        if (activeRound) {
+            const now = new Date();
+            const roundStart = new Date(activeRound.start_date);
+            const roundAge = now.getTime() - roundStart.getTime();
+
+            // Check if round is expired
+            if (roundAge > ROUND_MS) {
+                console.log(`Round ${activeRound.round_number} expired, auto-ending`);
+                try {
+                    await endRound(client);
+                } catch (error) {
+                    console.error('Failed to auto-end expired round:', error);
+                    // Force end
+                    await Round.findByIdAndUpdate(activeRound._id, {
+                        status: 'ended',
+                        end_date: new Date(),
+                        auto_ended: true
+                    });
+                }
+                return;
+            }
+
+            const remaining = Math.max(0, ROUND_MS - roundAge);
+            console.log(`Resuming round ${activeRound.round_number}. Ends in ${Math.ceil(remaining / 60000)} minutes.`);
+
+            // Schedule tick interval
+            tickInterval = setInterval(() => {
+                evaluateTick(client).catch(e => console.error('Tick error:', e));
+            }, TICK_MS);
+
+            // Schedule round end
+            roundTimeout = setTimeout(async () => {
+                try {
+                    await endRound(client);
+                } catch (e) {
+                    console.error('Auto-end round error:', e);
+                }
+            }, remaining);
+
+        } else {
+            console.log('No active round found on startup.');
+        }
+    } catch (error) {
+        console.error('Error initializing round system:', error);
+        cleanupTimers();
+    }
+}
+
+// ===== AUTO-OFFER EVALUATION =====
 const VISIBILITY_FIELDS = [
     'networkAccess',
     'arbitraryCodeExecution',
@@ -477,11 +527,9 @@ function countVisibleFieldsForUser(vuln, userId) {
 }
 
 async function evaluateAutoOffers(client) {
-    // Fetch all non-POC reports with a linked vulnerability
     const reports = await Report.find({ is_poc_only: { $ne: true }, vulnerability_id: { $ne: null } });
     if (!reports.length) return;
 
-    // Group by vulnerability_id
     const byVuln = new Map();
     for (const r of reports) {
         const key = r.vulnerability_id?.toString();
@@ -495,18 +543,15 @@ async function evaluateAutoOffers(client) {
         const vuln = await Vulnerability.findById(vulnId);
         if (!vuln) continue;
 
-        // Skip if there is already a pending offer for any report on this vulnerability
         const pendingForVuln = await CompanyOffer.findOne({ report_id: { $in: vulnReports.map(r => r._id) }, status: 'pending' });
         if (pendingForVuln) continue;
 
-        // Build per-user stats
-        const perUser = new Map(); // userId -> { visibleCount, earliestReport, earliestAt }
+        const perUser = new Map();
         for (const r of vulnReports) {
             const uid = r.user_id?.toString();
             if (!uid) continue;
             const visible = countVisibleFieldsForUser(vuln, r.user_id);
             const entry = perUser.get(uid) || { visibleCount: visible, earliestReport: r, earliestAt: r.submitted_at || r.createdAt };
-            // Update visible count in case multiple reports exist; keep max visibility
             if (visible > entry.visibleCount) entry.visibleCount = visible;
             const ts = r.submitted_at || r.createdAt;
             if (!entry.earliestAt || (ts && ts < entry.earliestAt)) {
@@ -519,28 +564,24 @@ async function evaluateAutoOffers(client) {
         if (!perUser.size) continue;
 
         const totalFields = VISIBILITY_FIELDS.length;
-        // Find users with full visibility
         const fullUsers = Array.from(perUser.entries())
             .filter(([, v]) => v.visibleCount >= totalFields)
             .sort((a, b) => (a[1].earliestAt || now) - (b[1].earliestAt || now));
 
         let chosenReport = null;
         if (fullUsers.length) {
-            // Immediate offer to the earliest full-visibility user
             chosenReport = fullUsers[0][1].earliestReport;
             await Vulnerability.updateOne({ _id: vuln._id }, { $set: { offer_wait_started_at: null, last_offer_report_id: chosenReport._id } });
         } else {
-            // No full visibility. Wait exactly one additional cycle; if already waited, pick the highest visible count, earliest.
             if (!vuln.offer_wait_started_at) {
                 await Vulnerability.updateOne({ _id: vuln._id }, { $set: { offer_wait_started_at: now } });
                 continue;
             }
             const waitedMs = now.getTime() - new Date(vuln.offer_wait_started_at).getTime();
-            if (waitedMs < TICK_MS) continue; // wait one more cycle
+            if (waitedMs < TICK_MS) continue;
 
             const ranked = Array.from(perUser.entries())
                 .sort((a, b) => {
-                    // Desc by visibleCount, then asc by earliestAt
                     if (b[1].visibleCount !== a[1].visibleCount) return b[1].visibleCount - a[1].visibleCount;
                     return (a[1].earliestAt || now) - (b[1].earliestAt || now);
                 });
@@ -550,11 +591,9 @@ async function evaluateAutoOffers(client) {
 
         if (!chosenReport) continue;
 
-        // Ensure we are not duplicating an offer for this report
         const existing = await CompanyOffer.findOne({ report_id: chosenReport._id, status: 'pending' });
         if (existing) continue;
 
-        // Fetch Discord user and generate offer
         try {
             const user = await Users.findById(chosenReport.user_id);
             if (!user?.discord_id) continue;
@@ -566,66 +605,104 @@ async function evaluateAutoOffers(client) {
     }
 }
 
-// Start a new round (admin triggered). Enables auto-run loop after the first start.
-async function startRound(client, channelId) {
-    // clear previous intervals if any
-    if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
-    if (roundTimeout) { clearTimeout(roundTimeout); roundTimeout = null; }
-
-    autoRunEnabled = true; // after first manual start, rounds autorun per user request
-
-    // end any leftover active round
-    const active = await Round.findOne({ status: 'active' });
-    if (active) {
-        await Round.findByIdAndUpdate(active._id, { status: 'ended', end_date: new Date() });
-    }
-
-    // create new active round and generate vulns
-    const vulns = await generateDailyVulnerabilities();
-    await announceNewRound(client, channelId, vulns);
-
-    // schedule periodic tick and round end
-    tickInterval = setInterval(() => { evaluateTick(client).catch(() => {}); }, TICK_MS);
-    roundTimeout = setTimeout(async () => {
-        try { await endRound(client, channelId); } catch (e) { console.error(e); }
-    }, ROUND_MS);
-}
-
-// Auto-round management (run on bot startup)
-// Resumes active round if present; does not auto-start if none.
-async function initializeRoundSystem(client) {
+// ===== HELPER FUNCTIONS =====
+async function endPreviousRound() {
     try {
         const activeRound = await Round.findOne({ status: 'active' });
         if (activeRound) {
             const roundAge = Date.now() - activeRound.start_date.getTime();
-            const remaining = Math.max(0, ROUND_MS - roundAge);
-            console.log(`Round ${activeRound.round_number} active. Ends in ${Math.ceil(remaining / 60000)} minutes.`);
-
-            // schedule timers
-            if (tickInterval) clearInterval(tickInterval);
-            tickInterval = setInterval(() => { evaluateTick(client).catch(() => {}); }, TICK_MS);
-            if (roundTimeout) clearTimeout(roundTimeout);
-            roundTimeout = setTimeout(async () => {
-                try { await endRound(client); } catch (e) { console.error(e); }
-            }, remaining);
-        } else {
-            console.log('No active round. Waiting for admin to start the game.');
+            if (roundAge > 24 * 60 * 60 * 1000) {
+                await Round.findByIdAndUpdate(activeRound._id, {
+                    end_date: new Date(),
+                    status: 'ended'
+                });
+                console.log(`Auto-ended round ${activeRound.round_number} (expired)`);
+            }
         }
     } catch (error) {
-        console.error('Error initializing round system:', error);
+        console.error('Error ending previous round:', error);
     }
 }
 
+async function getCurrentRound() {
+    return await Round.findOne({ status: 'active' });
+}
+
+async function getRoundHistory(limit = 10) {
+    return await Round.find({})
+        .sort({ round_number: -1 })
+        .limit(limit)
+        .populate('companies_involved');
+}
+
+async function getRoundStatus() {
+    const activeRound = await Round.findOne({ status: 'active' });
+    if (!activeRound) {
+        return { active: false, message: 'No active round' };
+    }
+
+    const now = new Date();
+    const elapsed = now.getTime() - activeRound.start_date.getTime();
+    const remaining = Math.max(0, ROUND_MS - elapsed);
+
+    return {
+        active: true,
+        roundNumber: activeRound.round_number,
+        startDate: activeRound.start_date,
+        elapsedMinutes: Math.floor(elapsed / 60000),
+        remainingMinutes: Math.floor(remaining / 60000),
+        timers: {
+            tickInterval: !!tickInterval,
+            roundTimeout: !!roundTimeout,
+            cooldownTimeout: !!cooldownTimeout
+        },
+        autoRunEnabled
+    };
+}
+
+async function recoverRoundSystem(client) {
+    try {
+        cleanupTimers();
+
+        const activeRound = await Round.findOne({ status: 'active' });
+        const now = new Date();
+
+        if (activeRound) {
+            const roundAge = now.getTime() - activeRound.start_date.getTime();
+
+            if (roundAge > ROUND_MS * 2) {
+                console.log('Recovery: Round is too old, ending it');
+                await endRound(client);
+                return { action: 'ended_old_round' };
+            }
+
+            await initializeRoundSystem(client);
+            return { action: 'resumed_round' };
+        }
+
+        return { action: 'no_active_round' };
+
+    } catch (error) {
+        console.error('Recovery failed:', error);
+        return { action: 'error', error: error.message };
+    }
+}
+
+// ===== EXPORTS =====
 module.exports = {
     generateDailyVulnerabilities,
     endRound,
     announceNewRound,
     getCurrentRound,
+    getRoundStatus,
     getRoundHistory,
     initializeRoundSystem,
     endPreviousRound,
     startRound,
+    recoverRoundSystem,
+    cleanupTimers,
     // controls
     enableAutoRun: () => { autoRunEnabled = true; },
-    disableAutoRun: () => { autoRunEnabled = false; }
+    disableAutoRun: () => { autoRunEnabled = false; },
+    getAutoRunStatus: () => autoRunEnabled
 };
