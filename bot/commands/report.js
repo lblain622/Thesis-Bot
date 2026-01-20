@@ -49,13 +49,15 @@ module.exports = {
             );
             if (!confirmed) return;
 
+            const isPocOnly = reportType === 'poc';
 
             const report = await saveReport(
                 interaction,
                 platformId,
                 companyId,
                 vulnerabilityId,
-                reportType === 'poc'
+                isPocOnly
+
             );
 
             const typeLabel = reportType === 'poc' ? 'POC' : 'Report';
@@ -65,8 +67,8 @@ module.exports = {
             await interaction.followUp({
                 content: `**${typeLabel} Submitted Successfully!**\n\n` +
                     `**Report ID:** \`${report._id}\`\n` +
-                    `Your ${typeLabel.toLowerCase()} has been submitted to the company.` +
-                    extraPOCNote,
+                    `Your ${typeLabel.toLowerCase()} has been submitted to the company.`,
+
                 flags: 64,
             });
 
@@ -457,26 +459,6 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, i
             'availabilityImpact',
             'recoveryPotential'
         ];
-
-        // Ensure subdocuments exist in the expected shape before adding to visibleTo
-        const setInit = {};
-        fieldNames.forEach(field => {
-            const current = vulnerability[field];
-            if (!current || typeof current !== 'object' || Array.isArray(current)) {
-                const answerVal = (typeof current === 'string') ? current : (current?.answer || null);
-                setInit[field] = { answer: answerVal, visibleTo: [] };
-            } else if (!Array.isArray(current.visibleTo)) {
-                // ensure visibleTo array exists
-                setInit[`${field}.visibleTo`] = [];
-            }
-        });
-        if (Object.keys(setInit).length) {
-            await Vulnerability.updateOne(
-                { _id: vulnerabilityId },
-                { $set: setInit }
-            );
-        }
-
         const addToSetObj = {};
         fieldNames.forEach(field => {
             addToSetObj[`${field}.visibleTo`] = user._id;
