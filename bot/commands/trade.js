@@ -7,7 +7,7 @@ const {
     ComponentType,
 } = require('discord.js');
 const User = require('../../models/Users');
-const Vulnerability = require('../../models/Volunerabilies');
+const Vulnerability = require('../../models/Vulnerabilities');
 const Trade = require('../../models/Trades');
 
 //TODO: Ensure Trading works correctly

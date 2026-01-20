@@ -6,12 +6,12 @@ const {
 } = require('discord.js');
 const { generateDailyVulnerabilities, endRound, announceNewRound, startRound: startRoundScheduler } = require('../utils/roundSystem');
 const { announceVulnerabilityPatched } = require('../events/announcePatches');
-const Vulnerability = require('../../models/Volunerabilies');
+const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
 const Report = require('../../models/Reports');
 const Company = require('../../models/Company');
 const Round = require('../../models/Round');
-const Exploit = require('../../models/Expoits');
+const Exploit = require('../../models/Exploit');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -321,7 +321,7 @@ async function setAnnounceChannel(interaction) {
 }
 
 
-a
+
 async function listUsers(interaction) {
     await interaction.deferReply();
 

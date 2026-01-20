@@ -2,7 +2,7 @@ const CompanyOffer = require('../../models/CompanyOffers');
 const User = require('../../models/Users');
 const Report = require('../../models/Reports');
 const Trade = require('../../models/Trades');
-const Vulnerability = require('../../models/Volunerabilies');
+const Vulnerability = require('../../models/Vulnerabilities');
 const { announceVulnerabilityPatched } = require('../events/announcePatches');
 
 //TODO: If user does any command with the bot, add them as a user if not exists

@@ -10,7 +10,7 @@ const Platform = require('../../models/Platform');
 const Company = require('../../models/Company');
 const Reports = require('../../models/Reports');
 const User = require('../../models/Users');
-const Vulnerability = require('../../models/Volunerabilies');
+const Vulnerability = require('../../models/Vulnerabilities');
 const generateOffer = require('../utils/generateOffer');
 const generateDictatorOffer = require('../utils/generateDicOffer');
 
@@ -59,10 +59,14 @@ module.exports = {
             );
 
             const typeLabel = reportType === 'poc' ? 'POC' : 'Report';
+//            const extraPOCNote = reportType === 'poc'
+//                ? `\n\n🔓 You now have access to all vulnerability details for this vulnerability. This visibility is private to you (not globally revealed).`
+//                : '';
             await interaction.followUp({
                 content: `**${typeLabel} Submitted Successfully!**\n\n` +
                     `**Report ID:** \`${report._id}\`\n` +
-                    `Your ${typeLabel.toLowerCase()} has been submitted to the company.`,
+                    `Your ${typeLabel.toLowerCase()} has been submitted to the company.` +
+                    extraPOCNote,
                 flags: 64,
             });
 
@@ -72,19 +76,22 @@ module.exports = {
 //                : 5 * 60 * 1000;
 const offerDelayMs = 30*1000; // 30 seconds
 
-            setTimeout(async () => {
-                try {
-                    const platform = await Platform.findById(platformId);
-                    await Company.findById(companyId);
-                    if (platform.name.includes('Ultimatum')) {
-                        await generateOffer(interaction.client, report, interaction.user);
-                    } else if (platform.name.includes('Dictator')) {
-                        await generateDictatorOffer(interaction.client, report, interaction.user);
+            // Only generate an offer for full reports (not POC-only)
+            if (!report.is_poc_only) {
+                setTimeout(async () => {
+                    try {
+                        const platform = await Platform.findById(platformId);
+                        await Company.findById(companyId);
+                        if (platform.name.includes('Ultimatum')) {
+                            await generateOffer(interaction.client, report, interaction.user);
+                        } else if (platform.name.includes('Dictator')) {
+                            await generateDictatorOffer(interaction.client, report, interaction.user);
+                        }
+                    } catch (err) {
+                        console.error('Error generating delayed offer:', err);
                     }
-                } catch (err) {
-                    console.error('Error generating delayed offer:', err);
-                }
-            }, offerDelayMs);
+                }, offerDelayMs);
+            }
 
         } catch (err) {
             console.error(err);
@@ -432,11 +439,6 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, i
         { upsert: false }
     );
 
-    //TODO: modify this so that we give access to volun after offer is made as wel
-    //since offer and amount is based upon how much info is given, and there is a delay in submission now,
-    //we need to make sure that we can check before giving a the info
-    //maybe range all users access to voln. once resovled
-    // Grant user access to vulnerability fields after report/POC submission
     if(isPOCOnly){
         await Vulnerability.updateOne(
             { _id: vulnerabilityId },
@@ -456,69 +458,88 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, i
             'recoveryPotential'
         ];
 
-        const updateObj = {};
+        // Ensure subdocuments exist in the expected shape before adding to visibleTo
+        const setInit = {};
         fieldNames.forEach(field => {
-            updateObj[`${field}.visibleTo`] = user._id;
+            const current = vulnerability[field];
+            if (!current || typeof current !== 'object' || Array.isArray(current)) {
+                const answerVal = (typeof current === 'string') ? current : (current?.answer || null);
+                setInit[field] = { answer: answerVal, visibleTo: [] };
+            } else if (!Array.isArray(current.visibleTo)) {
+                // ensure visibleTo array exists
+                setInit[`${field}.visibleTo`] = [];
+            }
+        });
+        if (Object.keys(setInit).length) {
+            await Vulnerability.updateOne(
+                { _id: vulnerabilityId },
+                { $set: setInit }
+            );
+        }
+
+        const addToSetObj = {};
+        fieldNames.forEach(field => {
+            addToSetObj[`${field}.visibleTo`] = user._id;
         });
 
         await Vulnerability.updateOne(
             { _id: vulnerabilityId },
-            { $addToSet: updateObj }
+            { $addToSet: addToSetObj }
         );
     }
-    await checkExploitsAfterReport(vulnerabilityId);
+//    await checkExploitsAfterReport(vulnerabilityId);
         return report;
 
 }
-
-//TODO: lets now check explosits after the voln is resolved instead!
-async function checkExploitsAfterReport(vulnerabilityId) {
-    try {
-        const Exploit = require('../../models/Expoits');
-        const affectedExploits = await Exploit.find({
-            volunerability_id: vulnerabilityId,
-            is_caught: false
-        });
-
-        if (affectedExploits.length > 0) {
-            const caughtExploits = [];
-            const safeExploits = [];
-
-            for (const exploit of affectedExploits) {
-                const randomChance = Math.random();
-
-                if (randomChance <= exploit.exposure_chance) {
-                    exploit.is_caught = true;
-                    await exploit.save();
-
-                    caughtExploits.push({
-                        exploit_id: exploit._id,
-                        user_id: exploit.user_id,
-                        exposure_chance: exploit.exposure_chance,
-                        cycles_completed: exploit.cycles_completed,
-                        caught_at: new Date()
-                    });
-                } else {
-                    safeExploits.push({
-                        exploit_id: exploit._id,
-                        user_id: exploit.user_id
-                    });
-                }
-            }
-
-            console.log(`Vulnerability reported: ${caughtExploits.length}/${affectedExploits.length} exploits caught.`);
-
-            return {
-                caughtExploits,
-                safeExploits,
-                totalAffected: affectedExploits.length,
-                caughtCount: caughtExploits.length
-            };
-        }
-
-        return null;
-    } catch (err) {
-        console.error('Error checking exploits after report:', err);
-        throw err;
-    }
-}
+//
+////TODO: lets now check explosits after the voln is resolved instead!
+//async function checkExploitsAfterReport(vulnerabilityId) {
+//    try {
+//        const Exploit = require('../../models/Expoits');
+//        const affectedExploits = await Exploit.find({
+//            volunerability_id: vulnerabilityId,
+//            is_caught: false
+//        });
+//
+//        if (affectedExploits.length > 0) {
+//            const caughtExploits = [];
+//            const safeExploits = [];
+//
+//            for (const exploit of affectedExploits) {
+//                const randomChance = Math.random();
+//
+//                if (randomChance <= exploit.exposure_chance) {
+//                    exploit.is_caught = true;
+//                    await exploit.save();
+//
+//                    caughtExploits.push({
+//                        exploit_id: exploit._id,
+//                        user_id: exploit.user_id,
+//                        exposure_chance: exploit.exposure_chance,
+//                        cycles_completed: exploit.cycles_completed,
+//                        caught_at: new Date()
+//                    });
+//                } else {
+//                    safeExploits.push({
+//                        exploit_id: exploit._id,
+//                        user_id: exploit.user_id
+//                    });
+//                }
+//            }
+//
+//            console.log(`Vulnerability reported: ${caughtExploits.length}/${affectedExploits.length} exploits caught.`);
+//
+//            return {
+//                caughtExploits,
+//                safeExploits,
+//                totalAffected: affectedExploits.length,
+//                caughtCount: caughtExploits.length
+//            };
+//        }
+//
+//        return null;
+//    } catch (err) {
+//        console.error('Error checking exploits after report:', err);
+//        throw err;
+//    }
+//}

@@ -1,6 +1,6 @@
 // bot/utils/announcements.js
 const { EmbedBuilder } = require('discord.js');
-const Vulnerability = require('../../models/Volunerabilies');
+const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
 const Company = require('../../models/Company');
 const Report = require('../../models/Reports');

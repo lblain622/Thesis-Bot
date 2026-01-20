@@ -1,23 +1,35 @@
 const { Schema, model } = require('mongoose');
 
-const volunerabilitySchema = new Schema({
+const vulnerabilitySchema = new Schema({
     company_id: {
         type: Schema.Types.ObjectId,
         ref: 'Company',
         required: true
     },
-  //TODO: make more creatuive name for volun
+    // Round the vulnerability was generated in (used for round summaries)
+    round_id: {
+        type: Schema.Types.ObjectId,
+        ref: 'Round',
+        required: true
+    },
+
     vuln_identifier: {
         type: String,
         required: true,
         unique: true
     },
-    //TODO: add more types for more diversity
+
     volun_type: {
         type: String,
         enum: ['XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR', 'Authentication', 'Authorization',
                'Information_Disclosure', 'Business_Logic', 'Cryptographic', 'Other'],
         required: true
+    },
+    // Severity used by offers/reporting flows
+    severity: {
+        type: String,
+        enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
+        default: 'LOW'
     },
     name: String,
     description: String,
@@ -100,4 +112,4 @@ const volunerabilitySchema = new Schema({
     last_offer_report_id: { type: Schema.Types.ObjectId, ref: 'Report', default: null }
 }, { timestamps: true });
 
-module.exports = model('Volunerabilies', volunerabilitySchema);
+module.exports = model('Vulnerabilities', vulnerabilitySchema);

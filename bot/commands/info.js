@@ -5,7 +5,7 @@ const {
     StringSelectMenuBuilder,
     ComponentType
 } = require('discord.js');
-const Vulnerability = require('../../models/Volunerabilies');
+const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
 const Company = require('../../models/Company');
 
@@ -259,9 +259,15 @@ function buildFieldAnalysis(vulnerability, user) {
 }
 
 function formatFieldAnswer(fieldKey, answer) {
+    // Fallback for missing/undefined values
+    if (answer === undefined || answer === null || answer === '') {
+        return 'Unknown';
+    }
     // Y/N fields
     if (['networkAccess', 'arbitraryCodeExecution', 'userInteraction', 'automatable'].includes(fieldKey)) {
-        return answer === 'Yes' ? '✅ Yes' : '❌ No';
+        if (answer === 'Yes') return '✅ Yes';
+        if (answer === 'No') return '❌ No';
+        return 'Unknown';
     }
 
     // Privileges Required
@@ -271,7 +277,7 @@ function formatFieldAnswer(fieldKey, answer) {
             'Low': '🟡 Low',
             'High': '🔴 High'
         };
-        return map[answer] || answer;
+        return map[answer] || 'Unknown';
     }
 
     // Recovery Potential
@@ -281,7 +287,7 @@ function formatFieldAnswer(fieldKey, answer) {
             'User': '🟡 User Intervention',
             'Irrecoverable': '🔴 Irrecoverable'
         };
-        return map[answer] || answer;
+        return map[answer] || 'Unknown';
     }
 
     // CIA Impacts
@@ -292,10 +298,10 @@ function formatFieldAnswer(fieldKey, answer) {
             'Medium': '🟠 Medium',
             'High': '🔴 High'
         };
-        return map[answer] || answer;
+        return map[answer] || 'Unknown';
     }
 
-    return answer;
+    return typeof answer === 'string' && answer.trim() ? answer : 'Unknown';
 }
 
 function getSeverityColor(severity) {

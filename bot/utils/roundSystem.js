@@ -1,10 +1,11 @@
-const Vulnerability = require('../../models/Volunerabilies');
+const Vulnerability = require('../../models/Vulnerabilities');
 const Company = require('../../models/Company');
 const Round = require('../../models/Round');
 const Report = require('../../models/Reports');
 const Users = require('../../models/Users');
-const Exploit = require('../../models/Expoits');
+const Exploit = require('../../models/Exploit');
 const { EmbedBuilder } = require('discord.js');
+const testVulnData = require('../../data/test-data.json');
 const generateOffer = require('./generateOffer');
 const CompanyOffer = require('../../models/CompanyOffers');
 
@@ -80,7 +81,20 @@ async function resolveAnnouncementsChannel(client) {
 
 // Vulnerability generation (placeholder simple generator if not provided elsewhere)
 async function generateDailyVulnerabilities() {
-    // Determine round number
+
+//    sheetsData =[]
+//    fetch('https://sheetdb.io/api/v1/58f61be4dda40')
+//        .then(async (response) => {
+//                response.json();
+//                sheetsData = await response
+//
+//            }
+//        )
+//        .then((data) => console.log(data));
+//
+//
+
+
     const lastRound = await Round.findOne({}).sort({ round_number: -1 });
     const roundNumber = (lastRound?.round_number || 0) + 1;
 
@@ -95,22 +109,59 @@ async function generateDailyVulnerabilities() {
     }
 
     const vulns = [];
-    for (const company of companies.slice(0, 5)) { // limit to avoid spam
-        const severityOptions = [
-            { value: 'Low', weight: 3 },
-            { value: 'Medium', weight: 5 },
-            { value: 'High', weight: 2 },
-            { value: 'Critical', weight: 1 }
-        ];
-        const chosen = weightedRandom(severityOptions).value;
+    const companiesToUse = companies.slice(0, 5); // limit to avoid spam
+    for (let i = 0; i < companiesToUse.length; i++) {
+        const company = companiesToUse[i];
+        // pick corresponding test data entry (cycle if fewer entries than companies)
+        const data = testVulnData[i % testVulnData.length];
+
         const visibilityGlobal = Math.random() < 0.5;
         const allowedUsers = selectAllowedUsers(users, visibilityGlobal);
+
+        // Map fields from test data to schema (support both normalized strings and legacy {answer} objects)
+        const pickAnswer = (val) => {
+            if (val == null) return undefined;
+            if (typeof val === 'string') return val;
+            if (typeof val === 'object' && typeof val.answer === 'string') return val.answer;
+            return undefined;
+        };
+
+
+
+        const severity =
+            typeof data.severity === 'string' ? data.severity : pickAnswer(data.severity) || 'LOW';
+
+        // Normalize field structures to match schema: { answer: <value>, visibleTo: [] }
+        const toField = (val) => ({ answer: val, visibleTo: [] });
+        const networkAccess = toField(data?.networkAccess);
+        const arbitraryCodeExecution = toField(data?.arbitraryCodeExecution);
+        const userInteraction = toField(data?.userInteraction);
+        const automatable = toField(data?.automatable);
+        const confidentialityImpact = toField(data?.confidentialityImpact);
+        const integrityImpact = toField(data?.integrityImpact);
+        const availabilityImpact = toField(data?.availabilityImpact);
+        const privilegesRequired = toField(data?.privilegesRequired);
+        const recoveryPotential = toField(data?.recoveryPotential);
+
+
         const vuln = await Vulnerability.create({
             company_id: company._id,
-            vuln_identifier: `VULN-${company._id.toString().slice(-4)}-${Math.floor(Math.random()*10000)}`,
-            severity: chosen,
-            volun_type: 'Generic',
             round_id: round._id,
+            // keep unique across companies while preserving test id
+            vuln_identifier: `${data.id}-${company._id.toString().slice(-4)}`,
+            name: data.id,
+            description: data.description,
+            volun_type: data.volun_type,
+            severity,
+            networkAccess,
+            arbitraryCodeExecution,
+            userInteraction,
+            automatable,
+            confidentialityImpact,
+            integrityImpact,
+            availabilityImpact,
+            privilegesRequired,
+            recoveryPotential,
             visibility: { isGlobal: visibilityGlobal, allowedUsers },
             isResolved: false
         });

@@ -26,7 +26,7 @@ const reportSchema = new Schema({
     vuln_identifier: String,
     volunerablity_sev: {
         type: String,
-        enum: ['None', 'Low', 'Medium', 'High', 'Critical'],
+        enum: ['None', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
         required: true
     },
     // CVSS information
