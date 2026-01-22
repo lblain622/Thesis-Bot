@@ -8,7 +8,7 @@ const Reports = require('../../models/Reports');
 const CompanyOffers = require('../../models/CompanyOffers');
 const Trades = require('../../models/Trades');
 const Expoits = require('../../models/Exploit')
-const Rounds = require('../../models/Rounds')
+const Rounds = require('../../models/Round')
 async function setup() {
 
 
@@ -244,8 +244,8 @@ async function clearCollections() {
         await Company.deleteMany({});
         console.log(' Cleared Company collection');
         
-        await Volunerabilies.deleteMany({});
-        console.log(' Cleared Volunerabilies collection');
+        await Vulnerabilities.deleteMany({});
+        console.log(' Cleared Vulnerabilities collection');
         
         await Reports.deleteMany({});
         console.log(' Cleared Reports collection');

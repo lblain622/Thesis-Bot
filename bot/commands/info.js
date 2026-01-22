@@ -3,7 +3,9 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
-    ComponentType
+    ComponentType,
+    ButtonBuilder,
+    ButtonStyle,
 } = require('discord.js');
 const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
@@ -173,6 +175,19 @@ module.exports = {
                     `**Status:** ${vulnerability.isResolved ? '✅ Resolved' : vulnerability.isReported ? ' Reported' : 'Unreported'}`
             });
 
+            const actionRow = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`report_${vulnerability._id}`)
+                        .setLabel('Report This Vulnerability')
+                        .setStyle(ButtonStyle.Primary)
+                        .setEmoji('📝'),
+                    new ButtonBuilder()
+                        .setCustomId(`submitpoc_${vulnerability._id}`)
+                        .setLabel('Submit POC')
+                        .setStyle(ButtonStyle.Secondary)
+                        .setEmoji('🔍')
+                );
             // Field Analysis - only show if user can see
             if (canSeeFields) {
                 const fieldAnalysis = buildFieldAnalysis(vulnerability,user);
