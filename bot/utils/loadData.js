@@ -3,11 +3,12 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env'
 const mongoose = require('mongoose');
 const Company = require('../../models/Company');
 const Platform = require('../../models/Platform');
-const Volunerabilies = require('../../models/Vulnerabilities');
+const Vulnerabilities = require('../../models/Vulnerabilities');
 const Reports = require('../../models/Reports');
 const CompanyOffers = require('../../models/CompanyOffers');
 const Trades = require('../../models/Trades');
 const Expoits = require('../../models/Exploit')
+const Rounds = require('../../models/Rounds')
 async function setup() {
     //TODO: connect AI  agent jose sent and modify it for context of new severity information
     //TODO: have agent push to google sheets first then push the mongodb
@@ -261,6 +262,9 @@ async function clearCollections() {
         
         await Expoits.deleteMany({});
         console.log(' Cleared Exploits collection');
+
+        await Rounds.deleteMany({});
+        console.log(' Cleared Rounds collection');
 
 
         console.log('All collections cleared successfully\n');

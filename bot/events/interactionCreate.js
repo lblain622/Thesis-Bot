@@ -15,15 +15,8 @@ module.exports = {
         
         try {
 
-//            // ============= ULTIMATUM GAME =============
-//            if (prefix === 'offer') {
-//                await handleUltimatumGame(interaction, action, id);
-//            }
-//
-//            // ============= DICTATOR GAME =============
-//            if (prefix === 'dictator') {
-//                await handleDictatorGame(interaction, action, id);
-            }
+
+            
 
             // ============= TRADE SYSTEM =============
             if (prefix === 'trade') {
