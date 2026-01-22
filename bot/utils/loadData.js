@@ -10,11 +10,7 @@ const Trades = require('../../models/Trades');
 const Expoits = require('../../models/Exploit')
 const Rounds = require('../../models/Rounds')
 async function setup() {
-    //TODO: connect AI  agent jose sent and modify it for context of new severity information
-    //TODO: have agent push to google sheets first then push the mongodb
-    //prob need to add in rounds to call the agent to generate more vol when needed
-    //TODO: (if possible) have so if we make changfes in the sheets the fields in mongodb are also updated
-    //TODO: Lets start giving comanies and the platforms more create names :)
+
 
     try {
         await mongoose.connect(process.env.MONGO_URI);

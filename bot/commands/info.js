@@ -243,7 +243,7 @@ function buildFieldAnalysis(vulnerability, user) {
 
         if (!fieldData) continue;
 
-        //  Use the actual visibleTo array inside the vulnerability
+
         const canView = fieldData.visibleTo?.some(
             u => u.toString() === user._id.toString()
         ) || false;

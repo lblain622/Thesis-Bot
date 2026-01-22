@@ -21,79 +21,86 @@ const generateDictatorOffer = require('../utils/generateDicOffer');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('report')
-        .setDescription('Submit a vulnerability report or POC'),
+        .setDescription('Submit a full vulnerability report')
+        .addStringOption(option =>
+            option.setName('vulnerability')
+                .setDescription('Vulnerability identifier (e.g., CVE-2024-1234)')
+                .setRequired(false)
+        ),
 
     async execute(interaction) {
         await interaction.deferReply({ flags: 64 });
 
         try {
+            const vulnIdentifier = interaction.options.getString('vulnerability');
+            let vulnerabilityId, companyId, platformId;
 
-            const reportType = await selectReportType(interaction);
-            if (!reportType) return;
+            if (vulnIdentifier) {
+                // Direct submission via identifier
+                const vulnerability = await Vulnerability.findOne({
+                    vuln_identifier: vulnIdentifier,
+                    isResolved: false
+                });
 
-            const platformId = await selectPlatform(interaction);
-            if (!platformId) return;
+                if (!vulnerability) {
+                    await interaction.editReply({
+                        content: `No unresolved vulnerability found with identifier: **${vulnIdentifier}**`,
+                    });
+                    return;
+                }
 
-            const companyId = await selectCompany(interaction, platformId);
-            if (!companyId) return;
+                vulnerabilityId = vulnerability._id;
+                companyId = vulnerability.company_id;
+                platformId = vulnerability.platform_id;
 
-            const vulnerabilityId = await selectVulnerability(interaction, companyId);
-            if (!vulnerabilityId) return;
+                const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId);
+                if (!confirmed) return;
+            } else {
+                // Menu-based submission
+                companyId = await selectCompany(interaction);
+                if (!companyId) return;
 
-            const confirmed = await confirmSubmission(
-                interaction,
-                platformId,
-                companyId,
-                vulnerabilityId,
-                reportType
-            );
-            if (!confirmed) return;
+                vulnerabilityId = await selectVulnerability(interaction, companyId);
+                if (!vulnerabilityId) return;
 
-            const isPocOnly = reportType === 'poc';
+                const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId);
+                if (!confirmed) return;
+
+                const vulnerability = await Vulnerability.findById(vulnerabilityId);
+                platformId = vulnerability.platform_id;
+            }
 
             const report = await saveReport(
                 interaction,
                 platformId,
                 companyId,
-                vulnerabilityId,
-                isPocOnly
-
+                vulnerabilityId
             );
 
-            const typeLabel = reportType === 'poc' ? 'POC' : 'Report';
-//            const extraPOCNote = reportType === 'poc'
-//                ? `\n\n🔓 You now have access to all vulnerability details for this vulnerability. This visibility is private to you (not globally revealed).`
-//                : '';
             await interaction.followUp({
-                content: `**${typeLabel} Submitted Successfully!**\n\n` +
+                content: `**Report Submitted Successfully!**\n\n` +
                     `**Report ID:** \`${report._id}\`\n` +
-                    `Your ${typeLabel.toLowerCase()} has been submitted to the company.`,
-
+                    `Your report has been submitted to the company.\n\n` +
+                    `💰 You might receive a reward for your report within the next 5 minutes.`,
                 flags: 64,
             });
 
             // Generate offer after delay
-//            const offerDelayMs = process.env.OFFER_DELAY_MINUTES
-//                ? parseInt(process.env.OFFER_DELAY_MINUTES) * 60 * 1000
-//                : 5 * 60 * 1000;
 const offerDelayMs = 30*1000; // 30 seconds
 
-            // Only generate an offer for full reports (not POC-only)
-            if (!report.is_poc_only) {
-                setTimeout(async () => {
-                    try {
-                        const platform = await Platform.findById(platformId);
-                        await Company.findById(companyId);
-                        if (platform.name.includes('Ultimatum')) {
-                            await generateOffer(interaction.client, report, interaction.user);
-                        } else if (platform.name.includes('Dictator')) {
-                            await generateDictatorOffer(interaction.client, report, interaction.user);
-                        }
-                    } catch (err) {
-                        console.error('Error generating delayed offer:', err);
+            setTimeout(async () => {
+                try {
+                    const platform = await Platform.findById(platformId);
+                    await Company.findById(companyId);
+                    if (platform.name.includes('Ultimatum')) {
+                        await generateOffer(interaction.client, report, interaction.user);
+                    } else if (platform.name.includes('Dictator')) {
+                        await generateDictatorOffer(interaction.client, report, interaction.user);
                     }
-                }, offerDelayMs);
-            }
+                } catch (err) {
+                    console.error('Error generating delayed offer:', err);
+                }
+            }, offerDelayMs);
 
         } catch (err) {
             console.error(err);
@@ -133,95 +140,12 @@ async function waitForButton(message, userId, allowedCustomIds) {
     }
 }
 
-async function selectReportType(interaction) {
-    const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('full_report')
-            .setLabel('Full Report')
-            .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-            .setCustomId('poc_only')
-            .setLabel('POC Only')
-            .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-            .setCustomId('close')
-            .setLabel('Cancel')
-            .setStyle(ButtonStyle.Danger),
-    );
 
-    const message = await interaction.editReply({
-        content: '**Select Report Type:**\n\n' +
-            '📋 **Full Report** - Complete vulnerability report\n' +
-            '🔬 **POC Only** - Just proof-of-concept for a vulnerability',
-        components: [buttons],
-        fetchReply: true
-    });
-
-    const response = await waitForButton(message, interaction.user.id, ['full_report', 'poc_only', 'close']);
-    if (!response) return null;
-
-    if (response.customId === 'close') {
-        await response.update({ content: 'Report canceled.', components: [] });
-        return null;
-    }
-
-    await response.update({
-        content: `Selected: **${response.customId === 'full_report' ? 'Full Report' : 'POC Only'}**`,
-        components: []
-    });
-
-    return response.customId === 'full_report' ? 'full' : 'poc';
-}
-
-async function selectPlatform(interaction) {
-    const platforms = await Platform.find({});
-    if (!platforms.length) {
-        await interaction.editReply('No platforms found in the database.');
-        return null;
-    }
-
-    const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('select_platform')
-        .setPlaceholder('Select a Platform')
-        .addOptions(
-            platforms.map(p => ({
-                label: p.name,
-                description: p.description?.slice(0, 80) || 'No description',
-                value: p._id.toString(),
-            }))
-        );
-
-    const row = new ActionRowBuilder().addComponents(selectMenu);
-    const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('close')
-            .setLabel('Close')
-            .setStyle(ButtonStyle.Danger)
-    );
-
-    const message = await interaction.editReply({
-        content: 'Select a Platform:',
-        components: [row, buttons],
-        fetchReply: true
-    });
-
-    const response = await waitForSelect(message, interaction.user.id, ['select_platform', 'close']);
-    if (!response) return null;
-
-    if (response.customId === 'close') {
-        await response.update({ content: 'Report canceled.', components: [] });
-        return null;
-    }
-
-    await response.update({ content: 'Platform selected.', components: [] });
-    return response.values[0];
-}
-
-async function selectCompany(interaction, platformId) {
-    const companies = await Company.find({ platform_id: platformId });
+async function selectCompany(interaction) {
+    const companies = await Company.find({});
     if (!companies.length) {
         await interaction.followUp({
-            content: 'No companies found for that platform.',
+            content: 'No companies found.',
             flags: 64,
         });
         return null;
@@ -241,10 +165,6 @@ async function selectCompany(interaction, platformId) {
     const row = new ActionRowBuilder().addComponents(selectMenu);
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('back')
-            .setLabel('Back')
-            .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
             .setCustomId('close')
             .setLabel('Close')
             .setStyle(ButtonStyle.Danger)
@@ -256,13 +176,8 @@ async function selectCompany(interaction, platformId) {
         fetchReply: true
     });
 
-    const response = await waitForSelect(message, interaction.user.id, ['select_company', 'back', 'close']);
+    const response = await waitForSelect(message, interaction.user.id, ['select_company', 'close']);
     if (!response) return null;
-
-    if (response.customId === 'back') {
-        await response.update({ content: 'Returning to platform selection...', components: [] });
-        return await selectPlatform(interaction);
-    }
 
     if (response.customId === 'close') {
         await response.update({ content: 'Report canceled.', components: [] });
@@ -301,10 +216,6 @@ async function selectVulnerability(interaction, companyId) {
     const row = new ActionRowBuilder().addComponents(selectMenu);
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('back')
-            .setLabel('Back')
-            .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
             .setCustomId('close')
             .setLabel('Close')
             .setStyle(ButtonStyle.Danger)
@@ -316,13 +227,8 @@ async function selectVulnerability(interaction, companyId) {
         fetchReply: true
     });
 
-    const response = await waitForSelect(message, interaction.user.id, ['select_vulnerability', 'back', 'close']);
+    const response = await waitForSelect(message, interaction.user.id, ['select_vulnerability', 'close']);
     if (!response) return null;
-
-    if (response.customId === 'back') {
-        await response.update({ content: 'Returning to company selection...', components: [] });
-        return await selectCompany(interaction, companyId);
-    }
 
     if (response.customId === 'close') {
         await response.update({ content: 'Report canceled.', components: [] });
@@ -333,31 +239,20 @@ async function selectVulnerability(interaction, companyId) {
     return response.values[0];
 }
 
-async function confirmSubmission(interaction, platformId, companyId, vulnerabilityId, reportType) {
-    const platform = await Platform.findById(platformId);
+async function confirmSubmission(interaction, companyId, vulnerabilityId) {
     const company = await Company.findById(companyId);
     const vulnerability = await Vulnerability.findById(vulnerabilityId);
 
-    let summaryContent;
-    if (reportType === 'full') {
-        summaryContent = `**Full Report Summary**\n\n` +
-            `**Platform:** ${platform.name}\n` +
-            `**Company:** ${company.name}\n` +
-            `**Vulnerability:** ${vulnerability.vuln_identifier}\n` +
-            `**Type:** ${vulnerability.volun_type}\n\n` +
-            `Click **Submit Report** to confirm.`;
-    } else {
-        summaryContent = `**POC Submission Summary**\n\n` +
-            `**Platform:** ${platform.name}\n` +
-            `**Company:** ${company.name}\n` +
-            `**Vulnerability:** ${vulnerability.vuln_identifier}\n\n` +
-            `Click **Submit POC** to confirm and earn a company offer.`;
-    }
+    const summaryContent = `**Full Report Summary**\n\n` +
+        `**Company:** ${company.name}\n` +
+        `**Vulnerability:** ${vulnerability.vuln_identifier}\n` +
+        `**Type:** ${vulnerability.volun_type}\n\n` +
+        `Click **Submit Report** to confirm.`;
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('submit')
-            .setLabel(reportType === 'full' ? 'Submit Report' : 'Submit POC')
+            .setLabel('Submit Report')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
             .setCustomId('close')
@@ -380,13 +275,13 @@ async function confirmSubmission(interaction, platformId, companyId, vulnerabili
     }
 
     await response.update({
-        content: `Submitting ${reportType === 'full' ? 'report' : 'POC'}...`,
+        content: 'Submitting report...',
         components: []
     });
     return true;
 }
 
-async function saveReport(interaction, platformId, companyId, vulnerabilityId, isPOCOnly) {
+async function saveReport(interaction, platformId, companyId, vulnerabilityId) {
     const discordId = interaction.user.id;
     const discordName = interaction.user.username;
 
@@ -411,8 +306,8 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, i
         platform_id: platformId,
         company_id: companyId,
         vulnerability_id: vulnerabilityId,
-        is_poc_only: isPOCOnly,
-        status: isPOCOnly ? 'poc_submitted' : 'open',
+        is_poc_only: false,
+        status: 'open',
         volunerablity_sev: vulnerability.severity || 'Medium'
     };
 
@@ -441,37 +336,7 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, i
         { upsert: false }
     );
 
-    if(isPOCOnly){
-        await Vulnerability.updateOne(
-            { _id: vulnerabilityId },
-            { $addToSet: { 'visibility.allowedUsers': user._id } }
-        );
-
-        // Add user to all field visibility lists
-        const fieldNames = [
-            'networkAccess',
-            'arbitraryCodeExecution',
-            'userInteraction',
-            'automatable',
-            'privilegesRequired',
-            'confidentialityImpact',
-            'integrityImpact',
-            'availabilityImpact',
-            'recoveryPotential'
-        ];
-        const addToSetObj = {};
-        fieldNames.forEach(field => {
-            addToSetObj[`${field}.visibleTo`] = user._id;
-        });
-
-        await Vulnerability.updateOne(
-            { _id: vulnerabilityId },
-            { $addToSet: addToSetObj }
-        );
-    }
-//    await checkExploitsAfterReport(vulnerabilityId);
-        return report;
-
+    return report;
 }
 //
 ////TODO: lets now check explosits after the voln is resolved instead!

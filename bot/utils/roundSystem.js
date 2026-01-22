@@ -7,6 +7,8 @@ const Exploit = require('../../models/Exploit');
 const { EmbedBuilder } = require('discord.js');
 const testVulnData = require('../../data/test-data.json');
 const generateOffer = require('./generateOffer');
+const generateDictatorOffer = require('./generateDicOffer');
+const Platform = require('../../models/Platform');
 const CompanyOffer = require('../../models/CompanyOffers');
 
 // Round timing (defaults) — can be overridden via env
@@ -300,6 +302,13 @@ async function evaluateTick(client) {
                 const vuln = await Vulnerability.findById(ex.volunerability_id);
                 if (!user || !vuln) continue;
 
+                // If vulnerability is resolved, end associated exploit immediately (no more income)
+                if (vuln.isResolved) {
+                    await Exploit.findByIdAndUpdate(ex._id, { $set: { is_caught: true } });
+                    caughtCount += 1;
+                    continue;
+                }
+
                 // credit passive earnings
                 const credit = ex.money_per_cycle;
                 await Users.findByIdAndUpdate(user._id, { $inc: { money_earned: credit } });
@@ -551,13 +560,14 @@ async function evaluateAutoOffers(client) {
             const uid = r.user_id?.toString();
             if (!uid) continue;
             const visible = countVisibleFieldsForUser(vuln, r.user_id);
-            const entry = perUser.get(uid) || { visibleCount: visible, earliestReport: r, earliestAt: r.submitted_at || r.createdAt };
+            const entry = perUser.get(uid) || { visibleCount: visible, earliestReport: r, earliestAt: r.submitted_at || r.createdAt, count: 0 };
             if (visible > entry.visibleCount) entry.visibleCount = visible;
             const ts = r.submitted_at || r.createdAt;
             if (!entry.earliestAt || (ts && ts < entry.earliestAt)) {
                 entry.earliestAt = ts;
                 entry.earliestReport = r;
             }
+            entry.count = (entry.count || 0) + 1;
             perUser.set(uid, entry);
         }
 
@@ -580,9 +590,10 @@ async function evaluateAutoOffers(client) {
             const waitedMs = now.getTime() - new Date(vuln.offer_wait_started_at).getTime();
             if (waitedMs < TICK_MS) continue;
 
+            // Fallback after waiting: user who submitted the most, tie-break by earliest submission
             const ranked = Array.from(perUser.entries())
                 .sort((a, b) => {
-                    if (b[1].visibleCount !== a[1].visibleCount) return b[1].visibleCount - a[1].visibleCount;
+                    if ((b[1].count || 0) !== (a[1].count || 0)) return (b[1].count || 0) - (a[1].count || 0);
                     return (a[1].earliestAt || now) - (b[1].earliestAt || now);
                 });
             chosenReport = ranked[0][1].earliestReport;
@@ -598,7 +609,52 @@ async function evaluateAutoOffers(client) {
             const user = await Users.findById(chosenReport.user_id);
             if (!user?.discord_id) continue;
             const duser = await client.users.fetch(user.discord_id);
-            await generateOffer(client, chosenReport, duser);
+            // Decide offer type based on platform
+            let useDictator = false;
+            try {
+                if (chosenReport.platform_id) {
+                    const platform = await Platform.findById(chosenReport.platform_id);
+                    if (platform) {
+                        const nameHas = (platform.name || '').toLowerCase().includes('dictator');
+                        const variantsHas = Array.isArray(platform.variants) && platform.variants.some(v => String(v).toLowerCase().includes('dictator'));
+                        useDictator = nameHas || variantsHas;
+                    }
+                }
+            } catch (_) { /* no-op */ }
+
+            if (useDictator) {
+                await generateDictatorOffer(client, chosenReport, duser);
+            } else {
+                await generateOffer(client, chosenReport, duser);
+            }
+
+            // Notify and reward non-selected reporters for this vulnerability
+            const losers = vulnReports.filter(r => String(r._id) !== String(chosenReport._id));
+            for (const loser of losers) {
+                try {
+                    const lUser = await Users.findById(loser.user_id);
+                    if (lUser?.discord_id) {
+                        const lDiscord = await client.users.fetch(lUser.discord_id).catch(() => null);
+                        if (lDiscord) {
+                            await lDiscord.send({
+                                content: `Thanks for your report on ${vuln.vuln_identifier || 'the recent vulnerability'}. Another researcher received the main offer this round. You have been awarded $100 and a reputation bonus for your contribution.`
+                            }).catch(() => {});
+                        }
+                    }
+                    // Credit $100 and reputation bonus if not already granted
+                    const bonusRep = 10;
+                    const updates = {
+                        $inc: { money_earned: 100, repuation_earned: bonusRep }
+                    };
+                    await Users.updateOne({ _id: loser.user_id }, updates);
+                    await Report.updateOne({ _id: loser._id }, {
+                        $inc: { offered_amount: 100, reputation_bonus: bonusRep },
+                        $set: { status: 'closed' }
+                    });
+                } catch (e) {
+                    console.error('Failed to reward/notify non-selected reporter:', e);
+                }
+            }
         } catch (e) {
             console.error('Failed to send auto-offer:', e);
         }
