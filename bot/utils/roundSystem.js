@@ -12,7 +12,7 @@ const Platform = require('../../models/Platform');
 const CompanyOffer = require('../../models/CompanyOffers');
 
 // Round timing (defaults) — can be overridden via env
-const ROUND_MS = Number(process.env.ROUND_MS || 30 * 60 * 1000);   // 30 minutes
+const ROUND_MS = Number(process.env.ROUND_MS || 15 * 60 * 1000);   // 30 minutes
 const COOLDOWN_MS = Number(process.env.COOLDOWN_MS || 2 * 60 * 1000); // 2 minutes
 const TICK_MS = Number(process.env.TICK_MS || 5 * 60 * 1000);      // 5 minutes
 

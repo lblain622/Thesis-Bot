@@ -14,10 +14,6 @@ module.exports = {
         const [prefix, action, id] = interaction.customId.split('_');
         
         try {
-
-
-            
-
             // ============= TRADE SYSTEM =============
             if (prefix === 'trade') {
                 await handleTrade(interaction, action, id);

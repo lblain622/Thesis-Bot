@@ -123,6 +123,7 @@ client.once('clientReady', async () => {
      roundSystem.cleanupTimers();
 
             // Initialize the round system (this will resume any active round)
+            await roundSystem.enableAutoRun();
             await roundSystem.initializeRoundSystem(client);
     await roundSystem.recoverRoundSystem(client);
         const data = await rest.put(
