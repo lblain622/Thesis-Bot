@@ -112,4 +112,11 @@ const vulnerabilitySchema = new Schema({
     last_offer_report_id: { type: Schema.Types.ObjectId, ref: 'Report', default: null }
 }, { timestamps: true });
 
+// Performance indexes
+vulnerabilitySchema.index({ vuln_identifier: 1 }, { unique: true });
+vulnerabilitySchema.index({ company_id: 1, isResolved: 1 });
+vulnerabilitySchema.index({ 'visibility.allowedUsers': 1, isResolved: 1 });
+vulnerabilitySchema.index({ isResolved: 1, isReported: 1 });
+vulnerabilitySchema.index({ round_id: 1 });
+
 module.exports = model('Vulnerabilities', vulnerabilitySchema);

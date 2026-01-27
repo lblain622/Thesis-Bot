@@ -67,5 +67,10 @@ const reportSchema = new Schema({
     }
 }, { timestamps: true });
 
+// Performance indexes
+reportSchema.index({ user_id: 1, submitted_at: -1 });
+reportSchema.index({ vulnerability_id: 1 });
+reportSchema.index({ company_id: 1, status: 1 });
+reportSchema.index({ platform_id: 1 });
 
 module.exports = model('Report', reportSchema);

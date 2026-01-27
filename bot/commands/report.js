@@ -13,6 +13,7 @@ const User = require('../../models/Users');
 const Vulnerability = require('../../models/Vulnerabilities');
 const generateOffer = require('../utils/generateOffer');
 const generateDictatorOffer = require('../utils/generateDicOffer');
+const cache = require('../utils/cache');
 
 //TODO: add limit to reporting,so users dont spam command
 // maybe limit of 3 reports max (could get more info and report again)
@@ -90,8 +91,13 @@ const offerDelayMs = 30*1000; // 30 seconds
 
             setTimeout(async () => {
                 try {
-                    const platform = await Platform.findById(platformId);
-                    await Company.findById(companyId);
+                    // Check cache first for platform
+                    let platform = cache.getPlatform(platformId);
+                    if (!platform) {
+                        platform = await Platform.findById(platformId).lean();
+                        if (platform) cache.setPlatform(platformId, platform);
+                    }
+
                     if (platform.name.includes('Ultimatum')) {
                         await generateOffer(interaction.client, report, interaction.user);
                     } else if (platform.name.includes('Dictator')) {
@@ -142,7 +148,12 @@ async function waitForButton(message, userId, allowedCustomIds) {
 
 
 async function selectCompany(interaction) {
-    const companies = await Company.find({});
+    // Try to get companies from cache first
+    const companies = await Company.find({}).lean();
+
+    // Cache all companies for future use
+    companies.forEach(c => cache.setCompany(c._id, c));
+
     if (!companies.length) {
         await interaction.followUp({
             content: 'No companies found.',
@@ -192,7 +203,7 @@ async function selectVulnerability(interaction, companyId) {
     const vulnerabilities = await Vulnerability.find({
         company_id: companyId,
         isResolved: false
-    });
+    }).lean();
 
     if (!vulnerabilities.length) {
         await interaction.followUp({
@@ -240,8 +251,11 @@ async function selectVulnerability(interaction, companyId) {
 }
 
 async function confirmSubmission(interaction, companyId, vulnerabilityId) {
-    const company = await Company.findById(companyId);
-    const vulnerability = await Vulnerability.findById(vulnerabilityId);
+    // Parallel fetch for better performance
+    const [company, vulnerability] = await Promise.all([
+        Company.findById(companyId).lean(),
+        Vulnerability.findById(vulnerabilityId).lean()
+    ]);
 
     const summaryContent = `**Full Report Summary**\n\n` +
         `**Company:** ${company.name}\n` +

@@ -41,4 +41,8 @@ const companyOfferSchema = new Schema({
     counter_offered: Number,
 }, { timestamps: true });
 
+// Performance indexes
+companyOfferSchema.index({ report_id: 1 });
+companyOfferSchema.index({ status: 1, expires_at: 1 });
+
 module.exports = model('Company_Offer', companyOfferSchema);

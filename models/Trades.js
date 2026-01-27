@@ -45,4 +45,9 @@ const tradeSchema = new Schema({
     resolved_at: Date
 }, { timestamps: true });
 
+// Performance indexes
+tradeSchema.index({ giving_user_id: 1, status: 1 });
+tradeSchema.index({ receiving_user_id: 1, status: 1 });
+tradeSchema.index({ status: 1, expires_at: 1 });
+
 module.exports = model('Trade', tradeSchema);

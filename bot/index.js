@@ -6,6 +6,9 @@ const fs = require('fs');
 const path = require('path');
 const User = require('../models/Users');
 const roundSystem = require('./utils/roundSystem');
+const cache = require('./utils/cache');
+const Company = require('../models/Company');
+const Platform = require('../models/Platform');
 
 //Some db interactions wont work based upon user privacy settings
 //look iinto have the private dms function inside through different channels  (see how much of a delay it might cause in the sever when many ppl interact)
@@ -54,10 +57,23 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 connectDB();
 
 // Ensure a Discord user exists in the database; create if not, update last_active/name if yes
+// Now with caching to reduce DB load
 async function ensureUserExists(discordUser) {
     try {
-        if (!discordUser) return;
-        await User.findOneAndUpdate(
+        if (!discordUser) return null;
+
+        // Check cache first
+        const cachedUser = cache.getUser(discordUser.id);
+        if (cachedUser) {
+            // Only update last_active if more than 1 minute has passed
+            const oneMinuteAgo = Date.now() - 60000;
+            if (cachedUser.last_active && new Date(cachedUser.last_active).getTime() > oneMinuteAgo) {
+                return cachedUser;
+            }
+        }
+
+        // Update in database
+        const user = await User.findOneAndUpdate(
             { discord_id: discordUser.id },
             {
                 $setOnInsert: {
@@ -69,10 +85,15 @@ async function ensureUserExists(discordUser) {
                 },
             },
             { upsert: true, new: true }
-        );
+        ).lean();
+
+        // Cache the result
+        cache.setUser(discordUser.id, user);
+        return user;
     } catch (e) {
         // Non-fatal: bot should continue even if we fail to upsert user
         console.error('ensureUserExists error:', e);
+        return null;
     }
 }
 function setupGracefulShutdown() {
@@ -120,12 +141,21 @@ client.once('clientReady', async () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
 
     try {
-     roundSystem.cleanupTimers();
+        // Warmup cache with shared data
+        console.log('Warming up cache...');
+        await Promise.all([
+            cache.warmupCompanies(Company),
+            cache.warmupPlatforms(Platform)
+        ]);
+        console.log('Cache warmup complete');
 
-            // Initialize the round system (this will resume any active round)
-            await roundSystem.enableAutoRun();
-            await roundSystem.initializeRoundSystem(client);
-    await roundSystem.recoverRoundSystem(client);
+        roundSystem.cleanupTimers();
+
+        // Initialize the round system (this will resume any active round)
+        await roundSystem.enableAutoRun();
+        await roundSystem.initializeRoundSystem(client);
+        await roundSystem.recoverRoundSystem(client);
+
         const data = await rest.put(
             Routes.applicationCommands(process.env.DISCORD_APP_ID),
             { body: commands }

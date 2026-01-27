@@ -40,4 +40,9 @@ const userSchema = new Schema({
     ]
 }, { timestamps: true });
 
+// Performance indexes
+userSchema.index({ discord_id: 1 }, { unique: true });
+userSchema.index({ last_active: -1 });
+userSchema.index({ 'reputation_breakdown.company_id': 1 });
+
 module.exports = model('Users', userSchema);

@@ -4,6 +4,7 @@ const Report = require('../../models/Reports');
 const Trade = require('../../models/Trades');
 const Vulnerability = require('../../models/Vulnerabilities');
 const { announceVulnerabilityPatched } = require('../events/announcePatches');
+const cache = require('../utils/cache');
 
 //TODO: If user does any command with the bot, add them as a user if not exists
 module.exports = {
@@ -216,21 +217,27 @@ async function handleDictatorGame(interaction, action, offerId) {
 }
 
 async function handleTrade(interaction, action, tradeId) {
-    const trade = await Trade.findById(tradeId)
-        .populate('giving_user_id')
-        .populate('receiving_user_id');
+    // Fetch trade without populate for better performance
+    const trade = await Trade.findById(tradeId).lean();
 
     if (!trade) {
         return interaction.reply({ content: 'Trade not found.', ephemeral: true });
     }
 
-    const user = await User.findOne({ discord_id: interaction.user.id });
+    // Fetch users in parallel
+    const [givingUser, receivingUser, currentUser] = await Promise.all([
+        User.findById(trade.giving_user_id).lean(),
+        User.findById(trade.receiving_user_id).lean(),
+        User.findOne({ discord_id: interaction.user.id }).lean()
+    ]);
+
+    const user = currentUser;
     if (!user) {
         return interaction.reply({ content: 'User not found.', ephemeral: true });
     }
 
-    const isGiver = trade.giving_user_id._id.toString() === user._id.toString();
-    const isReceiver = trade.receiving_user_id._id.toString() === user._id.toString();
+    const isGiver = trade.giving_user_id.toString() === user._id.toString();
+    const isReceiver = trade.receiving_user_id.toString() === user._id.toString();
 
     if (!isGiver && !isReceiver) {
         return interaction.reply({ content: 'You are not part of this trade.', ephemeral: true });
@@ -249,7 +256,7 @@ async function handleTrade(interaction, action, tradeId) {
         });
 
         // Notify other user
-        const other = isGiver ? trade.receiving_user_id : trade.giving_user_id;
+        const other = isGiver ? receivingUser : givingUser;
         try {
             const discordOther = await interaction.client.users.fetch(other.discord_id);
             await discordOther.send(` Your trade was rejected by ${interaction.user.username}.`);
@@ -270,7 +277,7 @@ async function handleTrade(interaction, action, tradeId) {
         });
 
         // Notify giver for final confirmation
-        const giverDiscord = await interaction.client.users.fetch(trade.giving_user_id.discord_id);
+        const giverDiscord = await interaction.client.users.fetch(givingUser.discord_id);
         await giverDiscord.send({
             content: `**${interaction.user.username} accepted your trade!**\n\nPlease confirm the trade:`,
             components: [
@@ -307,7 +314,7 @@ async function handleTrade(interaction, action, tradeId) {
             });
 
             // Notify receiver
-            const recvDiscord = await interaction.client.users.fetch(trade.receiving_user_id.discord_id);
+            const recvDiscord = await interaction.client.users.fetch(receivingUser.discord_id);
             await recvDiscord.send(`🎉 The trade with ${interaction.user.username} is complete!`);
 
         } catch (err) {

@@ -45,7 +45,8 @@ module.exports = {
 
                 vulnerabilityId = vulnerability._id;
                 companyId = vulnerability.company_id;
-                platformId = vulnerability.platform_id;
+                const company = await Company.findById(companyId);
+                platformId = company.platform_id;
 
                 const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId);
                 if (!confirmed) return;
