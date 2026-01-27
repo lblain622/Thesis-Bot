@@ -289,28 +289,28 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId) {
 
     const report = await Reports.create(reportDoc);
 
-    // Update vulnerability - mark as reported and add to reported_by
-    await Vulnerability.updateOne(
-        { _id: vulnerabilityId },
-        {
-            $push: {
-                reported_by: {
-                    user_id: user._id,
-                    reported_at: new Date(),
-                    report_id: report._id
-                }
-            },
-            $set: {
-                isReported: true,
-                reported_date: new Date()
-            },
-            $setOnInsert: {
-                first_reporter: user._id,
-                first_reported_at: new Date()
-            }
-        },
-        { upsert: false }
-    );
+//    // Update vulnerability - mark as reported and add to reported_by
+//    await Vulnerability.updateOne(
+//        { _id: vulnerabilityId },
+//        {
+//            $push: {
+//                reported_by: {
+//                    user_id: user._id,
+//                    reported_at: new Date(),
+//                    report_id: report._id
+//                }
+//            },
+//            $set: {
+//                isReported: true,
+//                reported_date: new Date()
+//            },
+//            $setOnInsert: {
+//                first_reporter: user._id,
+//                first_reported_at: new Date()
+//            }
+//        },
+//        { upsert: false }
+//    );
 
     // Grant visibility to POC submitter
     await Vulnerability.updateOne(
