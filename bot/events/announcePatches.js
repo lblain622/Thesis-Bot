@@ -1,6 +1,6 @@
 // bot/utils/announcements.js
 const { EmbedBuilder } = require('discord.js');
-const Vulnerability = require('../../models/Volunerabilies');
+const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
 const Company = require('../../models/Company');
 const Report = require('../../models/Reports');
@@ -18,8 +18,7 @@ async function announceVulnerabilityPatched(client, vulnerability, acceptedOffer
             console.error('Guild not found:', serverId);
             return;
         }
-        //TODO: add a setup command that predefinies channels
-        // Find the general channel (usually named "general")
+
         let channel = guild.channels.cache.find(ch =>
             ch.type === 0 && // GuildText type
             ch.name.toLowerCase().includes('general')

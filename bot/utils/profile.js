@@ -1,15 +1,22 @@
 const {SlashCommandBuilder, EmbedBuilder} = require("discord.js");
-
 const User = require("../../models/Users");
+const cache = require('../utils/cache');
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('profile').setDescription('View Your Profile'),
 
 
     async execute(interaction) {
-        let user = await User.findOne({discord_id: interaction.user.id});
+        // Try cache first
+        let user = cache.getUser(interaction.user.id);
         if (!user) {
-            user = await User.create({ discord_id: interaction.user.id, username: interaction.user.username });
+            user = await User.findOne({discord_id: interaction.user.id}).lean();
+            if (!user) {
+                user = await User.create({ discord_id: interaction.user.id, username: interaction.user.username });
+            } else {
+                cache.setUser(interaction.user.id, user);
+            }
         }
 
         const embdVar = new EmbedBuilder()

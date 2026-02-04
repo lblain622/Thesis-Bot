@@ -3,19 +3,15 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env'
 const mongoose = require('mongoose');
 const Company = require('../../models/Company');
 const Platform = require('../../models/Platform');
-const Volunerabilies = require('../../models/Volunerabilies');
+const Vulnerabilities = require('../../models/Vulnerabilities');
 const Reports = require('../../models/Reports');
 const CompanyOffers = require('../../models/CompanyOffers');
 const Trades = require('../../models/Trades');
-const Expoits = require('../../models/Expoits')
+const Expoits = require('../../models/Exploit')
+const Rounds = require('../../models/Round')
 async function setup() {
-    //TODO: connect AI  agent jose sent and modify it for context of new severity information
-    //TODO: have agent push to google sheets first then push the mongodb
-    //prob need to add in rounds to call the agent to generate more vol when needed
-    //TODO: (if possible) have so if we make changfes in the sheets the fields in mongodb are also updated
-    //TODO: Lets start giving comanies and the platforms more create names :)
-    //lets start with generation 100 volunewriblies!!!!!
-    //might give agent context of each company so volun. are similar to things would find in a similar product
+
+
     try {
         await mongoose.connect(process.env.MONGO_URI);
         console.log('MongoDB connected');
@@ -248,8 +244,8 @@ async function clearCollections() {
         await Company.deleteMany({});
         console.log(' Cleared Company collection');
         
-        await Volunerabilies.deleteMany({});
-        console.log(' Cleared Volunerabilies collection');
+        await Vulnerabilities.deleteMany({});
+        console.log(' Cleared Vulnerabilities collection');
         
         await Reports.deleteMany({});
         console.log(' Cleared Reports collection');
@@ -262,6 +258,11 @@ async function clearCollections() {
         
         await Expoits.deleteMany({});
         console.log(' Cleared Exploits collection');
+
+        await Rounds.deleteMany({});
+        console.log(' Cleared Rounds collection');
+
+
 
 
         console.log('All collections cleared successfully\n');

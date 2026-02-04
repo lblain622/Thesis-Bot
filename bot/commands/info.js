@@ -3,15 +3,15 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
-    ComponentType
+    ComponentType,
+    ButtonBuilder,
+    ButtonStyle,
 } = require('discord.js');
-const Vulnerability = require('../../models/Volunerabilies');
+const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
 const Company = require('../../models/Company');
 
-//TODO: looking into UI improvements with this
-// info works as intened but I feel like it could work better for a better user experience
-// maybe filetering such as reported/reolved vs unreport/unresolved
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('info')
@@ -19,6 +19,31 @@ module.exports = {
         .addStringOption(option =>
             option.setName('identifier')
                 .setDescription('Vulnerability identifier (e.g., XSS-ADMIN-001)')
+                .setRequired(false)
+        )
+        .addStringOption(option =>
+            option.setName('reported')
+                .setDescription('Filter by reported status')
+                .addChoices(
+                    { name: 'Reported', value: 'reported' },
+                    { name: 'Unreported', value: 'unreported' },
+                    { name: 'Any', value: 'any' }
+                )
+                .setRequired(false)
+        )
+        .addStringOption(option =>
+            option.setName('resolved')
+                .setDescription('Filter by resolution status')
+                .addChoices(
+                    { name: 'Resolved', value: 'resolved' },
+                    { name: 'Unresolved', value: 'unresolved' },
+                    { name: 'Any', value: 'any' }
+                )
+                .setRequired(false)
+        )
+        .addBooleanOption(option =>
+            option.setName('exclude_self_reported')
+                .setDescription('Exclude vulnerabilities you have reported')
                 .setRequired(false)
         ),
 
@@ -61,13 +86,34 @@ module.exports = {
 
             } else {
 
-                const vulnerabilities = await Vulnerability.find({
+                // Build filters based on options
+                const reportedFilter = interaction.options.getString('reported') || 'any';
+                const resolvedFilter = interaction.options.getString('resolved') || 'unresolved'; // default keeps previous behavior
+                const excludeSelf = interaction.options.getBoolean('exclude_self_reported') || false;
+
+                const query = {
                     $or: [
                         { 'visibility.allowedUsers': user._id },
                         { 'visibility.isGlobal': true }
-                    ],
-                    $and:[{'isResolved':false}]
-                }).populate('company_id');
+                    ]
+                };
+
+                if (reportedFilter !== 'any') {
+                    query.isReported = (reportedFilter === 'reported');
+                }
+
+                if (resolvedFilter !== 'any') {
+                    query.isResolved = (resolvedFilter === 'resolved');
+                }
+
+                if (excludeSelf) {
+                    // Exclude vulnerabilities where current user is among reporters
+                    query.reported_by = { $not: { $elemMatch: { user_id: user._id } } };
+                }
+
+                const vulnerabilities = await Vulnerability.find(query)
+                    .populate('company_id')
+                    .populate('reported_by.user_id');
 
                 if (!vulnerabilities.length) {
                     return interaction.editReply({
@@ -80,11 +126,20 @@ module.exports = {
                     .setCustomId('select_vuln_info')
                     .setPlaceholder('Select a vulnerability to view details')
                     .addOptions(
-                        vulnerabilities.slice(0, 25).map(v => ({
-                            label: v.vuln_identifier,
-                            description: `${v.volun_type} - ${v.isReported ? 'Reported' : 'Unreported'}`,
-                            value: v._id.toString()
-                        }))
+                        vulnerabilities.slice(0, 25).map(v => {
+                            const selfReported = Array.isArray(v.reported_by) && v.reported_by.some(rb => rb.user_id && rb.user_id._id && rb.user_id._id.toString() === user._id.toString());
+                            const descParts = [
+                                v.volun_type,
+                                v.isReported ? 'Reported' : 'Unreported',
+                                v.isResolved ? 'Resolved' : 'Unresolved'
+                            ];
+                            if (selfReported) descParts.push('You reported');
+                            return ({
+                                label: v.vuln_identifier,
+                                description: descParts.join(' • '),
+                                value: v._id.toString()
+                            });
+                        })
                     );
 
                 const row = new ActionRowBuilder().addComponents(selectMenu);
@@ -120,6 +175,19 @@ module.exports = {
                     `**Status:** ${vulnerability.isResolved ? '✅ Resolved' : vulnerability.isReported ? ' Reported' : 'Unreported'}`
             });
 
+            const actionRow = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`report_${vulnerability._id}`)
+                        .setLabel('Report This Vulnerability')
+                        .setStyle(ButtonStyle.Primary)
+                        .setEmoji('📝'),
+                    new ButtonBuilder()
+                        .setCustomId(`submitpoc_${vulnerability._id}`)
+                        .setLabel('Submit POC')
+                        .setStyle(ButtonStyle.Secondary)
+                        .setEmoji('🔍')
+                );
             // Field Analysis - only show if user can see
             if (canSeeFields) {
                 const fieldAnalysis = buildFieldAnalysis(vulnerability,user);
@@ -190,7 +258,7 @@ function buildFieldAnalysis(vulnerability, user) {
 
         if (!fieldData) continue;
 
-        //  Use the actual visibleTo array inside the vulnerability
+
         const canView = fieldData.visibleTo?.some(
             u => u.toString() === user._id.toString()
         ) || false;
@@ -206,9 +274,15 @@ function buildFieldAnalysis(vulnerability, user) {
 }
 
 function formatFieldAnswer(fieldKey, answer) {
+    // Fallback for missing/undefined values
+    if (answer === undefined || answer === null || answer === '') {
+        return 'Unknown';
+    }
     // Y/N fields
     if (['networkAccess', 'arbitraryCodeExecution', 'userInteraction', 'automatable'].includes(fieldKey)) {
-        return answer === 'Yes' ? '✅ Yes' : '❌ No';
+        if (answer === 'Yes') return '✅ Yes';
+        if (answer === 'No') return '❌ No';
+        return 'Unknown';
     }
 
     // Privileges Required
@@ -218,7 +292,7 @@ function formatFieldAnswer(fieldKey, answer) {
             'Low': '🟡 Low',
             'High': '🔴 High'
         };
-        return map[answer] || answer;
+        return map[answer] || 'Unknown';
     }
 
     // Recovery Potential
@@ -228,7 +302,7 @@ function formatFieldAnswer(fieldKey, answer) {
             'User': '🟡 User Intervention',
             'Irrecoverable': '🔴 Irrecoverable'
         };
-        return map[answer] || answer;
+        return map[answer] || 'Unknown';
     }
 
     // CIA Impacts
@@ -239,10 +313,10 @@ function formatFieldAnswer(fieldKey, answer) {
             'Medium': '🟠 Medium',
             'High': '🔴 High'
         };
-        return map[answer] || answer;
+        return map[answer] || 'Unknown';
     }
 
-    return answer;
+    return typeof answer === 'string' && answer.trim() ? answer : 'Unknown';
 }
 
 function getSeverityColor(severity) {

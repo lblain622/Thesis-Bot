@@ -11,18 +11,11 @@ const Company = require('../../models/Company');
 const Reports = require('../../models/Reports');
 const User = require('../../models/Users');
 const Vulnerability = require('../../models/Vulnerabilities');
-const generateOffer = require('../utils/generateOffer');
-const generateDictatorOffer = require('../utils/generateDicOffer');
-const cache = require('../utils/cache');
-
-//TODO: add limit to reporting,so users dont spam command
-// maybe limit of 3 reports max (could get more info and report again)
-// only 1 poc can be submitted per voluneribiltiy
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('report')
-        .setDescription('Submit a full vulnerability report')
+        .setName('submitpoc')
+        .setDescription('Submit a proof-of-concept for a vulnerability')
         .addStringOption(option =>
             option.setName('vulnerability')
                 .setDescription('Vulnerability identifier (e.g., CVE-2024-1234)')
@@ -52,7 +45,8 @@ module.exports = {
 
                 vulnerabilityId = vulnerability._id;
                 companyId = vulnerability.company_id;
-                platformId = vulnerability.platform_id;
+                const company = await Company.findById(companyId);
+                platformId = company.platform_id;
 
                 const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId);
                 if (!confirmed) return;
@@ -68,8 +62,7 @@ module.exports = {
                 if (!confirmed) return;
 
                 const vulnerability = await Vulnerability.findById(vulnerabilityId);
-                const company = await Company.findById(companyId);
-                platformId = company.platform_id;
+                platformId = vulnerability.platform_id;
             }
 
             const report = await saveReport(
@@ -80,39 +73,17 @@ module.exports = {
             );
 
             await interaction.followUp({
-                content: `**Report Submitted Successfully!**\n\n` +
+                content: `**POC Submitted Successfully!**\n\n` +
                     `**Report ID:** \`${report._id}\`\n` +
-                    `Your report has been submitted to the company.\n\n` +
+                    `Your proof-of-concept has been submitted to the company.\n\n` +
                     `💰 You might receive a reward for your report within the next 5 minutes.`,
                 flags: 64,
             });
 
-            // Generate offer after delay
-const offerDelayMs = 30*1000; // 30 seconds
-
-            setTimeout(async () => {
-                try {
-                    // Check cache first for platform
-                    let platform = cache.getPlatform(platformId);
-                    if (!platform) {
-                        platform = await Platform.findById(platformId).lean();
-                        if (platform) cache.setPlatform(platformId, platform);
-                    }
-
-                    if (platform.name.includes('Ultimatum')) {
-                        await generateOffer(interaction.client, report, interaction.user);
-                    } else if (platform.name.includes('Dictator')) {
-                        await generateDictatorOffer(interaction.client, report, interaction.user);
-                    }
-                } catch (err) {
-                    console.error('Error generating delayed offer:', err);
-                }
-            }, offerDelayMs);
-
         } catch (err) {
             console.error(err);
             await interaction.followUp({
-                content: 'An error occurred while submitting your report.',
+                content: 'An error occurred while submitting your POC.',
                 flags: 64,
             });
         }
@@ -147,14 +118,8 @@ async function waitForButton(message, userId, allowedCustomIds) {
     }
 }
 
-
 async function selectCompany(interaction) {
-    // Try to get companies from cache first
-    const companies = await Company.find({}).lean();
-
-    // Cache all companies for future use
-    companies.forEach(c => cache.setCompany(c._id, c));
-
+    const companies = await Company.find({});
     if (!companies.length) {
         await interaction.followUp({
             content: 'No companies found.',
@@ -192,7 +157,7 @@ async function selectCompany(interaction) {
     if (!response) return null;
 
     if (response.customId === 'close') {
-        await response.update({ content: 'Report canceled.', components: [] });
+        await response.update({ content: 'POC submission canceled.', components: [] });
         return null;
     }
 
@@ -204,7 +169,7 @@ async function selectVulnerability(interaction, companyId) {
     const vulnerabilities = await Vulnerability.find({
         company_id: companyId,
         isResolved: false
-    }).lean();
+    });
 
     if (!vulnerabilities.length) {
         await interaction.followUp({
@@ -243,7 +208,7 @@ async function selectVulnerability(interaction, companyId) {
     if (!response) return null;
 
     if (response.customId === 'close') {
-        await response.update({ content: 'Report canceled.', components: [] });
+        await response.update({ content: 'POC submission canceled.', components: [] });
         return null;
     }
 
@@ -252,22 +217,18 @@ async function selectVulnerability(interaction, companyId) {
 }
 
 async function confirmSubmission(interaction, companyId, vulnerabilityId) {
-    // Parallel fetch for better performance
-    const [company, vulnerability] = await Promise.all([
-        Company.findById(companyId).lean(),
-        Vulnerability.findById(vulnerabilityId).lean()
-    ]);
+    const company = await Company.findById(companyId);
+    const vulnerability = await Vulnerability.findById(vulnerabilityId);
 
-    const summaryContent = `**Full Report Summary**\n\n` +
+    const summaryContent = `**POC Submission Summary**\n\n` +
         `**Company:** ${company.name}\n` +
-        `**Vulnerability:** ${vulnerability.vuln_identifier}\n` +
-        `**Type:** ${vulnerability.volun_type}\n\n` +
-        `Click **Submit Report** to confirm.`;
+        `**Vulnerability:** ${vulnerability.vuln_identifier}\n\n` +
+        `Click **Submit POC** to confirm.`;
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('submit')
-            .setLabel('Submit Report')
+            .setLabel('Submit POC')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
             .setCustomId('close')
@@ -290,7 +251,7 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId) {
     }
 
     await response.update({
-        content: 'Submitting report...',
+        content: 'Submitting POC...',
         components: []
     });
     return true;
@@ -321,87 +282,63 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId) {
         platform_id: platformId,
         company_id: companyId,
         vulnerability_id: vulnerabilityId,
-        is_poc_only: false,
-        status: 'open',
+        is_poc_only: true,
+        status: 'poc_submitted',
         volunerablity_sev: vulnerability.severity || 'Medium'
     };
 
     const report = await Reports.create(reportDoc);
 
-    // Update vulnerability - mark as reported and add to reported_by
+//    // Update vulnerability - mark as reported and add to reported_by
+//    await Vulnerability.updateOne(
+//        { _id: vulnerabilityId },
+//        {
+//            $push: {
+//                reported_by: {
+//                    user_id: user._id,
+//                    reported_at: new Date(),
+//                    report_id: report._id
+//                }
+//            },
+//            $set: {
+//                isReported: true,
+//                reported_date: new Date()
+//            },
+//            $setOnInsert: {
+//                first_reporter: user._id,
+//                first_reported_at: new Date()
+//            }
+//        },
+//        { upsert: false }
+//    );
+
+    // Grant visibility to POC submitter
     await Vulnerability.updateOne(
         { _id: vulnerabilityId },
-        {
-            $push: {
-                reported_by: {
-                    user_id: user._id,
-                    reported_at: new Date(),
-                    report_id: report._id
-                }
-            },
-            $set: {
-                isReported: true,
-                reported_date: new Date()
-            },
-            $setOnInsert: {
-                first_reporter: user._id,
-                first_reported_at: new Date()
-            }
-        },
-        { upsert: false }
+        { $addToSet: { 'visibility.allowedUsers': user._id } }
+    );
+
+    // Add user to all field visibility lists
+    const fieldNames = [
+        'networkAccess',
+        'arbitraryCodeExecution',
+        'userInteraction',
+        'automatable',
+        'privilegesRequired',
+        'confidentialityImpact',
+        'integrityImpact',
+        'availabilityImpact',
+        'recoveryPotential'
+    ];
+    const addToSetObj = {};
+    fieldNames.forEach(field => {
+        addToSetObj[`${field}.visibleTo`] = user._id;
+    });
+
+    await Vulnerability.updateOne(
+        { _id: vulnerabilityId },
+        { $addToSet: addToSetObj }
     );
 
     return report;
 }
-//
-////TODO: lets now check explosits after the voln is resolved instead!
-//async function checkExploitsAfterReport(vulnerabilityId) {
-//    try {
-//        const Exploit = require('../../models/Expoits');
-//        const affectedExploits = await Exploit.find({
-//            volunerability_id: vulnerabilityId,
-//            is_caught: false
-//        });
-//
-//        if (affectedExploits.length > 0) {
-//            const caughtExploits = [];
-//            const safeExploits = [];
-//
-//            for (const exploit of affectedExploits) {
-//                const randomChance = Math.random();
-//
-//                if (randomChance <= exploit.exposure_chance) {
-//                    exploit.is_caught = true;
-//                    await exploit.save();
-//
-//                    caughtExploits.push({
-//                        exploit_id: exploit._id,
-//                        user_id: exploit.user_id,
-//                        exposure_chance: exploit.exposure_chance,
-//                        cycles_completed: exploit.cycles_completed,
-//                        caught_at: new Date()
-//                    });
-//                } else {
-//                    safeExploits.push({
-//                        exploit_id: exploit._id,
-//                        user_id: exploit.user_id
-//                    });
-//                }
-//            }
-//
-//            console.log(`Vulnerability reported: ${caughtExploits.length}/${affectedExploits.length} exploits caught.`);
-//
-//            return {
-//                caughtExploits,
-//                safeExploits,
-//                totalAffected: affectedExploits.length,
-//                caughtCount: caughtExploits.length
-//            };
-//        }
-//
-//        return null;
-//    } catch (err) {
-//        console.error('Error checking exploits after report:', err);
-//        throw err;
-//    }
-//}

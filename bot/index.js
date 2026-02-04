@@ -4,7 +4,11 @@ const { Client, GatewayIntentBits,Collection,REST, Routes } = require('discord.j
 const { connectDB } = require('../config/database');
 const fs = require('fs');
 const path = require('path');
-require('../models/Users');
+const User = require('../models/Users');
+const roundSystem = require('./utils/roundSystem');
+const cache = require('./utils/cache');
+const Company = require('../models/Company');
+const Platform = require('../models/Platform');
 
 //Some db interactions wont work based upon user privacy settings
 //look iinto have the private dms function inside through different channels  (see how much of a delay it might cause in the sever when many ppl interact)
@@ -52,14 +56,111 @@ for (const file of eventFiles) {
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 connectDB();
 
+// Ensure a Discord user exists in the database; create if not, update last_active/name if yes
+// Now with caching to reduce DB load
+async function ensureUserExists(discordUser) {
+    try {
+        if (!discordUser) return null;
+
+        // Check cache first
+        const cachedUser = cache.getUser(discordUser.id);
+        if (cachedUser) {
+            // Only update last_active if more than 1 minute has passed
+            const oneMinuteAgo = Date.now() - 60000;
+            if (cachedUser.last_active && new Date(cachedUser.last_active).getTime() > oneMinuteAgo) {
+                return cachedUser;
+            }
+        }
+
+        // Update in database
+        const user = await User.findOneAndUpdate(
+            { discord_id: discordUser.id },
+            {
+                $setOnInsert: {
+                    discord_id: discordUser.id,
+                },
+                $set: {
+                    discord_name: discordUser.tag,
+                    last_active: new Date(),
+                },
+            },
+            { upsert: true, new: true }
+        ).lean();
+
+        // Cache the result
+        cache.setUser(discordUser.id, user);
+        return user;
+    } catch (e) {
+        // Non-fatal: bot should continue even if we fail to upsert user
+        console.error('ensureUserExists error:', e);
+        return null;
+    }
+}
+function setupGracefulShutdown() {
+    const shutdownSignals = ['SIGINT', 'SIGTERM', 'SIGQUIT'];
+
+    shutdownSignals.forEach(signal => {
+        process.on(signal, async () => {
+            console.log(`\n${signal} received. Shutting down gracefully...`);
+
+            try {
+                // Clean up round system timers
+                if (typeof roundSystem.cleanupTimers === 'function') {
+                    roundSystem.cleanupTimers();
+                    console.log('Cleaned up round system timers');
+                }
+
+                // End any active round properly
+                const activeRound = await roundSystem.getCurrentRound();
+                if (activeRound) {
+                    console.log(`Ending active round ${activeRound.round_number} before shutdown...`);
+                    try {
+                        await roundSystem.endRound(client);
+                    } catch (e) {
+                        console.error('Error ending round on shutdown:', e);
+                    }
+                }
+
+                // Destroy Discord client
+                if (client && !client.destroyed) {
+                    client.destroy();
+                    console.log('Discord client destroyed');
+                }
+
+                console.log('Shutdown complete.');
+                process.exit(0);
+            } catch (error) {
+                console.error('Error during graceful shutdown:', error);
+                process.exit(1);
+            }
+        });
+    });
+}
+
 client.once('clientReady', async () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
 
     try {
+        // Warmup cache with shared data
+        console.log('Warming up cache...');
+        await Promise.all([
+            cache.warmupCompanies(Company),
+            cache.warmupPlatforms(Platform)
+        ]);
+        console.log('Cache warmup complete');
+
+        roundSystem.cleanupTimers();
+
+        // Initialize the round system (this will resume any active round)
+        await roundSystem.enableAutoRun();
+        await roundSystem.initializeRoundSystem(client);
+        await roundSystem.recoverRoundSystem(client);
+
         const data = await rest.put(
             Routes.applicationCommands(process.env.DISCORD_APP_ID),
             { body: commands }
         );
+        setupGracefulShutdown();
         console.log("Registered Commands");
     } catch (err) {
         console.error('Error with commands:', err);
@@ -69,10 +170,15 @@ client.once('clientReady', async () => {
 client.on('messageCreate', async (msg) => {
     if (msg.author.bot) return;
 
+    // Add/Update user on any message usage (acts as a command usage tracker too)
+    await ensureUserExists(msg.author);
+
     if (msg.content === '!ping') return msg.reply('pong');
 });
 
 client.on('interactionCreate', async interaction => {
+    await ensureUserExists(interaction.user);
+
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;

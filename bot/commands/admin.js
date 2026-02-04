@@ -4,19 +4,15 @@ const {
     PermissionFlagsBits,
     EmbedBuilder
 } = require('discord.js');
-const { generateDailyVulnerabilities, endRound, announceNewRound } = require('../utils/roundSystem');
+const { generateDailyVulnerabilities, endRound, announceNewRound, startRound: startRoundScheduler } = require('../utils/roundSystem');
 const { announceVulnerabilityPatched } = require('../events/announcePatches');
-const Vulnerability = require('../../models/Volunerabilies');
+const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
 const Report = require('../../models/Reports');
 const Company = require('../../models/Company');
 const Round = require('../../models/Round');
-const Exploit = require('../../models/Expoits');
+const Exploit = require('../../models/Exploit');
 
-
-//hmmm admin command works to make it easier to modify everything without modify the database too much
-//TODO: Remove some commands I dont need anymore
-// helps to stop admin abuse 101
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('admin')
@@ -44,11 +40,6 @@ module.exports = {
         )
         .addSubcommand(subcommand =>
             subcommand
-                .setName('resolveall')
-                .setDescription('Resolve all reported vulnerabilities (end of round)')
-        )
-        .addSubcommand(subcommand =>
-            subcommand
                 .setName('stats')
                 .setDescription('View bot statistics')
         )
@@ -60,69 +51,6 @@ module.exports = {
                     option.setName('channel')
                         .setDescription('Channel for announcements')
                         .setRequired(true)
-                )
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('givemoney')
-                .setDescription('Give money to a user')
-                .addUserOption(option =>
-                    option.setName('user')
-                        .setDescription('Target user')
-                        .setRequired(true)
-                )
-                .addIntegerOption(option =>
-                    option.setName('amount')
-                        .setDescription('Amount to give')
-                        .setRequired(true)
-                )
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('resetuser')
-                .setDescription('Reset a user\'s stats')
-                .addUserOption(option =>
-                    option.setName('user')
-                        .setDescription('Target user')
-                        .setRequired(true)
-                )
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('createvuln')
-                .setDescription('Manually create a vulnerability')
-                .addStringOption(option =>
-                    option.setName('identifier')
-                        .setDescription('Vulnerability identifier')
-                        .setRequired(true)
-                )
-                .addStringOption(option =>
-                    option.setName('type')
-                        .setDescription('Vulnerability type')
-                        .setRequired(true)
-                        .addChoices(
-                            { name: 'XSS', value: 'XSS' },
-                            { name: 'SQLi', value: 'SQLi' },
-                            { name: 'CSRF', value: 'CSRF' },
-                            { name: 'RCE', value: 'RCE' },
-                            { name: 'IDOR', value: 'IDOR' }
-                        )
-                )
-                .addStringOption(option =>
-                    option.setName('severity')
-                        .setDescription('Severity level')
-                        .setRequired(true)
-                        .addChoices(
-                            { name: 'Low', value: 'Low' },
-                            { name: 'Medium', value: 'Medium' },
-                            { name: 'High', value: 'High' },
-                            { name: 'Critical', value: 'Critical' }
-                        )
-                )
-                .addBooleanOption(option =>
-                    option.setName('global')
-                        .setDescription('Make globally visible?')
-                        .setRequired(false)
                 )
         )
         .addSubcommand(subcommand =>
@@ -160,28 +88,16 @@ module.exports = {
 
         switch (subcommand) {
             case 'startround':
-                await startRound(interaction);
+                await startRoundCmd(interaction);
                 break;
             case 'endround':
                 await endRoundCommand(interaction);
-                break;
-            case 'resolveall':
-                await resolveAllVulns(interaction);
                 break;
             case 'stats':
                 await showStats(interaction);
                 break;
             case 'setannounce':
                 await setAnnounceChannel(interaction);
-                break;
-            case 'givemoney':
-                await giveMoney(interaction);
-                break;
-            case 'resetuser':
-                await resetUser(interaction);
-                break;
-            case 'createvuln':
-                await createVuln(interaction);
                 break;
             case 'listusers':
                 await listUsers(interaction);
@@ -279,24 +195,17 @@ async function addUsersBulk(interaction) {
         await interaction.editReply('Error processing bulk user addition.');
     }
 }
-async function startRound(interaction) {
+async function startRoundCmd(interaction) {
     await interaction.deferReply();
 
     try {
         const channel = interaction.options.getChannel('channel');
 
-        // Generate vulnerabilities
-        const vulnerabilities = await generateDailyVulnerabilities();
-
-        
-        await announceNewRound(interaction.client, channel.id, vulnerabilities);
+        // Start the scheduled round system (enables auto-run after first admin start)
+        await startRoundScheduler(interaction.client, channel.id);
 
         await interaction.editReply({
-            content: `New round started!\n\n` +
-                    `**Vulnerabilities Generated:** ${vulnerabilities.length}\n` +
-                    `**Global:** ${vulnerabilities.filter(v => v.visibility.isGlobal).length}\n` +
-                    `**Exclusive:** ${vulnerabilities.filter(v => !v.visibility.isGlobal).length}\n\n` +
-                    `Announcement sent to ${channel}.`
+            content: `New round started and scheduler enabled. Announcements in ${channel}.`
         });
     } catch (err) {
         console.error(err);
@@ -411,110 +320,7 @@ async function setAnnounceChannel(interaction) {
     }
 }
 
-async function giveMoney(interaction) {
-    await interaction.deferReply();
 
-    try {
-        const targetUser = interaction.options.getUser('user');
-        const amount = interaction.options.getInteger('amount');
-
-        const user = await User.findOne({ discord_id: targetUser.id });
-        if (!user) {
-            return interaction.editReply('User not found in database.');
-        }
-
-        await User.updateOne(
-            { _id: user._id },
-            { $inc: { money_earned: amount } }
-        );
-
-        await interaction.editReply({
-            content: ` Gave **$${amount}** to ${targetUser.username}.`
-        });
-    } catch (err) {
-        console.error(err);
-        await interaction.editReply('Error giving money.');
-    }
-}
-
-async function resetUser(interaction) {
-    await interaction.deferReply();
-
-    try {
-        const targetUser = interaction.options.getUser('user');
-
-        const result = await User.updateOne(
-            { discord_id: targetUser.id },
-            {
-                $set: {
-                    reports_made: 0,
-                    money_earned: 0,
-                    reputation_earned: 0,
-                    reputation_breakdown: []
-                }
-            }
-        );
-
-        if (result.modifiedCount === 0) {
-            return interaction.editReply('  User not found in database.');
-        }
-
-        await interaction.editReply({
-            content: `   Reset stats for ${targetUser.username}.`
-        });
-    } catch (err) {
-        console.error(err);
-        await interaction.editReply('  Error resetting user.');
-    }
-}
-
-async function createVuln(interaction) {
-    await interaction.deferReply();
-
-    try {
-        const identifier = interaction.options.getString('identifier');
-        const type = interaction.options.getString('type');
-        const severity = interaction.options.getString('severity');
-        const isGlobal = interaction.options.getBoolean('global') || false;
-
-        // Get a random company
-        const companies = await Company.find({});
-        const company = companies[Math.floor(Math.random() * companies.length)];
-
-        const cvssScore = calculateRandomCVSS(severity);
-
-        const vuln = await Vulnerability.create({
-            company_id: company._id,
-            vuln_identifier: identifier,
-            volun_type: type,
-            name: `${type} vulnerability`,
-            cvss_score: cvssScore,
-            severity: severity,
-            description: `Manually created ${type} vulnerability`,
-            isReported: false,
-            discovered_by: [],
-            reported_by: [],
-            pocs_submitted: [],
-            visibility: {
-                isGlobal: isGlobal,
-                allowedUsers: []
-            },
-            expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000)
-        });
-
-        await interaction.editReply({
-            content: `   Created vulnerability!\n\n` +
-                    `**ID:** ${identifier}\n` +
-                    `**Type:** ${type}\n` +
-                    `**Severity:** ${severity} (CVSS: ${cvssScore})\n` +
-                    `**Company:** ${company.name}\n` +
-                    `**Visibility:** ${isGlobal ? 'Global' : 'Hidden'}`
-        });
-    } catch (err) {
-        console.error(err);
-        await interaction.editReply('  Error creating vulnerability.');
-    }
-}
 
 async function listUsers(interaction) {
     await interaction.deferReply();
@@ -580,17 +386,4 @@ async function showLeaderboard(interaction) {
         console.error(err);
         await interaction.editReply('  Error generating leaderboard.');
     }
-}
-
-//TODO: remove this for when agent is connected
-function calculateRandomCVSS(severity) {
-    const ranges = {
-        'Low': [0.1, 3.9],
-        'Medium': [4.0, 6.9],
-        'High': [7.0, 8.9],
-        'Critical': [9.0, 10.0]
-    };
-
-    const [min, max] = ranges[severity] || [0.1, 3.9];
-    return Math.round((Math.random() * (max - min) + min) * 10) / 10;
 }
