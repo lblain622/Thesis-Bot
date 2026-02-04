@@ -68,7 +68,8 @@ module.exports = {
                 if (!confirmed) return;
 
                 const vulnerability = await Vulnerability.findById(vulnerabilityId);
-                platformId = vulnerability.platform_id;
+                const company = await Company.findById(companyId);
+                platformId = company.platform_id;
             }
 
             const report = await saveReport(

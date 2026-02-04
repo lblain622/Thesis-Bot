@@ -39,12 +39,13 @@ async function generateOffer(client, report, discordUser) {
                     new ButtonBuilder()
                         .setCustomId(`offer_reject_${offer._id}`)
                         .setLabel('Reject')
-                        .setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder()
-                        .setCustomId(`offer_counter_${offer._id}`)
-                        .setLabel('Counter Offer')
-                        .setStyle(ButtonStyle.Secondary)
+                        .setStyle(ButtonStyle.Danger)
                 ),
+//                    new ButtonBuilder()
+//                        .setCustomId(`offer_counter_${offer._id}`)
+//                        .setLabel('Counter Offer')
+//                        .setStyle(ButtonStyle.Secondary)
+//                ),
             ],
         });
     } catch (err) {
