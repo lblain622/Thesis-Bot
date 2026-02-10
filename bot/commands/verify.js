@@ -25,21 +25,19 @@ const slides = [
     {
         title: 'How do you get Vulnerabilities?',
         content:
-            "You can discover vulnerabilities by participating in security research activities.\n"
-
+            "You can discover vulnerabilities by participating in security research activities.\n",
     },
     {
         title: 'Reporting Vulnerabilities (/report)',
         content:
-            "Use `/report` to submit a finding. Typical fields include: title, target, severity, and details.\n" +
-
+            "Use `/report` to submit a finding. Typical fields include: title, target, severity, and details.\n",
     },
     {
         title: 'Proof of Concepts (PoC)',
         content:
             "A PoC demonstrates the issue safely.\n" +
-            " User `/submitpoc` to submit a PoC.\n`",
-
+            "Use `/submitpoc` to submit a PoC.\n",
+    },
     {
         title: 'Rewards and Reputation',
         content:
@@ -52,7 +50,7 @@ const slides = [
         title: 'Trading (/trade)',
         content:
             "Some findings or assets may be tradable if allowed.\n" +
-            "• Use trading responsibly and follow server rules.\n" +
+            "• Use trading responsibly and follow server rules.\n",
     },
     {
         title: 'Exploiting (/exploit)',

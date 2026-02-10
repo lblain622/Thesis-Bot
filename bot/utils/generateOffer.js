@@ -1,6 +1,7 @@
 const Company = require('../../models/Company');
 const BountyTier = require('../../models/BountyTiers');
 const CompanyOffer = require('../../models/CompanyOffers');
+const Items = require('../../models/Items');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { fetchInventoryItems, computeCompanyBonusPct, maybeConsumeLuckyToken, grantMerchantHatIfMissing } = require('./shopEffects');
 const Users = require('../../models/Users');
@@ -33,6 +34,34 @@ async function generateOffer(client, report, discordUser) {
         }
     } catch (_) { /* ignore */ }
 
+    // Maybe attach an item and reduce cash
+    let attachedItems = [];
+    let reductionReason = null;
+    const withItemsEnabled = process.env.OFFERS_WITH_ITEMS_ENABLED === 'true';
+    const attachChance = Number(process.env.OFFERS_ITEM_ATTACH_CHANCE || 0.35);
+    const reducePct = Number(process.env.OFFERS_ITEM_CASH_REDUCT_PCT || 60);
+    const minCash = Number(process.env.OFFERS_ITEM_MIN_CASH || 50);
+    const maxItems = Number(process.env.OFFERS_MAX_ITEMS_PER_OFFER || 1);
+
+    if (withItemsEnabled && Math.random() < attachChance) {
+        try {
+            const pool = await Items.find({ enabled: true, type: { $in: ['merch', 'tool'] } }).lean();
+            if (pool.length) {
+                // Simple weighted by inverse price to bias affordable items
+                const chosen = pool.sort(() => 0.5 - Math.random()).slice(0, Math.min(1, maxItems));
+                for (const it of chosen) {
+                    const entry = { item_id: it._id, qty: 1 };
+                    if (it.type === 'merch' && it.companyScoped) entry.company_id = company._id;
+                    attachedItems.push(entry);
+                }
+                // Reduce cash
+                const reduced = Math.floor(offerAmount * (1 - reducePct / 100));
+                offerAmount = Math.max(minCash, reduced);
+                reductionReason = 'item_bonus';
+            }
+        } catch (e) { /* ignore */ }
+    }
+
     const offer = await CompanyOffer.create({
         company_id: company._id,
         report_id: report._id,
@@ -45,6 +74,8 @@ async function generateOffer(client, report, discordUser) {
         created_at: new Date(),
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         counter_offer: null,
+        items: attachedItems,
+        cash_reduction_reason: reductionReason,
     });
 
     try {
@@ -57,11 +88,19 @@ async function generateOffer(client, report, discordUser) {
             }
         } catch (_) {}
 
+        const itemsLine = attachedItems.length
+            ? `\nIncluded Item${attachedItems.length>1?'s':''}: ` + attachedItems.map(ai => {
+                const it = (ai && ai.item_id) ? ai.item_id : null; // not populated here
+                // we only have ids, so show generic label
+                return `1x bonus item`;
+            }).join(', ')
+            : '';
         await discordUser.send({
             content: `Reward Offer from ${company.name}\n` +
                 `You have an offer of $${offerAmount} for your report.` +
+                (reductionReason ? `\nNote: Cash reduced due to item bonus.` : '') +
                 (notes.length ? `\nApplied: ${notes.join(', ')}` : '') +
-                `${grantMsg}\n` +
+                `${itemsLine}${grantMsg}\n` +
                 `Do you accept this offer?`,
             components: [
                 new ActionRowBuilder().addComponents(
@@ -74,11 +113,11 @@ async function generateOffer(client, report, discordUser) {
                         .setLabel('Reject')
                         .setStyle(ButtonStyle.Danger)
                 ),
-//                    new ButtonBuilder()
-//                        .setCustomId(`offer_counter_${offer._id}`)
-//                        .setLabel('Counter Offer')
-//                        .setStyle(ButtonStyle.Secondary)
-//                ),
+                    new ButtonBuilder()
+                        .setCustomId(`offer_counter_${offer._id}`)
+                        .setLabel('Counter Offer')
+                        .setStyle(ButtonStyle.Secondary)
+                ),
             ],
         });
     } catch (err) {

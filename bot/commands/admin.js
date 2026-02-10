@@ -12,6 +12,7 @@ const Report = require('../../models/Reports');
 const Company = require('../../models/Company');
 const Round = require('../../models/Round');
 const Exploit = require('../../models/Exploit');
+const { clearCollections, loadInitialData } = require('../utils/loadData');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -72,6 +73,11 @@ module.exports = {
                         .setDescription('Comma-separated Discord user IDs')
                         .setRequired(true)
                 )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('resetdata')
+                .setDescription('Reset all collections and reload seed data (DANGEROUS)')
         ),
 
 
@@ -108,9 +114,31 @@ module.exports = {
             case 'addusers':
                 await addUsersBulk(interaction);
                 break;
+            case 'resetdata':
+                await resetData(interaction);
+                break;
         }
     },
 };
+async function resetData(interaction) {
+    try {
+        await interaction.deferReply({ ephemeral: true });
+        await clearCollections();
+        const result = await loadInitialData();
+
+        // Optionally, we could refresh any caches here if needed in the future
+        await interaction.editReply({
+            content: `✅ Data reset complete. Seeded ${result?.companiesCreated || 0} companies. Loaded ${result?.shopItemsLoaded || 0} shop items.`,
+        });
+    } catch (err) {
+        console.error('resetdata error:', err);
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: '❌ Failed to reset data. Check logs for details.' });
+        } else {
+            await interaction.reply({ content: '❌ Failed to reset data. Check logs for details.', ephemeral: true });
+        }
+    }
+}
 async function addUsersBulk(interaction) {
     await interaction.deferReply();
 

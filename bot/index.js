@@ -9,6 +9,7 @@ const roundSystem = require('./utils/roundSystem');
 const continuousMode = require('./utils/continuousMode');
 const cache = require('./utils/cache');
 const { loadShopItems } = require('./utils/loadShopItems');
+const { initializeShopRotation, cleanupShopRotation } = require('./utils/shopRotation');
 const Company = require('../models/Company');
 const Platform = require('../models/Platform');
 
@@ -116,6 +117,11 @@ function setupGracefulShutdown() {
                     roundSystem.cleanupTimers();
                     console.log('Cleaned up round system timers');
                 }
+                // Cleanup shop rotation
+                if (typeof cleanupShopRotation === 'function') {
+                    cleanupShopRotation();
+                    console.log('Cleaned up shop rotation timers');
+                }
 
                 // End any active round properly
                 if (process.env.CONTINUOUS_MODE !== 'true') {
@@ -164,21 +170,18 @@ client.once('clientReady', async () => {
         }
 
         // Initialize game mode
-        if (process.env.CONTINUOUS_MODE === 'true') {
+
             // Continuous mode (no rounds)
-            await continuousMode.initialize(client);
-        } else {
-            // Round-based mode (legacy)
-            roundSystem.cleanupTimers();
-            await roundSystem.enableAutoRun();
-            await roundSystem.initializeRoundSystem(client);
-            await roundSystem.recoverRoundSystem(client);
-        }
+        await continuousMode.initialize(client);
 
         const data = await rest.put(
             Routes.applicationCommands(process.env.DISCORD_APP_ID),
             { body: commands }
         );
+        // Initialize Shop rotation
+
+            await initializeShopRotation();
+
         setupGracefulShutdown();
         console.log("Registered Commands");
     } catch (err) {
@@ -189,27 +192,67 @@ client.once('clientReady', async () => {
 client.on('messageCreate', async (msg) => {
     if (msg.author.bot) return;
 
-    // Add/Update user on any message usage (acts as a command usage tracker too)
-    await ensureUserExists(msg.author);
+    // Only update existing users' activity; do NOT auto-create here
+    try {
+        const cached = cache.getUser(msg.author.id);
+        let existing = cached;
+        if (!existing) {
+            existing = await User.findOne({ discord_id: msg.author.id }).lean();
+            if (existing) cache.setUser(msg.author.id, existing);
+        }
+        if (existing) {
+            await User.updateOne(
+                { _id: existing._id },
+                { $set: { last_active: new Date(), discord_name: msg.author.tag } }
+            );
+        }
+    } catch (_) {}
 
     if (msg.content === '!ping') return msg.reply('pong');
 });
 
 client.on('interactionCreate', async interaction => {
-    await ensureUserExists(interaction.user);
-
     if (interaction.isChatInputCommand()) {
-        const command = client.commands.get(interaction.commandName);
+        const commandName = interaction.commandName;
+        const command = client.commands.get(commandName);
         if (!command) return;
+
+        // Gate commands: require verification except for /verify and /admin
+        if (commandName !== 'verify' && commandName !== 'admin') {
+            try {
+                const cached = cache.getUser(interaction.user.id);
+                let userDoc = cached;
+                if (!userDoc) {
+                    userDoc = await User.findOne({ discord_id: interaction.user.id }).lean();
+                    if (userDoc) cache.setUser(interaction.user.id, userDoc);
+                }
+                if (!userDoc) {
+                    return interaction.reply({
+                        content: 'You need to complete verification before using this command. Please run `/verify` first.',
+                        ephemeral: true,
+                    });
+                } else {
+                    // Touch last_active for verified users
+                    await User.updateOne({ _id: userDoc._id }, { $set: { last_active: new Date(), discord_name: interaction.user.tag } });
+                }
+            } catch (e) {
+                console.error('Verification gate error:', e);
+                return interaction.reply({ content: 'Error verifying user status. Please try again.', ephemeral: true });
+            }
+        }
 
         try {
             await command.execute(interaction);
         } catch (err) {
             console.error(err);
-            await interaction.reply({
-                content: 'There was an error executing this command.',
-                ephemeral: true,
-            });
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({ content: 'There was an error executing this command.', ephemeral: true });
+            } else {
+                await interaction.reply({
+                    content: 'There was an error executing this command.',
+                    ephemeral: true,
+                });
+            }
         }
     }
     else if (interaction.isButton() || interaction.isStringSelectMenu()) {

@@ -5,6 +5,9 @@ const {
 const Items = require('../../models/Items');
 const Users = require('../../models/Users');
 const Company = require('../../models/Company');
+const ItemStock = require('../../models/ItemStock');
+const ShopRotation = require('../../models/ShopRotation');
+const { getActiveRotation } = require('../utils/shopRotation');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -48,19 +51,49 @@ module.exports = {
 async function listItems(interaction) {
     await interaction.deferReply({ flags: 64 });
     const type = interaction.options.getString('type');
-    const query = { enabled: true };
-    if (type) query.type = type;
-    const items = await Items.find(query).sort({ price: 1 }).lean();
+
+    let items = [];
+    let title = 'Shop Catalog';
+    let footer = null;
+    if (process.env.SHOP_ROTATE_ENABLED === 'true') {
+        const rotation = await getActiveRotation();
+        const now = new Date();
+        const remainingMs = Math.max(0, new Date(rotation.active_until).getTime() - now.getTime());
+        const m = Math.floor(remainingMs / 60000);
+        const s = Math.floor((remainingMs % 60000) / 1000);
+        footer = `Resets in ${m}m ${s}s`;
+        const ids = rotation.item_ids || [];
+        const q = { _id: { $in: ids }, enabled: true };
+        if (type) q.type = type;
+        items = await Items.find(q).sort({ price: 1 }).lean();
+        title = 'Shop — Rotating Selection (6 items)';
+    } else {
+        const query = { enabled: true };
+        if (type) query.type = type;
+        items = await Items.find(query).sort({ price: 1 }).lean();
+    }
+
     if (!items.length) return interaction.editReply({ content: 'No items available right now.' });
-    const embed = new EmbedBuilder().setTitle('Shop Catalog').setColor('#3BA55D');
+    const embed = new EmbedBuilder().setTitle(title).setColor('#3BA55D');
     for (const it of items) {
         const scope = it.companyScoped ? ' (company-specific)' : '';
+        // Daily stock remaining (if enabled)
+        let stockStr = '';
+        if (process.env.SHOP_ROTATE_ENABLED === 'true') {
+            const dayKey = getDayKey();
+            const st = await ItemStock.findOne({ item_id: it._id, dayKey }).lean();
+            const cap = st?.cap ?? Number(process.env.SHOP_DAILY_CAP_DEFAULT || 50);
+            const sold = st?.sold || 0;
+            const remain = Math.max(0, cap - sold);
+            stockStr = `\nStock remaining today: ${remain}/${cap}`;
+        }
         embed.addFields({
             name: `${it.name} — $${it.price}${scope}`,
-            value: `Key: ${it.key}\nType: ${it.type}${it.stackable ? ' (stackable)' : ''}\n${it.description || ''}`,
+            value: `Key: ${it.key}\nType: ${it.type}${it.stackable ? ' (stackable)' : ''}\n${it.description || ''}${stockStr}`,
             inline: false
         });
     }
+    if (footer) embed.setFooter({ text: footer });
     return interaction.editReply({ embeds: [embed] });
 }
 
@@ -78,7 +111,38 @@ async function buyItem(interaction) {
         const item = await Items.findOne({ key: itemKey, enabled: true });
         if (!item) return interaction.editReply({ content: `Item with key "${itemKey}" is not available.` });
 
+        // Pre-calc desired quantity for stock and cost
         let qty = item.stackable ? Math.max(1, qtyArg) : 1;
+
+        // Check funds early
+        const costEarly = item.price * qty;
+        const available = Number(user.balance || 0);
+        if (available < costEarly) {
+            return interaction.editReply({ content: `Insufficient funds. You need $${costEarly}, but you have $${available}.` });
+        }
+
+        // Enforce rotation membership and stock when enabled
+        if (process.env.SHOP_ROTATE_ENABLED === 'true') {
+            const rotation = await getActiveRotation();
+            const inRotation = (rotation.item_ids || []).some(id => String(id) === String(item._id));
+            if (!inRotation) return interaction.editReply({ content: 'This item is not available in the current rotation. Please check /shop list.' });
+            // Enforce daily stock cap
+            const dayKey = getDayKey();
+            const capDefault = Number(process.env.SHOP_DAILY_CAP_DEFAULT || 50);
+            // Upsert stock doc if absent
+            let st = await ItemStock.findOneAndUpdate(
+                { item_id: item._id, dayKey },
+                { $setOnInsert: { item_id: item._id, dayKey, cap: capDefault, sold: 0 } },
+                { upsert: true, new: true }
+            );
+            const want = qty;
+            if ((st.sold + want) > (st.cap ?? capDefault)) {
+                return interaction.editReply({ content: 'This item is out of stock for today. Check back after the daily reset.' });
+            }
+            // Reserve stock
+            await ItemStock.updateOne({ _id: st._id, sold: st.sold }, { $inc: { sold: want } });
+        }
+
         let companyId = null;
         if (item.companyScoped) {
             if (!companyName) return interaction.editReply({ content: 'This item is company-specific. Please provide the company name via the company option.' });
@@ -97,12 +161,9 @@ async function buyItem(interaction) {
         }
 
         const cost = item.price * qty;
-        if ((user.money_earned || 0) < cost) {
-            return interaction.editReply({ content: `Insufficient funds. You need $${cost}, but you have $${user.money_earned || 0}.` });
-        }
 
-        // Deduct balance
-        await Users.updateOne({ _id: user._id }, { $inc: { money_earned: -cost } });
+        // Deduct balance (use main balance)
+        await Users.updateOne({ _id: user._id }, { $inc: { balance: -cost } });
         // Add to inventory (merge if same key and stackable)
         const existingIdx = (user.inventory || []).findIndex(e => String(e.item_id) === String(item._id) && String(e.company_id || '') === String(companyId || ''));
         if (existingIdx >= 0) {
@@ -142,4 +203,11 @@ async function showInventory(interaction) {
 
 function escapeRegExp(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getDayKey(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
 }

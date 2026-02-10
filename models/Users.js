@@ -17,6 +17,24 @@ const userSchema = new Schema({
         type: Number,
         default: 0
     },
+    // Main spendable balance used for purchases and trade thresholds
+    balance: {
+        type: Number,
+        default: 0
+    },
+    // Breakdown of balance sources
+    money_from_exploits: {
+        type: Number,
+        default: 0
+    },
+    money_from_reports: {
+        type: Number,
+        default: 0
+    },
+    money_from_trades: {
+        type: Number,
+        default: 0
+    },
     repuation_earned: {
         type: Number,
         default: 0

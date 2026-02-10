@@ -15,10 +15,6 @@ const generateOffer = require('../utils/generateOffer');
 const generateDictatorOffer = require('../utils/generateDicOffer');
 const cache = require('../utils/cache');
 
-//TODO: add limit to reporting,so users dont spam command
-// maybe limit of 3 reports max (could get more info and report again)
-// only 1 poc can be submitted per voluneribiltiy
-
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('report')
@@ -52,7 +48,8 @@ module.exports = {
 
                 vulnerabilityId = vulnerability._id;
                 companyId = vulnerability.company_id;
-                platformId = vulnerability.platform_id;
+                const company = await Company.findById(companyId);
+                                platformId = company.platform_id;
 
                 const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId);
                 if (!confirmed) return;

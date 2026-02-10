@@ -1,6 +1,7 @@
 const Company = require('../../models/Company');
 const BountyTier = require('../../models/BountyTiers');
 const CompanyOffer = require('../../models/CompanyOffers');
+const Items = require('../../models/Items');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { fetchInventoryItems, computeCompanyBonusPct, maybeConsumeLuckyToken, grantMerchantHatIfMissing } = require('./shopEffects');
 const Users = require('../../models/Users');
@@ -36,6 +37,30 @@ async function generateDictatorOffer(client, report, discordUser) {
     }
   } catch (_) {}
 
+  // Optionally attach an item and reduce cash (applies to both options)
+  let attachedItems = [];
+  let reductionReason = null;
+  const withItemsEnabled = process.env.OFFERS_WITH_ITEMS_ENABLED === 'true';
+  const attachChance = Number(process.env.OFFERS_ITEM_ATTACH_CHANCE || 0.35);
+  const reducePct = Number(process.env.OFFERS_ITEM_CASH_REDUCT_PCT || 60);
+  const minCash = Number(process.env.OFFERS_ITEM_MIN_CASH || 50);
+  const maxItems = Number(process.env.OFFERS_MAX_ITEMS_PER_OFFER || 1);
+  if (withItemsEnabled && Math.random() < attachChance) {
+    try {
+      const pool = await Items.find({ enabled: true, type: { $in: ['merch', 'tool'] } }).lean();
+      if (pool.length) {
+        const chosen = pool.sort(() => 0.5 - Math.random()).slice(0, Math.min(1, maxItems));
+        for (const it of chosen) {
+          const entry = { item_id: it._id, qty: 1 };
+          if (it.type === 'merch' && it.companyScoped) entry.company_id = company._id;
+          attachedItems.push(entry);
+        }
+        base = Math.max(minCash, Math.floor(base * (1 - reducePct / 100)));
+        reductionReason = 'item_bonus';
+      }
+    } catch (_) {}
+  }
+
   const options = {
     option1: { money: base, rep: 0 },
     option2: { money: Math.floor(base * 0.7), rep: 50 },
@@ -49,6 +74,8 @@ async function generateDictatorOffer(client, report, discordUser) {
     status: 'pending',
     created_at: new Date(),
     expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+    items: attachedItems,
+    cash_reduction_reason: reductionReason,
   });
 
   // 20% chance to grant a Merchant Hat for this company if not owned
@@ -60,12 +87,17 @@ async function generateDictatorOffer(client, report, discordUser) {
     }
   } catch (_) {}
 
+  const itemsLine = attachedItems.length
+    ? `\nIncluded Item${attachedItems.length>1?'s':''}: ` + attachedItems.map(() => '1x bonus item').join(', ')
+    : '';
   await discordUser.send({
     content:
       `Offer from ${company.name}\n Report\n` +
       `Option 1: $${options.option1.money} + ${options.option1.rep} reputation\n` +
       `Option 2: $${options.option2.money} + ${options.option2.rep} reputation` +
+      (reductionReason ? `\nNote: Cash reduced due to item bonus.` : '') +
       (notes.length ? `\nApplied: ${notes.join(', ')}` : '') +
+      itemsLine +
       `${grantMsg}\n\n` +
       `Please choose one:`,
     components: [

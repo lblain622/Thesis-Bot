@@ -17,8 +17,10 @@ async function loadShopItems() {
       );
     }
     console.log(`[Shop] Loaded ${items.length} items.`);
+    return { count: items.length };
   } catch (e) {
     console.error('[Shop] Failed to load items:', e);
+    return { count: 0, error: true };
   }
 }
 

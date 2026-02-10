@@ -7,7 +7,11 @@
     "price": 1500,
     "stackable": false,
     "companyScoped": true,
-    "effects": { "offer": { "companyBonusPct": 15 } },
+    "effects": {
+      "offer": {
+        "companyBonusPct": 15
+      }
+    },
     "enabled": true
   },
   {
@@ -18,7 +22,11 @@
     "price": 800,
     "stackable": false,
     "companyScoped": false,
-    "effects": { "search": { "extraDiscover": 1 } },
+    "effects": {
+      "search": {
+        "extraDiscover": 1
+      }
+    },
     "enabled": true
   },
   {
@@ -29,7 +37,12 @@
     "price": 600,
     "stackable": true,
     "companyScoped": false,
-    "effects": { "search": { "extraFields": 1, "maxStacks": 2 } },
+    "effects": {
+      "search": {
+        "extraFields": 1,
+        "maxStacks": 2
+      }
+    },
     "enabled": true
   },
   {
@@ -40,7 +53,63 @@
     "price": 400,
     "stackable": true,
     "companyScoped": false,
-    "effects": { "consumable": { "doubleNextOfferChancePct": 10 } },
+    "effects": {
+      "consumable": {
+        "doubleNextOfferChancePct": 10
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "corp_hoodie",
+    "name": "Corp Hoodie",
+    "description": "Company-branded hoodie that gives +10% rewards with that company.",
+    "type": "merch",
+    "price": 1200,
+    "stackable": false,
+    "companyScoped": true,
+    "effects": {
+      "offer": { "companyBonusPct": 10 }
+    },
+    "enabled": true
+  },
+  {
+    "key": "pentest_kit",
+    "name": "Pentest Kit",
+    "description": "Professional toolkit increasing chance to discover an extra vuln during /search.",
+    "type": "tool",
+    "price": 1800,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "search": { "extraDiscover": 1, "extraFields": 1 }
+    },
+    "enabled": true
+  },
+  {
+    "key": "brand_pass",
+    "name": "Brand Pass",
+    "description": "Consumable: Guarantees next offer from this company includes +5 reputation.",
+    "type": "consumable",
+    "price": 700,
+    "stackable": true,
+    "companyScoped": true,
+    "effects": {
+      "consumable": { "guaranteedRepBonus": 5 }
+    },
+    "enabled": true
+  },
+  {
+    "key": "company_keychain",
+    "name": "Company Keychain",
+    "description": "A small trinket: minor +5% company bonus.",
+    "type": "merch",
+    "price": 300,
+    "stackable": false,
+    "companyScoped": true,
+    "effects": {
+      "offer": { "companyBonusPct": 5 }
+    },
     "enabled": true
   }
 ]
