@@ -37,6 +37,14 @@ const userSchema = new Schema({
                 default: 0
             }
         }
+    ],
+    // Shop inventory entries
+    inventory: [
+        {
+            item_id: { type: Schema.Types.ObjectId, ref: 'Items', required: true },
+            company_id: { type: Schema.Types.ObjectId, ref: 'Company', default: null },
+            qty: { type: Number, default: 1, min: 0 }
+        }
     ]
 }, { timestamps: true });
 
@@ -44,5 +52,6 @@ const userSchema = new Schema({
 userSchema.index({ discord_id: 1 }, { unique: true });
 userSchema.index({ last_active: -1 });
 userSchema.index({ 'reputation_breakdown.company_id': 1 });
+userSchema.index({ 'inventory.item_id': 1 });
 
 module.exports = model('Users', userSchema);

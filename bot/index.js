@@ -6,7 +6,9 @@ const fs = require('fs');
 const path = require('path');
 const User = require('../models/Users');
 const roundSystem = require('./utils/roundSystem');
+const continuousMode = require('./utils/continuousMode');
 const cache = require('./utils/cache');
+const { loadShopItems } = require('./utils/loadShopItems');
 const Company = require('../models/Company');
 const Platform = require('../models/Platform');
 
@@ -104,20 +106,27 @@ function setupGracefulShutdown() {
             console.log(`\n${signal} received. Shutting down gracefully...`);
 
             try {
-                // Clean up round system timers
-                if (typeof roundSystem.cleanupTimers === 'function') {
+                // Clean up timers (round or continuous)
+                if (process.env.CONTINUOUS_MODE === 'true') {
+                    if (typeof continuousMode.cleanupTimers === 'function') {
+                        continuousMode.cleanupTimers();
+                        console.log('Cleaned up continuous mode timers');
+                    }
+                } else if (typeof roundSystem.cleanupTimers === 'function') {
                     roundSystem.cleanupTimers();
                     console.log('Cleaned up round system timers');
                 }
 
                 // End any active round properly
-                const activeRound = await roundSystem.getCurrentRound();
-                if (activeRound) {
-                    console.log(`Ending active round ${activeRound.round_number} before shutdown...`);
-                    try {
-                        await roundSystem.endRound(client);
-                    } catch (e) {
-                        console.error('Error ending round on shutdown:', e);
+                if (process.env.CONTINUOUS_MODE !== 'true') {
+                    const activeRound = await roundSystem.getCurrentRound();
+                    if (activeRound) {
+                        console.log(`Ending active round ${activeRound.round_number} before shutdown...`);
+                        try {
+                            await roundSystem.endRound(client);
+                        } catch (e) {
+                            console.error('Error ending round on shutdown:', e);
+                        }
                     }
                 }
 
@@ -149,12 +158,22 @@ client.once('clientReady', async () => {
         ]);
         console.log('Cache warmup complete');
 
-        roundSystem.cleanupTimers();
+        // Load Shop catalog if enabled
+        if (process.env.SHOP_ENABLED === 'true') {
+            await loadShopItems();
+        }
 
-        // Initialize the round system (this will resume any active round)
-        await roundSystem.enableAutoRun();
-        await roundSystem.initializeRoundSystem(client);
-        await roundSystem.recoverRoundSystem(client);
+        // Initialize game mode
+        if (process.env.CONTINUOUS_MODE === 'true') {
+            // Continuous mode (no rounds)
+            await continuousMode.initialize(client);
+        } else {
+            // Round-based mode (legacy)
+            roundSystem.cleanupTimers();
+            await roundSystem.enableAutoRun();
+            await roundSystem.initializeRoundSystem(client);
+            await roundSystem.recoverRoundSystem(client);
+        }
 
         const data = await rest.put(
             Routes.applicationCommands(process.env.DISCORD_APP_ID),

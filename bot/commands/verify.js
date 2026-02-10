@@ -38,7 +38,7 @@ const slides = [
         title: 'Proof of Concepts (PoC)',
         content:
             "A PoC demonstrates the issue safely.\n" +
-            " User `/submitpoc` to submit a PoC.\n`"
+            " User `/submitpoc` to submit a PoC.\n`",
 
     {
         title: 'Rewards and Reputation',
