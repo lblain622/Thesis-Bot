@@ -47,11 +47,21 @@ async function generateOffer(client, report, discordUser) {
         try {
             const pool = await Items.find({ enabled: true, type: { $in: ['merch', 'tool'] } }).lean();
             if (pool.length) {
-                // Simple weighted by inverse price to bias affordable items
-                const chosen = pool.sort(() => 0.5 - Math.random()).slice(0, Math.min(1, maxItems));
+                // Bias towards companyScoped (branded) items
+                const brandedPool = pool.filter(it => it.companyScoped);
+                const generalPool = pool.filter(it => !it.companyScoped);
+                
+                let candidates = [];
+                if (brandedPool.length && Math.random() < 0.7) {
+                    candidates = brandedPool;
+                } else {
+                    candidates = pool;
+                }
+
+                const chosen = candidates.sort(() => 0.5 - Math.random()).slice(0, Math.min(1, maxItems));
                 for (const it of chosen) {
-                    const entry = { item_id: it._id, qty: 1 };
-                    if (it.type === 'merch' && it.companyScoped) entry.company_id = company._id;
+                    const entry = { item_id: it._id, qty: 1, name: it.name };
+                    if (it.companyScoped) entry.company_id = company._id;
                     attachedItems.push(entry);
                 }
                 // Reduce cash
@@ -89,10 +99,8 @@ async function generateOffer(client, report, discordUser) {
         } catch (_) {}
 
         const itemsLine = attachedItems.length
-            ? `\nIncluded Item${attachedItems.length>1?'s':''}: ` + attachedItems.map(ai => {
-                const it = (ai && ai.item_id) ? ai.item_id : null; // not populated here
-                // we only have ids, so show generic label
-                return `1x bonus item`;
+            ? `\nIncluded Item${attachedItems.length > 1 ? 's' : ''}: ` + attachedItems.map(ai => {
+                return ai.name || '1x bonus item';
             }).join(', ')
             : '';
         await discordUser.send({
@@ -111,8 +119,7 @@ async function generateOffer(client, report, discordUser) {
                     new ButtonBuilder()
                         .setCustomId(`offer_reject_${offer._id}`)
                         .setLabel('Reject')
-                        .setStyle(ButtonStyle.Danger)
-                ),
+                        .setStyle(ButtonStyle.Danger),
                     new ButtonBuilder()
                         .setCustomId(`offer_counter_${offer._id}`)
                         .setLabel('Counter Offer')

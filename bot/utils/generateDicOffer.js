@@ -49,10 +49,20 @@ async function generateDictatorOffer(client, report, discordUser) {
     try {
       const pool = await Items.find({ enabled: true, type: { $in: ['merch', 'tool'] } }).lean();
       if (pool.length) {
-        const chosen = pool.sort(() => 0.5 - Math.random()).slice(0, Math.min(1, maxItems));
+        // Bias towards companyScoped (branded) items
+        const brandedPool = pool.filter(it => it.companyScoped);
+        
+        let candidates = [];
+        if (brandedPool.length && Math.random() < 0.7) {
+          candidates = brandedPool;
+        } else {
+          candidates = pool;
+        }
+
+        const chosen = candidates.sort(() => 0.5 - Math.random()).slice(0, Math.min(1, maxItems));
         for (const it of chosen) {
-          const entry = { item_id: it._id, qty: 1 };
-          if (it.type === 'merch' && it.companyScoped) entry.company_id = company._id;
+          const entry = { item_id: it._id, qty: 1, name: it.name };
+          if (it.companyScoped) entry.company_id = company._id;
           attachedItems.push(entry);
         }
         base = Math.max(minCash, Math.floor(base * (1 - reducePct / 100)));
@@ -88,7 +98,7 @@ async function generateDictatorOffer(client, report, discordUser) {
   } catch (_) {}
 
   const itemsLine = attachedItems.length
-    ? `\nIncluded Item${attachedItems.length>1?'s':''}: ` + attachedItems.map(() => '1x bonus item').join(', ')
+    ? `\nIncluded Item${attachedItems.length > 1 ? 's' : ''}: ` + attachedItems.map(ai => ai.name || '1x bonus item').join(', ')
     : '';
   await discordUser.send({
     content:

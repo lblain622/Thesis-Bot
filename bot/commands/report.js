@@ -29,6 +29,11 @@ module.exports = {
         await interaction.deferReply({ flags: 64 });
 
         try {
+            const user = await User.findOne({ discord_id: interaction.user.id });
+            if (!user) {
+                return interaction.editReply({ content: 'User not found.', flags: 64 });
+            }
+
             const vulnIdentifier = interaction.options.getString('vulnerability');
             let vulnerabilityId, companyId, platformId;
 
@@ -46,6 +51,17 @@ module.exports = {
                     return;
                 }
 
+                // Check for existing submissions
+                const existingReport = await Reports.findOne({
+                    user_id: user._id,
+                    vulnerability_id: vulnerability._id
+                });
+                if (existingReport) {
+                    return interaction.editReply({
+                        content: `You have already submitted a ${existingReport.is_poc_only ? 'POC' : 'report'} for this vulnerability. Only one submission is allowed.`,
+                    });
+                }
+
                 vulnerabilityId = vulnerability._id;
                 companyId = vulnerability.company_id;
                 const company = await Company.findById(companyId);
@@ -61,6 +77,17 @@ module.exports = {
                 vulnerabilityId = await selectVulnerability(interaction, companyId);
                 if (!vulnerabilityId) return;
 
+                // Check for existing submissions
+                const existingReport = await Reports.findOne({
+                    user_id: user._id,
+                    vulnerability_id: vulnerabilityId
+                });
+                if (existingReport) {
+                    return interaction.editReply({
+                        content: `You have already submitted a ${existingReport.is_poc_only ? 'POC' : 'report'} for this vulnerability. Only one submission is allowed.`,
+                    });
+                }
+
                 const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId);
                 if (!confirmed) return;
 
@@ -73,7 +100,8 @@ module.exports = {
                 interaction,
                 platformId,
                 companyId,
-                vulnerabilityId
+                vulnerabilityId,
+                user
             );
 
             await interaction.followUp({
@@ -293,17 +321,19 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId) {
     return true;
 }
 
-async function saveReport(interaction, platformId, companyId, vulnerabilityId) {
-    const discordId = interaction.user.id;
-    const discordName = interaction.user.username;
-
-    let user = await User.findOne({ discord_id: discordId });
+async function saveReport(interaction, platformId, companyId, vulnerabilityId, user) {
     if (!user) {
-        user = await User.create({
-            discord_id: discordId,
-            username: discordName,
-            reports_made: 0
-        });
+        const discordId = interaction.user.id;
+        const discordName = interaction.user.username;
+
+        user = await User.findOne({ discord_id: discordId });
+        if (!user) {
+            user = await User.create({
+                discord_id: discordId,
+                username: discordName,
+                reports_made: 0
+            });
+        }
     }
 
     await User.updateOne(

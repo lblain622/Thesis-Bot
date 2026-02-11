@@ -3,10 +3,11 @@ const User = require('../../models/Users');
 const Report = require('../../models/Reports');
 const Trade = require('../../models/Trades');
 const Vulnerability = require('../../models/Vulnerabilities');
-const { announceVulnerabilityPatched } = require('../events/announcePatches');
+const { announceVulnerabilityPatched, announceExploitSummary } = require('../events/announcePatches');
+const { handleExploitCleanup } = require('../utils/exploitUtils');
 const cache = require('../utils/cache');
 
-//TODO: If user does any command with the bot, add them as a user if not exists
+
 module.exports = {
     name: 'interactionCreate',
     async execute(interaction) {
@@ -22,7 +23,16 @@ module.exports = {
 
             // ============= STANDARD OFFERS =============
             if (prefix === 'offer') {
-                await handleStandardOffer(interaction, action, id);
+                const offer = await CompanyOffer.findById(id);
+                const report = await Report.findById(offer?.report_id);
+                const company = await (require('../../models/Company').findById(report?.company_id));
+                const platform = await (require('../../models/Platform').findById(company?.platform_id));
+
+                if (platform?.name?.includes('Ultimatum')) {
+                    await handleUltimatumGame(interaction, action, id);
+                } else {
+                    await handleStandardOffer(interaction, action, id);
+                }
             }
 
             // ============= DICTATOR OFFERS =============
@@ -90,15 +100,32 @@ async function handleUltimatumGame(interaction, action, offerId) {
                 components: []
             });
         }
-         const vulnerability = await Vulnerability.findById(report.vulnerability_id);
-        if (vulnerability && interaction.guild) {
-            // Pass the server ID (guild ID) to the announcement function
-            await announceVulnerabilityPatched(
-                interaction.client,
-                vulnerability,
-                offer,
-                interaction.guild.id
-            );
+        const vulnerability = await Vulnerability.findById(report.vulnerability_id);
+        if (vulnerability) {
+            vulnerability.isResolved = true;
+            vulnerability.is_resolved_date = new Date();
+            await vulnerability.save();
+
+            if (interaction.guild) {
+                // Pass the server ID (guild ID) to the announcement function
+                await announceVulnerabilityPatched(
+                    interaction.client,
+                    vulnerability,
+                    offer,
+                    interaction.guild.id
+                );
+
+                // Handle exploit cleanup and announcement
+                const exploitSummary = await handleExploitCleanup(vulnerability._id);
+                if (exploitSummary.caughtCount > 0) {
+                    await announceExploitSummary(
+                        interaction.client,
+                        interaction.guild.id,
+                        vulnerability.vuln_identifier,
+                        exploitSummary
+                    );
+                }
+            }
         }
     }
 
@@ -114,7 +141,8 @@ async function handleUltimatumGame(interaction, action, offerId) {
     }
 
     if (action === 'counter') {
-        await interaction.reply({ content: 'Please type your counteroffer amount (USD):', ephemeral: true });
+        const company = await (require('../../models/Company').findById(report.company_id));
+        await interaction.reply({ content: `Please type your counteroffer amount (USD) for **${company?.name || 'the company'}**:`, ephemeral: true });
 
         const filter = (msg) => msg.author.id === interaction.user.id;
         const collected = await interaction.channel.awaitMessages({ filter, max: 1, time: 120000 });
@@ -125,32 +153,138 @@ async function handleUltimatumGame(interaction, action, offerId) {
         if (isNaN(amount) || amount <= 0)
             return interaction.followUp({ content: 'Invalid amount.', ephemeral: true });
 
-        if (amount <= offer.original_amount) {
+        // Logic for negotiation: 
+        // 1. If amount <= offered_amount: Accept (User asked for less or same)
+        // 2. If amount <= original_amount: High chance of acceptance (original amount is what company first thought of)
+        // 3. If amount > original_amount: Decreasing chance of acceptance based on how much higher
+        
+        let accepted = false;
+        let finalOfferAmount = amount;
+        let reason = "";
+
+        const currentOffered = offer.offered_amount;
+        const originalBase = offer.original_amount;
+
+        if (amount <= currentOffered) {
+            accepted = true;
+            reason = "The company is happy to pay less than they offered!";
+        } else {
+            const ratio = amount / originalBase;
+            // 1.0 ratio -> 90% chance
+            // 1.2 ratio -> 50% chance
+            // 1.5 ratio -> 10% chance
+            // 2.0 ratio -> 0% chance
+            let chance = 0;
+            if (ratio <= 1.0) chance = 0.95;
+            else if (ratio <= 2.0) chance = 0.95 * Math.pow(1 - (ratio - 1), 2);
+            
+            if (Math.random() < chance) {
+                accepted = true;
+                reason = "The company accepted your counteroffer!";
+            } else if (Math.random() < 0.3 && ratio < 1.5) {
+                // Counter-counter offer
+                finalOfferAmount = Math.floor((amount + currentOffered) / 2);
+                accepted = true;
+                reason = `The company rejected $${amount} but countered with a final offer of $${finalOfferAmount}. (Automatically accepted as negotiation)`;
+            }
+        }
+
+        if (accepted) {
             await CompanyOffer.updateOne(
                 { _id: offer._id },
-                { $set: { status: 'accepted', counter_offer: amount, offered_amount: amount } }
+                { $set: { status: 'accepted', counter_offer: amount, offered_amount: finalOfferAmount, resolved_at: new Date() } }
             );
+            
+            // Apply rewards (Money + Rep + Items)
+            const repBonus = parseInt(offer.reputation_offered || offer.repuatation_offered || 0);
             await User.updateOne(
                 { _id: user._id },
                 {
                     $inc: {
-                        money_earned: amount,
-                        balance: amount,
-                        money_from_reports: amount,
-                        repuation_earned: parseInt(offer.reputation_offered || 0),
+                        money_earned: finalOfferAmount,
+                        balance: finalOfferAmount,
+                        money_from_reports: finalOfferAmount,
+                        repuation_earned: repBonus,
                     },
                 }
             );
+
+            // Grant items
+            if (Array.isArray(offer.items) && offer.items.length) {
+                const Items = require('../../models/Items');
+                const userDoc = await User.findById(user._id).lean();
+                const inv = Array.isArray(userDoc.inventory) ? userDoc.inventory : [];
+                for (const it of offer.items) {
+                    try {
+                        const itemDoc = await Items.findById(it.item_id).lean();
+                        if (!itemDoc) continue;
+                        const companyIdStr = it.company_id ? String(it.company_id) : '';
+                        if (itemDoc.stackable) {
+                            const idx = inv.findIndex(e => String(e.item_id) === String(it.item_id) && String(e.company_id || '') === companyIdStr);
+                            if (idx >= 0) {
+                                await User.updateOne({ _id: user._id }, { $inc: { [`inventory.${idx}.qty`]: it.qty || 1 } });
+                            } else {
+                                await User.updateOne({ _id: user._id }, { $push: { inventory: { item_id: it.item_id, company_id: it.company_id || null, qty: it.qty || 1 } } });
+                            }
+                        } else {
+                            let exists = false;
+                            if (itemDoc.companyScoped) {
+                                exists = inv.some(e => String(e.item_id) === String(it.item_id) && String(e.company_id || '') === companyIdStr);
+                            } else {
+                                exists = inv.some(e => String(e.item_id) === String(it.item_id));
+                            }
+                            if (!exists) {
+                                await User.updateOne({ _id: user._id }, { $push: { inventory: { item_id: it.item_id, company_id: it.company_id || null, qty: 1 } } });
+                            }
+                        }
+                    } catch (_) { }
+                }
+            }
+
             await updateCompanyReputation(user._id, report.company_id, 3);
-            return interaction.followUp({ content: `Your counteroffer of $${amount} was accepted.`, ephemeral: true });
+            
+        const vulnerability = await Vulnerability.findById(report.vulnerability_id);
+        if (vulnerability) {
+            vulnerability.isResolved = true;
+            vulnerability.is_resolved_date = new Date();
+            await vulnerability.save();
+
+            if (interaction.guild) {
+                // Pass the server ID (guild ID) to the announcement function
+                await announceVulnerabilityPatched(
+                    interaction.client,
+                    vulnerability,
+                    offer,
+                    interaction.guild.id
+                );
+
+                // Handle exploit cleanup and announcement
+                const exploitSummary = await handleExploitCleanup(vulnerability._id);
+                if (exploitSummary.caughtCount > 0) {
+                    await announceExploitSummary(
+                        interaction.client,
+                        interaction.guild.id,
+                        vulnerability.vuln_identifier,
+                        exploitSummary
+                    );
+                }
+            }
+        }
+
+            const msg = `${reason}\n` +
+                `**Final Payout:** $${finalOfferAmount}\n` +
+                `**Reputation:** +${repBonus}` +
+                (offer.items?.length ? `\n**Items Received:** ${offer.items.length} item(s)` : '');
+            
+            return interaction.followUp({ content: msg, ephemeral: true });
         } else {
             await CompanyOffer.updateOne(
                 { _id: offer._id },
-                { $set: { status: 'rejected', counter_offer: amount } }
+                { $set: { status: 'rejected', counter_offer: amount, resolved_at: new Date() } }
             );
             await updateCompanyReputation(user._id, report.company_id, -1);
             return interaction.followUp({
-                content: `Your counteroffer of $${amount} exceeded the original offer and was rejected.`,
+                content: `The company rejected your counteroffer of $${amount} and has withdrawn the original offer.`,
                 ephemeral: true,
             });
         }
@@ -218,6 +352,34 @@ async function handleStandardOffer(interaction, action, offerId) {
 
         await CompanyOffer.updateOne({ _id: offer._id }, { $set: { status: 'accepted', resloved_at: new Date() } });
         const msg = `You accepted the offer and received $${money}` + (offer.items?.length ? ` and ${offer.items.length} item(s).` : '.');
+        
+        const vulnerability = await Vulnerability.findById(report.vulnerability_id);
+        if (vulnerability) {
+            vulnerability.isResolved = true;
+            vulnerability.is_resolved_date = new Date();
+            await vulnerability.save();
+
+            if (interaction.guild) {
+                await announceVulnerabilityPatched(
+                    interaction.client,
+                    vulnerability,
+                    offer,
+                    interaction.guild.id
+                );
+
+                // Handle exploit cleanup and announcement
+                const exploitSummary = await handleExploitCleanup(vulnerability._id);
+                if (exploitSummary.caughtCount > 0) {
+                    await announceExploitSummary(
+                        interaction.client,
+                        interaction.guild.id,
+                        vulnerability.vuln_identifier,
+                        exploitSummary
+                    );
+                }
+            }
+        }
+
         if (interaction.deferred || interaction.replied) {
             await interaction.followUp({ content: msg, ephemeral: true });
         } else {
@@ -291,6 +453,35 @@ async function handleDictatorOffer(interaction, action, offerId) {
     }
 
     await CompanyOffer.updateOne({ _id: offer._id }, { $set: { status: 'accepted', dictator_choice: choice, resloved_at: new Date() } });
+    
+    const vulnerability = await Vulnerability.findById(report.vulnerability_id);
+    if (vulnerability) {
+        vulnerability.isResolved = true;
+        vulnerability.is_resolved_date = new Date();
+        await vulnerability.save();
+
+        if (interaction.guild) {
+            // Pass the server ID (guild ID) to the announcement function
+            await announceVulnerabilityPatched(
+                interaction.client,
+                vulnerability,
+                offer,
+                interaction.guild.id
+            );
+
+            // Handle exploit cleanup and announcement
+            const exploitSummary = await handleExploitCleanup(vulnerability._id);
+            if (exploitSummary.caughtCount > 0) {
+                await announceExploitSummary(
+                    interaction.client,
+                    interaction.guild.id,
+                    vulnerability.vuln_identifier,
+                    exploitSummary
+                );
+            }
+        }
+    }
+
     const msg = `You chose ${choice === 'option1' ? 'Option 1' : 'Option 2'} and received $${money}${rep ? ` and +${rep} reputation` : ''}` + (offer.items?.length ? ` and ${offer.items.length} item(s).` : '.');
     if (interaction.deferred || interaction.replied) {
         await interaction.followUp({ content: msg, ephemeral: true });

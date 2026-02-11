@@ -23,50 +23,79 @@ const slides = [
             "• When finished, you'll be verified and added to the system.",
     },
     {
-        title: 'How do you get Vulnerabilities?',
+        title: 'Searching for Vulnerabilities (/search)',
         content:
-            "You can discover vulnerabilities by participating in security research activities.\n",
+            "Before you can report anything, you need to find it!\n" +
+            "• Use `/search` to scan the world for active vulnerabilities.\n" +
+            "• Items like **Scout Drones** or **Signal Boosters** can help you find more or reveal more details.\n",
     },
     {
         title: 'Reporting Vulnerabilities (/report)',
         content:
-            "Use `/report` to submit a finding. Typical fields include: title, target, severity, and details.\n",
+            "Once you've found a vulnerability via `/search`, it's time to report it.\n" +
+            "• Use `/report` to submit your findings to the affected company.\n" +
+            "• You can select a company and a vulnerability you've discovered from the menus.\n" +
+            "• Companies on different platforms  may offer different reward structures.",
     },
     {
-        title: 'Proof of Concepts (PoC)',
+        title: 'Proof of Concepts (/submitpoc)',
         content:
-            "A PoC demonstrates the issue safely.\n" +
-            "Use `/submitpoc` to submit a PoC.\n",
+            "Sometimes a simple report isn't enough. A Proof of Concept (PoC) proves the impact.\n" +
+            "• Use `/submitpoc` to provide detailed steps and evidence for a vulnerability.\n" +
+            "• Successful PoCs can increase your rewards and reputation.",
     },
     {
-        title: 'Rewards and Reputation',
+        title: 'Checking Vulnerability Info (/info)',
         content:
-            "Valid reports may yield rewards and reputation.\n" +
-            "• Reputation reflects trust and program history.\n" +
-            "• Payouts depend on severity and program policy.\n" +
-            "• Check `/info` for your stats when available.",
+            "Need to see the details of what you've found?\n" +
+            "• Use `/info` to view technical details, reported status, and expiration times for vulnerabilities you have access to.\n" +
+            "• You can filter by reported or resolved status to keep track of your work.",
     },
     {
-        title: 'Trading (/trade)',
+        title: 'Exploiting for Profit (/exploit)',
         content:
-            "Some findings or assets may be tradable if allowed.\n" +
-            "• Use trading responsibly and follow server rules.\n",
+            "If you're feeling risky, you can exploit vulnerabilities for passive income.\n" +
+            "• Use `/exploit start` to begin earning money every minute from an unpatched bug.\n" +
+            "• Use `/exploit collect` to gather your earnings—but beware, there's a risk of being caught!\n" +
+            "• If caught, you'll face heavy fines. Use `/exploit stop` to cease operations .",
     },
     {
-        title: 'Exploiting (/exploit)',
+        title: 'Your Profile and Stats (/profile)',
         content:
-            "• Use `/exploit` features only as permitted by the program.\n" +
-            "• Do not cause harm, data loss, or service disruption.\n" +
-            "• Always prefer safe, minimal-impact validation.",
+            "Keep track of your progress as a security researcher.\n" +
+            "• Use `/profile` to view your total reports, balance, reputation points, and a preview of your inventory.\n" +
+            "• Your balance and reputation are key to your standing in HexaHive.",
     },
     {
-        title: 'Other Rules and Help',
+        title: 'The Shop (/shop)',
         content:
-            "General rules:\n" +
+            "Spend your hard-earned money to boost your capabilities.\n" +
+            "• Use `/shop list` to see available items like tools, merch, and consumables.\n" +
+            "• Use `/shop buy` to purchase items that can double rewards, help discovery, or provide company-specific bonuses.\n" +
+            "• Use `/shop inventory` to see everything you own.",
+    },
+    {
+        title: 'Trading with Others (/trade)',
+        content:
+            "Collaborate or barter with other researchers.\n" +
+            "• Use `/trade @user` to propose a swap of vulnerabilities or money.\n" +
+            "• Both parties must confirm the trade for it to be completed.",
+    },
+    {
+        title: 'Getting Help (/help)',
+        content:
+            "Forgotten a command? Need a quick refresher?\n" +
+            "• Use `/help` for a general overview of all available commands.\n" +
+            "• This tutorial can always be restarted with `/verify` if you need a deeper dive.",
+    },
+    {
+        title: 'Final Rules',
+        content:
+            "General rules for a healthy community:\n" +
             "• No harassment, spam, or abuse.\n" +
             "• Follow moderators' instructions.\n" +
-            "• When in doubt, ask for guidance.\n" +
-            "You can always use command descriptions or server help channels for more info.",
+            "• When in doubt, ask for guidance in the support channels.\n\n" +
+            "Click 'Complete and Verify' below to finish your training!",
     },
 ];
 
@@ -83,15 +112,27 @@ module.exports = {
             const userTag = interaction.user.tag;
 
             // Initialize progress
-            userProgress.set(userId, { index: 0 });
+            userProgress.set(userId, { index: 0, lastSlideAt: Date.now() });
 
             // Send first slide as an ephemeral reply
-            const { embed, components } = buildSlide(slides[0], 0, userId);
+            const { embed, components } = buildSlide(slides[0], 0, userId, true);
             const reply = await interaction.reply({
                 embeds: [embed],
                 components,
                 ephemeral: true,
             });
+
+            // Re-enable the next button after 5 seconds
+            setTimeout(async () => {
+                const prog = userProgress.get(userId);
+                if (prog && prog.index === 0) {
+                    const { embed: updatedEmbed, components: updatedComponents } = buildSlide(slides[0], 0, userId, false);
+                    await interaction.editReply({
+                        embeds: [updatedEmbed],
+                        components: updatedComponents,
+                    }).catch(() => {});
+                }
+            }, 5000);
 
             // Collector for this interaction
             const message = await interaction.fetchReply();
@@ -107,12 +148,21 @@ module.exports = {
             collector.on('collect', async (i) => {
                 const prog = userProgress.get(userId);
                 if (!prog) return i.deferUpdate().catch(() => {});
+                
+                const now = Date.now();
+                const elapsed = now - prog.lastSlideAt;
+                
+                if (i.customId.startsWith('next_') && elapsed < 5000) {
+                    return i.reply({ content: `Please wait ${Math.ceil((5000 - elapsed) / 1000)} more seconds before proceeding.`, ephemeral: true });
+                }
+
                 let idx = prog.index;
 
                 if (i.customId.startsWith('prev_')) {
                     idx = Math.max(0, idx - 1);
                     prog.index = idx;
-                    const built = buildSlide(slides[idx], idx, userId);
+                    prog.lastSlideAt = now - 5000; // Allow immediate "Next" after going back
+                    const built = buildSlide(slides[idx], idx, userId, false);
                     await i.update({ embeds: [built.embed], components: built.components }).catch(() => {});
                     return;
                 }
@@ -122,8 +172,18 @@ module.exports = {
                 if (!isLast) {
                     idx = Math.min(slides.length - 1, idx + 1);
                     prog.index = idx;
-                    const built = buildSlide(slides[idx], idx, userId);
+                    prog.lastSlideAt = now;
+                    const built = buildSlide(slides[idx], idx, userId, true);
                     await i.update({ embeds: [built.embed], components: built.components }).catch(() => {});
+
+                    // Re-enable button after 5s
+                    setTimeout(async () => {
+                        const currentProg = userProgress.get(userId);
+                        if (currentProg && currentProg.index === idx) {
+                            const updated = buildSlide(slides[idx], idx, userId, false);
+                            await interaction.editReply({ embeds: [updated.embed], components: updated.components }).catch(() => {});
+                        }
+                    }, 5000);
                 } else {
                     // Complete and verify: add user to DB if not exists
                     try {
@@ -190,7 +250,7 @@ module.exports = {
     },
 };
 
-function buildSlide(slide, index, userId) {
+function buildSlide(slide, index, userId, nextDisabled = false) {
     const embed = new EmbedBuilder()
         .setTitle(slide.title)
         .setDescription(slide.content)
@@ -211,6 +271,7 @@ function buildSlide(slide, index, userId) {
             .setCustomId(`next_${userId}`)
             .setLabel(isLastSlide ? 'Complete and Verify' : 'Next ▶')
             .setStyle(isLastSlide ? ButtonStyle.Success : ButtonStyle.Primary)
+            .setDisabled(nextDisabled)
     );
 
     const row = new ActionRowBuilder().addComponents(buttons);

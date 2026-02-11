@@ -7,6 +7,8 @@ const Platform = require('../../models/Platform');
 const generateOffer = require('./generateOffer');
 const generateDictatorOffer = require('./generateDicOffer');
 const { EmbedBuilder } = require('discord.js');
+const { announceExploitSummary } = require('../events/announcePatches');
+const { handleExploitCleanup } = require('./exploitUtils');
 const testVulnData = require('../../data/test-data.json');
 
 // Intervals (ms)
@@ -125,6 +127,21 @@ async function sweepExpirations() {
         try {
             await v.save();
             await announceExpired(v);
+
+            // Handle exploit cleanup and announcement for expired vulnerabilities
+            const exploitSummary = await handleExploitCleanup(v._id);
+            if (exploitSummary.caughtCount > 0 && clientRef) {
+                // We need a guild ID. Since this is continuous mode, we'll try to get the first guild.
+                const guild = clientRef.guilds.cache.first() || await clientRef.guilds.fetch().then(col => col.first()).catch(() => null);
+                if (guild) {
+                    await announceExploitSummary(
+                        clientRef,
+                        guild.id,
+                        v.vuln_identifier,
+                        exploitSummary
+                    );
+                }
+            }
         } catch (e) {
             console.error('expire save error:', e);
         }

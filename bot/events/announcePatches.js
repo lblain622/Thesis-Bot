@@ -119,7 +119,49 @@ async function announceBatchPatches(client, vulnerabilities, channelId) {
     }
 }
 
+async function announceExploitSummary(client, serverId, vulnIdentifier, summary) {
+    try {
+        if (!summary || summary.caughtCount === 0) return;
+
+        const guild = await client.guilds.fetch(serverId);
+        if (!guild) return;
+
+        let channel = guild.channels.cache.find(ch =>
+            ch.type === 0 && ch.name.toLowerCase().includes('general')
+        );
+
+        if (!channel) {
+            const textChannels = guild.channels.cache.filter(ch => ch.type === 0);
+            if (textChannels.size > 0) channel = textChannels.first();
+        }
+
+        if (!channel) return;
+
+        const embed = new EmbedBuilder()
+            .setTitle('🛡️ Anti-Exploit Enforcement')
+            .setColor('#FF0000')
+            .setDescription(
+                `Security teams have finished patching **${vulnIdentifier}**.\n\n` +
+                `During the patch process, several unauthorized exploits were detected and shut down.`
+            )
+            .addFields(
+                { name: 'Exploits Terminated', value: `${summary.caughtCount}`, inline: true },
+                { name: 'Total Fines Issued', value: `$${summary.totalFines}`, inline: true }
+            )
+            .setFooter({ text: 'Exploiting vulnerabilities is a risky business. Report them for safe rewards!' })
+            .setTimestamp();
+
+        await channel.send({
+            content: `📢 **Exploit crackdown announced!**`,
+            embeds: [embed]
+        });
+    } catch (err) {
+        console.error('Error announcing exploit summary:', err);
+    }
+}
+
 module.exports = {
     announceVulnerabilityPatched,
-    announceBatchPatches
+    announceBatchPatches,
+    announceExploitSummary
 };

@@ -10,18 +10,45 @@ const Trades = require('../../models/Trades');
 const Expoits = require('../../models/Exploit');
 const Rounds = require('../../models/Round');
 const Users = require('../../models/Users');
+const Items = require('../../models/Items');
+const ItemStock = require('../../models/ItemStock');
+const ShopRotation = require('../../models/ShopRotation');
 const PlayerChoices = require('../../models/PlayerChoices');
 const { loadShopItems } = require('./loadShopItems');
 // Seed companies and related data assuming an active DB connection exists
 async function loadInitialData() {
     try {
-        // Find or create platforms (must already exist when used inside the bot)
+        // Find or create platforms
         let ultimatumPlatform = await Platform.findOne({ name: 'Ultimatum Test Platform' });
-        let dictatorPlatform = await Platform.findOne({ name: 'Dictator Test Platform' });
+        if (!ultimatumPlatform) {
+            ultimatumPlatform = await Platform.create({
+                name: 'Ultimatum Test Platform',
+                description: 'A platform focused on fair trade and transparency.',
+                base_policies: {
+                    response_speed: 'Fast',
+                    safe_harbor: 'Full',
+                    payout_speed: 'Instant',
+                    overall_transparency: 'High',
+                    offer_multiplier: '1.2'
+                }
+            });
+            console.log('✓ Created Ultimatum Test Platform');
+        }
 
-        if (!ultimatumPlatform || !dictatorPlatform) {
-            console.log('Please run generateUltPlatform.js and generateDicPlatform.js first');
-            throw new Error('Required platforms not found');
+        let dictatorPlatform = await Platform.findOne({ name: 'Dictator Test Platform' });
+        if (!dictatorPlatform) {
+            dictatorPlatform = await Platform.create({
+                name: 'Dictator Test Platform',
+                description: 'A platform with strict rules and variable rewards.',
+                base_policies: {
+                    response_speed: 'Variable',
+                    safe_harbor: 'Partial',
+                    payout_speed: 'Standard',
+                    overall_transparency: 'Low',
+                    offer_multiplier: '1.0'
+                }
+            });
+            console.log('✓ Created Dictator Test Platform');
         }
 
         // Enhanced company configurations
@@ -221,12 +248,12 @@ async function loadInitialData() {
             console.log(`✓ Created ${config.name}`);
         }
 
-        // Seed 5 global vulnerabilities (unassigned) – discovered later via /search
+        // Seed 15 global vulnerabilities (unassigned) – discovered later via /search
         const vulnTypes = ['XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR', 'Authentication', 'Authorization'];
         const severities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
         const inOneWeek = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-        const vulnsPayload = Array.from({ length: 5 }).map((_, i) => {
+        const vulnsPayload = Array.from({ length: 15 }).map((_, i) => {
             const company = companies[Math.floor(Math.random() * companies.length)];
             const type = vulnTypes[Math.floor(Math.random() * vulnTypes.length)];
             const sev = severities[Math.floor(Math.random() * severities.length)];
@@ -272,6 +299,18 @@ async function clearCollections() {
     try {
         await Users.deleteMany({});
         console.log(' Cleared Users collection');
+
+        await Platform.deleteMany({});
+        console.log(' Cleared Platform collection');
+
+        await Items.deleteMany({});
+        console.log(' Cleared Items collection');
+
+        await ItemStock.deleteMany({});
+        console.log(' Cleared ItemStock collection');
+
+        await ShopRotation.deleteMany({});
+        console.log(' Cleared ShopRotation collection');
 
         await PlayerChoices.deleteMany({});
         console.log(' Cleared PlayerChoices collection');
@@ -319,13 +358,13 @@ async function setup() {
     } catch (err) {
         console.error('Error:', err);
     } finally {
-        // Only close when running as a script
+
         await mongoose.connection.close();
     }
 }
 
 if (require.main === module) {
-    // Run as a CLI seeding script
+
     setup();
 }
 
