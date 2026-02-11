@@ -1,15 +1,15 @@
 // bot/index.js
 require('dotenv').config();
-const { Client, GatewayIntentBits,Collection,REST, Routes } = require('discord.js');
-const { connectDB } = require('../config/database');
+const {Client, GatewayIntentBits, Collection, REST, Routes} = require('discord.js');
+const {connectDB} = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 const User = require('../models/Users');
 const roundSystem = require('./utils/roundSystem');
 const continuousMode = require('./utils/continuousMode');
 const cache = require('./utils/cache');
-const { loadShopItems } = require('./utils/loadShopItems');
-const { initializeShopRotation, cleanupShopRotation } = require('./utils/shopRotation');
+const {loadShopItems} = require('./utils/loadShopItems');
+const {initializeShopRotation, cleanupShopRotation} = require('./utils/shopRotation');
 const Company = require('../models/Company');
 const Platform = require('../models/Platform');
 
@@ -19,11 +19,11 @@ const Platform = require('../models/Platform');
 const client = new Client({
     intents:
         [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.DirectMessages
+            GatewayIntentBits.Guilds,
+            GatewayIntentBits.Guilds,
+            GatewayIntentBits.GuildMessages,
+            GatewayIntentBits.MessageContent,
+            GatewayIntentBits.DirectMessages
         ]
 });
 
@@ -35,9 +35,9 @@ const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
-  const command = require(`./commands/${file}`);
-  client.commands.set(command.data.name, command);
-  commands.push(command.data.toJSON());
+    const command = require(`./commands/${file}`);
+    client.commands.set(command.data.name, command);
+    commands.push(command.data.toJSON());
 }
 
 const eventsPath = path.join(__dirname, 'events');
@@ -56,7 +56,7 @@ for (const file of eventFiles) {
 }
 
 
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+const rest = new REST({version: '10'}).setToken(process.env.DISCORD_TOKEN);
 connectDB();
 
 // Ensure a Discord user exists in the database; create if not, update last_active/name if yes
@@ -77,7 +77,7 @@ async function ensureUserExists(discordUser) {
 
         // Update in database
         const user = await User.findOneAndUpdate(
-            { discord_id: discordUser.id },
+            {discord_id: discordUser.id},
             {
                 $setOnInsert: {
                     discord_id: discordUser.id,
@@ -87,7 +87,7 @@ async function ensureUserExists(discordUser) {
                     last_active: new Date(),
                 },
             },
-            { upsert: true, new: true }
+            {upsert: true, new: true}
         ).lean();
 
         // Cache the result
@@ -99,6 +99,7 @@ async function ensureUserExists(discordUser) {
         return null;
     }
 }
+
 function setupGracefulShutdown() {
     const shutdownSignals = ['SIGINT', 'SIGTERM', 'SIGQUIT'];
 
@@ -171,16 +172,16 @@ client.once('clientReady', async () => {
 
         // Initialize game mode
 
-            // Continuous mode (no rounds)
+        // Continuous mode (no rounds)
         await continuousMode.initialize(client);
 
         const data = await rest.put(
             Routes.applicationCommands(process.env.DISCORD_APP_ID),
-            { body: commands }
+            {body: commands}
         );
         // Initialize Shop rotation
 
-            await initializeShopRotation();
+        await initializeShopRotation();
 
         setupGracefulShutdown();
         console.log("Registered Commands");
@@ -197,16 +198,17 @@ client.on('messageCreate', async (msg) => {
         const cached = cache.getUser(msg.author.id);
         let existing = cached;
         if (!existing) {
-            existing = await User.findOne({ discord_id: msg.author.id }).lean();
+            existing = await User.findOne({discord_id: msg.author.id}).lean();
             if (existing) cache.setUser(msg.author.id, existing);
         }
         if (existing) {
             await User.updateOne(
-                { _id: existing._id },
-                { $set: { last_active: new Date(), discord_name: msg.author.tag } }
+                {_id: existing._id},
+                {$set: {last_active: new Date(), discord_name: msg.author.tag}}
             );
         }
-    } catch (_) {}
+    } catch (_) {
+    }
 
     if (msg.content === '!ping') return msg.reply('pong');
 });
@@ -223,7 +225,7 @@ client.on('interactionCreate', async interaction => {
                 const cached = cache.getUser(interaction.user.id);
                 let userDoc = cached;
                 if (!userDoc) {
-                    userDoc = await User.findOne({ discord_id: interaction.user.id }).lean();
+                    userDoc = await User.findOne({discord_id: interaction.user.id}).lean();
                     if (userDoc) cache.setUser(interaction.user.id, userDoc);
                 }
                 if (!userDoc) {
@@ -233,11 +235,16 @@ client.on('interactionCreate', async interaction => {
                     });
                 } else {
                     // Touch last_active for verified users
-                    await User.updateOne({ _id: userDoc._id }, { $set: { last_active: new Date(), discord_name: interaction.user.tag } });
+                    await User.updateOne({_id: userDoc._id}, {
+                        $set: {
+                            last_active: new Date(),
+                            discord_name: interaction.user.tag
+                        }
+                    });
                 }
             } catch (e) {
                 console.error('Verification gate error:', e);
-                return interaction.reply({ content: 'Error verifying user status. Please try again.', ephemeral: true });
+                return interaction.reply({content: 'Error verifying user status. Please try again.', ephemeral: true});
             }
         }
 
@@ -246,7 +253,7 @@ client.on('interactionCreate', async interaction => {
         } catch (err) {
             console.error(err);
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: 'There was an error executing this command.', ephemeral: true });
+                await interaction.followUp({content: 'There was an error executing this command.', ephemeral: true});
             } else {
                 await interaction.reply({
                     content: 'There was an error executing this command.',
@@ -254,8 +261,7 @@ client.on('interactionCreate', async interaction => {
                 });
             }
         }
-    }
-    else if (interaction.isButton() || interaction.isStringSelectMenu()) {
+    } else if (interaction.isButton() || interaction.isStringSelectMenu()) {
         console.log(`Component interaction: ${interaction.customId}`);
     }
 });

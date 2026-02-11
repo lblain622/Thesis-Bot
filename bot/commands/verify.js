@@ -112,10 +112,10 @@ module.exports = {
             const userTag = interaction.user.tag;
 
             // Initialize progress
-            userProgress.set(userId, { index: 0, lastSlideAt: Date.now() });
+            userProgress.set(userId, {index: 0, lastSlideAt: Date.now()});
 
             // Send first slide as an ephemeral reply
-            const { embed, components } = buildSlide(slides[0], 0, userId, true);
+            const {embed, components} = buildSlide(slides[0], 0, userId, true);
             const reply = await interaction.reply({
                 embeds: [embed],
                 components,
@@ -126,11 +126,15 @@ module.exports = {
             setTimeout(async () => {
                 const prog = userProgress.get(userId);
                 if (prog && prog.index === 0) {
-                    const { embed: updatedEmbed, components: updatedComponents } = buildSlide(slides[0], 0, userId, false);
+                    const {
+                        embed: updatedEmbed,
+                        components: updatedComponents
+                    } = buildSlide(slides[0], 0, userId, false);
                     await interaction.editReply({
                         embeds: [updatedEmbed],
                         components: updatedComponents,
-                    }).catch(() => {});
+                    }).catch(() => {
+                    });
                 }
             }, 5000);
 
@@ -147,13 +151,17 @@ module.exports = {
 
             collector.on('collect', async (i) => {
                 const prog = userProgress.get(userId);
-                if (!prog) return i.deferUpdate().catch(() => {});
-                
+                if (!prog) return i.deferUpdate().catch(() => {
+                });
+
                 const now = Date.now();
                 const elapsed = now - prog.lastSlideAt;
-                
+
                 if (i.customId.startsWith('next_') && elapsed < 5000) {
-                    return i.reply({ content: `Please wait ${Math.ceil((5000 - elapsed) / 1000)} more seconds before proceeding.`, ephemeral: true });
+                    return i.reply({
+                        content: `Please wait ${Math.ceil((5000 - elapsed) / 1000)} more seconds before proceeding.`,
+                        ephemeral: true
+                    });
                 }
 
                 let idx = prog.index;
@@ -163,7 +171,8 @@ module.exports = {
                     prog.index = idx;
                     prog.lastSlideAt = now - 5000; // Allow immediate "Next" after going back
                     const built = buildSlide(slides[idx], idx, userId, false);
-                    await i.update({ embeds: [built.embed], components: built.components }).catch(() => {});
+                    await i.update({embeds: [built.embed], components: built.components}).catch(() => {
+                    });
                     return;
                 }
 
@@ -174,22 +183,27 @@ module.exports = {
                     prog.index = idx;
                     prog.lastSlideAt = now;
                     const built = buildSlide(slides[idx], idx, userId, true);
-                    await i.update({ embeds: [built.embed], components: built.components }).catch(() => {});
+                    await i.update({embeds: [built.embed], components: built.components}).catch(() => {
+                    });
 
                     // Re-enable button after 5s
                     setTimeout(async () => {
                         const currentProg = userProgress.get(userId);
                         if (currentProg && currentProg.index === idx) {
                             const updated = buildSlide(slides[idx], idx, userId, false);
-                            await interaction.editReply({ embeds: [updated.embed], components: updated.components }).catch(() => {});
+                            await interaction.editReply({
+                                embeds: [updated.embed],
+                                components: updated.components
+                            }).catch(() => {
+                            });
                         }
                     }, 5000);
                 } else {
                     // Complete and verify: add user to DB if not exists
                     try {
-                        const existing = await User.findOne({ discord_id: userId });
+                        const existing = await User.findOne({discord_id: userId});
                         if (!existing) {
-                            await User.create({ discord_id: userId, discord_name: userTag });
+                            await User.create({discord_id: userId, discord_name: userTag});
                         } else {
                             existing.last_active = new Date();
                             await existing.save();
@@ -216,7 +230,8 @@ module.exports = {
                                     .setDisabled(true)
                             ),
                         ],
-                    }).catch(() => {});
+                    }).catch(() => {
+                    });
                     collector.stop('completed');
                 }
             });
@@ -233,7 +248,8 @@ module.exports = {
                         return newRow;
                     });
                     if (rows && rows.length) {
-                        await interaction.editReply({ components: rows }).catch(() => {});
+                        await interaction.editReply({components: rows}).catch(() => {
+                        });
                     }
                 } catch (_) {
 
@@ -242,9 +258,14 @@ module.exports = {
         } catch (error) {
             console.error(error);
             if (interaction.replied || interaction.deferred) {
-                await interaction.editReply({ content: 'An error occurred while starting the tutorial.' }).catch(() => {});
+                await interaction.editReply({content: 'An error occurred while starting the tutorial.'}).catch(() => {
+                });
             } else {
-                await interaction.reply({ content: 'An error occurred while starting the tutorial.', ephemeral: true }).catch(() => {});
+                await interaction.reply({
+                    content: 'An error occurred while starting the tutorial.',
+                    ephemeral: true
+                }).catch(() => {
+                });
             }
         }
     },
@@ -254,7 +275,7 @@ function buildSlide(slide, index, userId, nextDisabled = false) {
     const embed = new EmbedBuilder()
         .setTitle(slide.title)
         .setDescription(slide.content)
-        .setFooter({ text: `Slide ${index + 1}/${slides.length} • Use buttons to navigate` });
+        .setFooter({text: `Slide ${index + 1}/${slides.length} • Use buttons to navigate`});
 
     const buttons = [];
     buttons.push(
@@ -275,5 +296,5 @@ function buildSlide(slide, index, userId, nextDisabled = false) {
     );
 
     const row = new ActionRowBuilder().addComponents(buttons);
-    return { embed, components: [row] };
+    return {embed, components: [row]};
 }

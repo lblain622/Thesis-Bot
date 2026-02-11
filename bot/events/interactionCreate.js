@@ -3,10 +3,9 @@ const User = require('../../models/Users');
 const Report = require('../../models/Reports');
 const Trade = require('../../models/Trades');
 const Vulnerability = require('../../models/Vulnerabilities');
-const { announceVulnerabilityPatched, announceExploitSummary } = require('../events/announcePatches');
-const { handleExploitCleanup } = require('../utils/exploitUtils');
+const {announceVulnerabilityPatched, announceExploitSummary} = require('../events/announcePatches');
+const {handleExploitCleanup} = require('../utils/exploitUtils');
 const cache = require('../utils/cache');
-
 
 module.exports = {
     name: 'interactionCreate',
@@ -14,7 +13,7 @@ module.exports = {
         if (!interaction.isButton()) return;
 
         const [prefix, action, id] = interaction.customId.split('_');
-        
+
         try {
             // ============= TRADE SYSTEM =============
             if (prefix === 'trade') {
@@ -43,9 +42,9 @@ module.exports = {
         } catch (err) {
             console.error('Interaction Error:', err);
             if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: 'An error occurred.', ephemeral: true });
+                await interaction.reply({content: 'An error occurred.', ephemeral: true});
             } else {
-                await interaction.followUp({ content: 'An error occurred.', ephemeral: true });
+                await interaction.followUp({content: 'An error occurred.', ephemeral: true});
             }
         }
     },
@@ -53,11 +52,11 @@ module.exports = {
 
 async function handleUltimatumGame(interaction, action, offerId) {
     const offer = await CompanyOffer.findById(offerId);
-    if (!offer) return interaction.reply({ content: 'Offer not found.', ephemeral: true });
+    if (!offer) return interaction.reply({content: 'Offer not found.', ephemeral: true});
 
     const report = await Report.findById(offer.report_id);
     const user = await User.findById(report.user_id);
-    if (!user) return interaction.reply({ content: 'User not found.', ephemeral: true });
+    if (!user) return interaction.reply({content: 'User not found.', ephemeral: true});
 
     if (action === 'accept') {
         // Calculate total bonus
@@ -67,9 +66,9 @@ async function handleUltimatumGame(interaction, action, offerId) {
         const totalMultiplier = 1 + reputationBonus + preferredBonus;
         const finalAmount = Math.floor(baseAmount * totalMultiplier);
 
-        await CompanyOffer.updateOne({ _id: offer._id }, { $set: { status: 'accepted' } });
+        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'accepted'}});
         await User.updateOne(
-            { _id: user._id },
+            {_id: user._id},
             {
                 $inc: {
                     money_earned: finalAmount,
@@ -104,6 +103,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
         if (vulnerability) {
             vulnerability.isResolved = true;
             vulnerability.is_resolved_date = new Date();
+
             await vulnerability.save();
 
             if (interaction.guild) {
@@ -130,34 +130,40 @@ async function handleUltimatumGame(interaction, action, offerId) {
     }
 
     if (action === 'reject') {
-        await CompanyOffer.updateOne({ _id: offer._id }, { $set: { status: 'rejected' } });
+        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'rejected'}});
         await updateCompanyReputation(user._id, report.company_id, -2);
 
         if (interaction.deferred || interaction.replied) {
-            await interaction.followUp({ content: `You rejected the offer of $${offer.offered_amount}.`, ephemeral: true });
+            await interaction.followUp({
+                content: `You rejected the offer of $${offer.offered_amount}.`,
+                ephemeral: true
+            });
         } else {
-            await interaction.update({ content: `You rejected the offer of $${offer.offered_amount}.`, components: [] });
+            await interaction.update({content: `You rejected the offer of $${offer.offered_amount}.`, components: []});
         }
     }
 
     if (action === 'counter') {
         const company = await (require('../../models/Company').findById(report.company_id));
-        await interaction.reply({ content: `Please type your counteroffer amount (USD) for **${company?.name || 'the company'}**:`, ephemeral: true });
+        await interaction.reply({
+            content: `Please type your counteroffer amount (USD) for **${company?.name || 'the company'}**:`,
+            ephemeral: true
+        });
 
         const filter = (msg) => msg.author.id === interaction.user.id;
-        const collected = await interaction.channel.awaitMessages({ filter, max: 1, time: 120000 });
+        const collected = await interaction.channel.awaitMessages({filter, max: 1, time: 120000});
 
-        if (!collected.size) return interaction.followUp({ content: 'Counteroffer timed out.', ephemeral: true });
+        if (!collected.size) return interaction.followUp({content: 'Counteroffer timed out.', ephemeral: true});
 
         const amount = parseFloat(collected.first().content);
         if (isNaN(amount) || amount <= 0)
-            return interaction.followUp({ content: 'Invalid amount.', ephemeral: true });
+            return interaction.followUp({content: 'Invalid amount.', ephemeral: true});
 
         // Logic for negotiation: 
         // 1. If amount <= offered_amount: Accept (User asked for less or same)
         // 2. If amount <= original_amount: High chance of acceptance (original amount is what company first thought of)
         // 3. If amount > original_amount: Decreasing chance of acceptance based on how much higher
-        
+
         let accepted = false;
         let finalOfferAmount = amount;
         let reason = "";
@@ -177,7 +183,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
             let chance = 0;
             if (ratio <= 1.0) chance = 0.95;
             else if (ratio <= 2.0) chance = 0.95 * Math.pow(1 - (ratio - 1), 2);
-            
+
             if (Math.random() < chance) {
                 accepted = true;
                 reason = "The company accepted your counteroffer!";
@@ -191,14 +197,21 @@ async function handleUltimatumGame(interaction, action, offerId) {
 
         if (accepted) {
             await CompanyOffer.updateOne(
-                { _id: offer._id },
-                { $set: { status: 'accepted', counter_offer: amount, offered_amount: finalOfferAmount, resolved_at: new Date() } }
+                {_id: offer._id},
+                {
+                    $set: {
+                        status: 'accepted',
+                        counter_offer: amount,
+                        offered_amount: finalOfferAmount,
+                        resolved_at: new Date()
+                    }
+                }
             );
-            
+
             // Apply rewards (Money + Rep + Items)
             const repBonus = parseInt(offer.reputation_offered || offer.repuatation_offered || 0);
             await User.updateOne(
-                { _id: user._id },
+                {_id: user._id},
                 {
                     $inc: {
                         money_earned: finalOfferAmount,
@@ -222,9 +235,17 @@ async function handleUltimatumGame(interaction, action, offerId) {
                         if (itemDoc.stackable) {
                             const idx = inv.findIndex(e => String(e.item_id) === String(it.item_id) && String(e.company_id || '') === companyIdStr);
                             if (idx >= 0) {
-                                await User.updateOne({ _id: user._id }, { $inc: { [`inventory.${idx}.qty`]: it.qty || 1 } });
+                                await User.updateOne({_id: user._id}, {$inc: {[`inventory.${idx}.qty`]: it.qty || 1}});
                             } else {
-                                await User.updateOne({ _id: user._id }, { $push: { inventory: { item_id: it.item_id, company_id: it.company_id || null, qty: it.qty || 1 } } });
+                                await User.updateOne({_id: user._id}, {
+                                    $push: {
+                                        inventory: {
+                                            item_id: it.item_id,
+                                            company_id: it.company_id || null,
+                                            qty: it.qty || 1
+                                        }
+                                    }
+                                });
                             }
                         } else {
                             let exists = false;
@@ -234,53 +255,62 @@ async function handleUltimatumGame(interaction, action, offerId) {
                                 exists = inv.some(e => String(e.item_id) === String(it.item_id));
                             }
                             if (!exists) {
-                                await User.updateOne({ _id: user._id }, { $push: { inventory: { item_id: it.item_id, company_id: it.company_id || null, qty: 1 } } });
+                                await User.updateOne({_id: user._id}, {
+                                    $push: {
+                                        inventory: {
+                                            item_id: it.item_id,
+                                            company_id: it.company_id || null,
+                                            qty: 1
+                                        }
+                                    }
+                                });
                             }
                         }
-                    } catch (_) { }
+                    } catch (_) {
+                    }
                 }
             }
 
             await updateCompanyReputation(user._id, report.company_id, 3);
-            
-        const vulnerability = await Vulnerability.findById(report.vulnerability_id);
-        if (vulnerability) {
-            vulnerability.isResolved = true;
-            vulnerability.is_resolved_date = new Date();
-            await vulnerability.save();
 
-            if (interaction.guild) {
-                // Pass the server ID (guild ID) to the announcement function
-                await announceVulnerabilityPatched(
-                    interaction.client,
-                    vulnerability,
-                    offer,
-                    interaction.guild.id
-                );
+            const vulnerability = await Vulnerability.findById(report.vulnerability_id);
+            if (vulnerability) {
+                vulnerability.isResolved = true;
+                vulnerability.is_resolved_date = new Date();
+                await vulnerability.save();
 
-                // Handle exploit cleanup and announcement
-                const exploitSummary = await handleExploitCleanup(vulnerability._id);
-                if (exploitSummary.caughtCount > 0) {
-                    await announceExploitSummary(
+                if (interaction.guild) {
+                    // Pass the server ID (guild ID) to the announcement function
+                    await announceVulnerabilityPatched(
                         interaction.client,
-                        interaction.guild.id,
-                        vulnerability.vuln_identifier,
-                        exploitSummary
+                        vulnerability,
+                        offer,
+                        interaction.guild.id
                     );
+
+                    // Handle exploit cleanup and announcement
+                    const exploitSummary = await handleExploitCleanup(vulnerability._id);
+                    if (exploitSummary.caughtCount > 0) {
+                        await announceExploitSummary(
+                            interaction.client,
+                            interaction.guild.id,
+                            vulnerability.vuln_identifier,
+                            exploitSummary
+                        );
+                    }
                 }
             }
-        }
 
             const msg = `${reason}\n` +
                 `**Final Payout:** $${finalOfferAmount}\n` +
                 `**Reputation:** +${repBonus}` +
                 (offer.items?.length ? `\n**Items Received:** ${offer.items.length} item(s)` : '');
-            
-            return interaction.followUp({ content: msg, ephemeral: true });
+
+            return interaction.followUp({content: msg, ephemeral: true});
         } else {
             await CompanyOffer.updateOne(
-                { _id: offer._id },
-                { $set: { status: 'rejected', counter_offer: amount, resolved_at: new Date() } }
+                {_id: offer._id},
+                {$set: {status: 'rejected', counter_offer: amount, resolved_at: new Date()}}
             );
             await updateCompanyReputation(user._id, report.company_id, -1);
             return interaction.followUp({
@@ -293,16 +323,19 @@ async function handleUltimatumGame(interaction, action, offerId) {
 
 async function handleStandardOffer(interaction, action, offerId) {
     const offer = await CompanyOffer.findById(offerId);
-    if (!offer) return interaction.reply({ content: 'Offer not found.', ephemeral: true });
-    if (offer.status !== 'pending') return interaction.reply({ content: 'This offer is no longer available.', ephemeral: true });
+    if (!offer) return interaction.reply({content: 'Offer not found.', ephemeral: true});
+    if (offer.status !== 'pending') return interaction.reply({
+        content: 'This offer is no longer available.',
+        ephemeral: true
+    });
 
     const report = await Report.findById(offer.report_id);
-    if (!report) return interaction.reply({ content: 'Related report not found.', ephemeral: true });
+    if (!report) return interaction.reply({content: 'Related report not found.', ephemeral: true});
     if (String(interaction.user.id) !== String((await User.findById(report.user_id).lean())?.discord_id)) {
         // Fallback: also allow directly by comparing stored discord ids
         const usr = await User.findById(report.user_id).lean();
         if (!usr || usr.discord_id !== interaction.user.id) {
-            return interaction.reply({ content: 'This offer does not belong to you.', ephemeral: true });
+            return interaction.reply({content: 'This offer does not belong to you.', ephemeral: true});
         }
     }
 
@@ -312,9 +345,9 @@ async function handleStandardOffer(interaction, action, offerId) {
         const money = Number(offer.offered_amount || 0);
         const repBonus = Number(offer.repuatation_offered || offer.reputation_offered || 0);
         if (money > 0) {
-            await User.updateOne({ _id: u._id }, { $inc: { money_earned: money, repuation_earned: repBonus } });
+            await User.updateOne({_id: u._id}, {$inc: {money_earned: money, repuation_earned: repBonus}});
         } else if (repBonus) {
-            await User.updateOne({ _id: u._id }, { $inc: { repuation_earned: repBonus } });
+            await User.updateOne({_id: u._id}, {$inc: {repuation_earned: repBonus}});
         }
 
         // Grant attached items if any
@@ -330,9 +363,17 @@ async function handleStandardOffer(interaction, action, offerId) {
                     if (itemDoc.stackable) {
                         const idx = inv.findIndex(e => String(e.item_id) === String(it.item_id) && String(e.company_id || '') === companyIdStr);
                         if (idx >= 0) {
-                            await User.updateOne({ _id: u._id }, { $inc: { [`inventory.${idx}.qty`]: it.qty || 1 } });
+                            await User.updateOne({_id: u._id}, {$inc: {[`inventory.${idx}.qty`]: it.qty || 1}});
                         } else {
-                            await User.updateOne({ _id: u._id }, { $push: { inventory: { item_id: it.item_id, company_id: it.company_id || null, qty: it.qty || 1 } } });
+                            await User.updateOne({_id: u._id}, {
+                                $push: {
+                                    inventory: {
+                                        item_id: it.item_id,
+                                        company_id: it.company_id || null,
+                                        qty: it.qty || 1
+                                    }
+                                }
+                            });
                         }
                     } else {
                         // Non-stackable: prevent duplicates
@@ -343,16 +384,25 @@ async function handleStandardOffer(interaction, action, offerId) {
                             exists = inv.some(e => String(e.item_id) === String(it.item_id));
                         }
                         if (!exists) {
-                            await User.updateOne({ _id: u._id }, { $push: { inventory: { item_id: it.item_id, company_id: it.company_id || null, qty: 1 } } });
+                            await User.updateOne({_id: u._id}, {
+                                $push: {
+                                    inventory: {
+                                        item_id: it.item_id,
+                                        company_id: it.company_id || null,
+                                        qty: 1
+                                    }
+                                }
+                            });
                         }
                     }
-                } catch (_) { }
+                } catch (_) {
+                }
             }
         }
 
-        await CompanyOffer.updateOne({ _id: offer._id }, { $set: { status: 'accepted', resloved_at: new Date() } });
+        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'accepted', resloved_at: new Date()}});
         const msg = `You accepted the offer and received $${money}` + (offer.items?.length ? ` and ${offer.items.length} item(s).` : '.');
-        
+
         const vulnerability = await Vulnerability.findById(report.vulnerability_id);
         if (vulnerability) {
             vulnerability.isResolved = true;
@@ -381,44 +431,60 @@ async function handleStandardOffer(interaction, action, offerId) {
         }
 
         if (interaction.deferred || interaction.replied) {
-            await interaction.followUp({ content: msg, ephemeral: true });
+            await interaction.followUp({content: msg, ephemeral: true});
         } else {
-            await interaction.update({ content: msg, components: [] });
+            await interaction.update({content: msg, components: []});
         }
         return;
     }
 
     if (action === 'reject') {
-        await CompanyOffer.updateOne({ _id: offer._id }, { $set: { status: 'rejected', resloved_at: new Date() } });
+        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'rejected', resloved_at: new Date()}});
         if (interaction.deferred || interaction.replied) {
-            await interaction.followUp({ content: `You rejected the offer of $${offer.offered_amount}.`, ephemeral: true });
+            await interaction.followUp({
+                content: `You rejected the offer of $${offer.offered_amount}.`,
+                ephemeral: true
+            });
         } else {
-            await interaction.update({ content: `You rejected the offer of $${offer.offered_amount}.`, components: [] });
+            await interaction.update({content: `You rejected the offer of $${offer.offered_amount}.`, components: []});
         }
-        return;
+
     }
 }
 
 async function handleDictatorOffer(interaction, action, offerId) {
     const offer = await CompanyOffer.findById(offerId);
-    if (!offer) return interaction.reply({ content: 'Offer not found.', ephemeral: true });
-    if (offer.status !== 'pending') return interaction.reply({ content: 'This offer is no longer available.', ephemeral: true });
+    if (!offer) return interaction.reply({content: 'Offer not found.', ephemeral: true});
+    if (offer.status !== 'pending') return interaction.reply({
+        content: 'This offer is no longer available.',
+        ephemeral: true
+    });
     const report = await Report.findById(offer.report_id);
-    if (!report) return interaction.reply({ content: 'Related report not found.', ephemeral: true });
+    if (!report) return interaction.reply({content: 'Related report not found.', ephemeral: true});
     const user = await User.findById(report.user_id).lean();
-    if (!user || user.discord_id !== interaction.user.id) return interaction.reply({ content: 'This offer does not belong to you.', ephemeral: true });
+    if (!user || user.discord_id !== interaction.user.id) return interaction.reply({
+        content: 'This offer does not belong to you.',
+        ephemeral: true
+    });
 
     let choice = null;
     if (action === 'option1') choice = 'option1';
     if (action === 'option2') choice = 'option2';
-    if (!choice) return interaction.reply({ content: 'Invalid selection.', ephemeral: true });
+    if (!choice) return interaction.reply({content: 'Invalid selection.', ephemeral: true});
 
     const opt = offer.dictator_options?.[choice];
-    if (!opt) return interaction.reply({ content: 'Offer options unavailable.', ephemeral: true });
+    if (!opt) return interaction.reply({content: 'Offer options unavailable.', ephemeral: true});
 
     const money = Number(opt.money || 0);
     const rep = Number(opt.rep || 0);
-    await User.updateOne({ _id: user._id }, { $inc: { money_earned: money, balance: money, money_from_reports: money, repuation_earned: rep } });
+    await User.updateOne({_id: user._id}, {
+        $inc: {
+            money_earned: money,
+            balance: money,
+            money_from_reports: money,
+            repuation_earned: rep
+        }
+    });
 
     // Grant attached items if any
     if (Array.isArray(offer.items) && offer.items.length) {
@@ -433,9 +499,17 @@ async function handleDictatorOffer(interaction, action, offerId) {
                 if (itemDoc.stackable) {
                     const idx = inv.findIndex(e => String(e.item_id) === String(it.item_id) && String(e.company_id || '') === companyIdStr);
                     if (idx >= 0) {
-                        await User.updateOne({ _id: user._id }, { $inc: { [`inventory.${idx}.qty`]: it.qty || 1 } });
+                        await User.updateOne({_id: user._id}, {$inc: {[`inventory.${idx}.qty`]: it.qty || 1}});
                     } else {
-                        await User.updateOne({ _id: user._id }, { $push: { inventory: { item_id: it.item_id, company_id: it.company_id || null, qty: it.qty || 1 } } });
+                        await User.updateOne({_id: user._id}, {
+                            $push: {
+                                inventory: {
+                                    item_id: it.item_id,
+                                    company_id: it.company_id || null,
+                                    qty: it.qty || 1
+                                }
+                            }
+                        });
                     }
                 } else {
                     let exists = false;
@@ -445,15 +519,30 @@ async function handleDictatorOffer(interaction, action, offerId) {
                         exists = inv.some(e => String(e.item_id) === String(it.item_id));
                     }
                     if (!exists) {
-                        await User.updateOne({ _id: user._id }, { $push: { inventory: { item_id: it.item_id, company_id: it.company_id || null, qty: 1 } } });
+                        await User.updateOne({_id: user._id}, {
+                            $push: {
+                                inventory: {
+                                    item_id: it.item_id,
+                                    company_id: it.company_id || null,
+                                    qty: 1
+                                }
+                            }
+                        });
                     }
                 }
-            } catch (_) { }
+            } catch (_) {
+            }
         }
     }
 
-    await CompanyOffer.updateOne({ _id: offer._id }, { $set: { status: 'accepted', dictator_choice: choice, resloved_at: new Date() } });
-    
+    await CompanyOffer.updateOne({_id: offer._id}, {
+        $set: {
+            status: 'accepted',
+            dictator_choice: choice,
+            resloved_at: new Date()
+        }
+    });
+
     const vulnerability = await Vulnerability.findById(report.vulnerability_id);
     if (vulnerability) {
         vulnerability.isResolved = true;
@@ -484,27 +573,27 @@ async function handleDictatorOffer(interaction, action, offerId) {
 
     const msg = `You chose ${choice === 'option1' ? 'Option 1' : 'Option 2'} and received $${money}${rep ? ` and +${rep} reputation` : ''}` + (offer.items?.length ? ` and ${offer.items.length} item(s).` : '.');
     if (interaction.deferred || interaction.replied) {
-        await interaction.followUp({ content: msg, ephemeral: true });
+        await interaction.followUp({content: msg, ephemeral: true});
     } else {
-        await interaction.update({ content: msg, components: [] });
+        await interaction.update({content: msg, components: []});
     }
 }
 
 async function handleDictatorGame(interaction, action, offerId) {
     const offer = await CompanyOffer.findById(offerId);
-    if (!offer) return interaction.reply({ content: 'Offer not found.', ephemeral: true });
+    if (!offer) return interaction.reply({content: 'Offer not found.', ephemeral: true});
 
     const report = await Report.findById(offer.report_id);
     const user = await User.findById(report.user_id);
-    if (!user) return interaction.reply({ content: 'User not found.', ephemeral: true });
+    if (!user) return interaction.reply({content: 'User not found.', ephemeral: true});
 
     const options = offer.dictator_options;
-    if (!options) return interaction.reply({ content: 'No dictator options found.', ephemeral: true });
+    if (!options) return interaction.reply({content: 'No dictator options found.', ephemeral: true});
 
     let selected;
     if (action === 'option1') selected = options.option1;
     if (action === 'option2') selected = options.option2;
-    if (!selected) return interaction.reply({ content: 'Invalid choice.', ephemeral: true });
+    if (!selected) return interaction.reply({content: 'Invalid choice.', ephemeral: true});
 
     // Apply bonuses
     const reputationBonus = (report.reputation_bonus || 0) / 100;
@@ -513,7 +602,7 @@ async function handleDictatorGame(interaction, action, offerId) {
     const finalMoney = Math.floor(selected.money * totalMultiplier);
 
     await CompanyOffer.updateOne(
-        { _id: offer._id },
+        {_id: offer._id},
         {
             $set: {
                 status: 'accepted',
@@ -525,7 +614,7 @@ async function handleDictatorGame(interaction, action, offerId) {
     );
 
     await User.updateOne(
-        { _id: user._id },
+        {_id: user._id},
         {
             $inc: {
                 money_earned: finalMoney,
@@ -570,33 +659,33 @@ async function handleTrade(interaction, action, tradeId) {
     const trade = await Trade.findById(tradeId).lean();
 
     if (!trade) {
-        return interaction.reply({ content: 'Trade not found.', ephemeral: true });
+        return interaction.reply({content: 'Trade not found.', ephemeral: true});
     }
 
     // Fetch users in parallel
     const [givingUser, receivingUser, currentUser] = await Promise.all([
         User.findById(trade.giving_user_id).lean(),
         User.findById(trade.receiving_user_id).lean(),
-        User.findOne({ discord_id: interaction.user.id }).lean()
+        User.findOne({discord_id: interaction.user.id}).lean()
     ]);
 
     const user = currentUser;
     if (!user) {
-        return interaction.reply({ content: 'User not found.', ephemeral: true });
+        return interaction.reply({content: 'User not found.', ephemeral: true});
     }
 
     const isGiver = trade.giving_user_id.toString() === user._id.toString();
     const isReceiver = trade.receiving_user_id.toString() === user._id.toString();
 
     if (!isGiver && !isReceiver) {
-        return interaction.reply({ content: 'You are not part of this trade.', ephemeral: true });
+        return interaction.reply({content: 'You are not part of this trade.', ephemeral: true});
     }
 
     // --- HANDLE REJECTIONS --- //
     if (action === 'reject') {
         await Trade.updateOne(
-            { _id: tradeId },
-            { status: 'rejected', resolved_at: new Date() }
+            {_id: tradeId},
+            {status: 'rejected', resolved_at: new Date()}
         );
 
         await interaction.update({
@@ -609,7 +698,8 @@ async function handleTrade(interaction, action, tradeId) {
         try {
             const discordOther = await interaction.client.users.fetch(other.discord_id);
             await discordOther.send(` Your trade was rejected by ${interaction.user.username}.`);
-        } catch {}
+        } catch {
+        }
 
         return;
     }
@@ -618,7 +708,7 @@ async function handleTrade(interaction, action, tradeId) {
 
     // Receiver accepts first
     if (isReceiver && action === 'accept' && trade.status === 'pending') {
-        await Trade.updateOne({ _id: tradeId }, { status: 'receiver_accepted' });
+        await Trade.updateOne({_id: tradeId}, {status: 'receiver_accepted'});
 
         await interaction.update({
             content: 'You accepted the trade. Waiting for the other user…',
@@ -654,8 +744,8 @@ async function handleTrade(interaction, action, tradeId) {
             await executeTrade(trade);
 
             await Trade.updateOne(
-                { _id: tradeId },
-                { status: 'completed', resolved_at: new Date() }
+                {_id: tradeId},
+                {status: 'completed', resolved_at: new Date()}
             );
 
             await interaction.update({
@@ -688,12 +778,12 @@ async function updateCompanyReputation(userId, companyId, change) {
 
     if (existingRep) {
         await User.updateOne(
-            { _id: userId, 'reputation_breakdown.company_id': companyId },
-            { $inc: { 'reputation_breakdown.$.trust_score': change } }
+            {_id: userId, 'reputation_breakdown.company_id': companyId},
+            {$inc: {'reputation_breakdown.$.trust_score': change}}
         );
     } else {
         await User.updateOne(
-            { _id: userId },
+            {_id: userId},
             {
                 $push: {
                     reputation_breakdown: {

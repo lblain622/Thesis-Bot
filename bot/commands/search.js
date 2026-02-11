@@ -5,7 +5,7 @@ const {
 const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
 const Company = require('../../models/Company');
-const { fetchInventoryItems, aggSearchBoosts } = require('../utils/shopEffects');
+const {fetchInventoryItems, aggSearchBoosts} = require('../utils/shopEffects');
 
 function formatRemaining(expiration) {
     const ms = new Date(expiration).getTime() - Date.now();
@@ -34,12 +34,12 @@ module.exports = {
         .setDescription('Actively search to discover vulnerabilities and reveal some fields'),
 
     async execute(interaction) {
-        await interaction.deferReply({ flags: 64 });
+        await interaction.deferReply({flags: 64});
 
         try {
-            const user = await User.findOne({ discord_id: interaction.user.id });
+            const user = await User.findOne({discord_id: interaction.user.id});
             if (!user) {
-                return interaction.editReply({ content: 'User record not found.', flags: 64 });
+                return interaction.editReply({content: 'User record not found.', flags: 64});
             }
 
             const now = new Date();
@@ -51,11 +51,14 @@ module.exports = {
             const candidates = await Vulnerability.find({
                 isResolved: false,
                 isReported: false,
-                expiration_date: { $gt: now },
+                expiration_date: {$gt: now},
             }).populate('company_id');
 
             if (!candidates.length) {
-                return interaction.editReply({ content: 'No active vulnerabilities available at the moment. Try again soon!', flags: 64 });
+                return interaction.editReply({
+                    content: 'No active vulnerabilities available at the moment. Try again soon!',
+                    flags: 64
+                });
             }
 
             // Split into accessible and inaccessible; allow discovering a few new ones
@@ -81,7 +84,7 @@ module.exports = {
             for (const v of found) {
                 const wasAccessible = v.visibility?.isGlobal || (v.visibility?.allowedUsers || []).some(u => u.toString() === user._id.toString());
                 if (!wasAccessible) {
-                    v.visibility = v.visibility || { isGlobal: false, allowedUsers: [] };
+                    v.visibility = v.visibility || {isGlobal: false, allowedUsers: []};
                     v.visibility.allowedUsers = v.visibility.allowedUsers || [];
                     v.visibility.allowedUsers.push(user._id);
                 }
@@ -90,7 +93,7 @@ module.exports = {
                 const alreadyDiscovered = (v.discovered_by || []).some(d => d.user_id?.toString() === user._id.toString());
                 if (!alreadyDiscovered) {
                     v.discovered_by = v.discovered_by || [];
-                    v.discovered_by.push({ user_id: user._id, discovered_at: new Date() });
+                    v.discovered_by.push({user_id: user._id, discovered_at: new Date()});
                 }
 
                 // Reveal 2-4 fields for the user, boosted by items (Signal Booster etc.)
@@ -116,7 +119,10 @@ module.exports = {
 
             // If still nothing accessible after attempt
             if (!found.length) {
-                return interaction.editReply({ content: 'You didn\'t find anything this time. Try again in a bit!', flags: 64 });
+                return interaction.editReply({
+                    content: 'You didn\'t find anything this time. Try again in a bit!',
+                    flags: 64
+                });
             }
 
             // Build response embed
@@ -135,10 +141,13 @@ module.exports = {
                 });
             }
 
-            await interaction.editReply({ embeds: [embed], flags: 64 });
+            await interaction.editReply({embeds: [embed], flags: 64});
         } catch (err) {
             console.error('search command error:', err);
-            return interaction.editReply({ content: 'There was an error during your search. Please try again later.', flags: 64 });
+            return interaction.editReply({
+                content: 'There was an error during your search. Please try again later.',
+                flags: 64
+            });
         }
     }
 }

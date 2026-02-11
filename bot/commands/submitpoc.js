@@ -23,12 +23,12 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        await interaction.deferReply({ flags: 64 });
+        await interaction.deferReply({flags: 64});
 
         try {
-            const user = await User.findOne({ discord_id: interaction.user.id });
+            const user = await User.findOne({discord_id: interaction.user.id});
             if (!user) {
-                return interaction.editReply({ content: 'User not found.', flags: 64 });
+                return interaction.editReply({content: 'User not found.', flags: 64});
             }
 
             const vulnIdentifier = interaction.options.getString('vulnerability');
@@ -185,11 +185,11 @@ async function selectCompany(interaction) {
     if (!response) return null;
 
     if (response.customId === 'close') {
-        await response.update({ content: 'POC submission canceled.', components: [] });
+        await response.update({content: 'POC submission canceled.', components: []});
         return null;
     }
 
-    await response.update({ content: 'Company selected.', components: [] });
+    await response.update({content: 'Company selected.', components: []});
     return response.values[0];
 }
 
@@ -236,11 +236,11 @@ async function selectVulnerability(interaction, companyId) {
     if (!response) return null;
 
     if (response.customId === 'close') {
-        await response.update({ content: 'POC submission canceled.', components: [] });
+        await response.update({content: 'POC submission canceled.', components: []});
         return null;
     }
 
-    await response.update({ content: 'Vulnerability selected.', components: [] });
+    await response.update({content: 'Vulnerability selected.', components: []});
     return response.values[0];
 }
 
@@ -274,7 +274,7 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId) {
     if (!response) return null;
 
     if (response.customId === 'close') {
-        await response.update({ content: 'Submission canceled.', components: [] });
+        await response.update({content: 'Submission canceled.', components: []});
         return null;
     }
 
@@ -290,7 +290,7 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
         const discordId = interaction.user.id;
         const discordName = interaction.user.username;
 
-        user = await User.findOne({ discord_id: discordId });
+        user = await User.findOne({discord_id: discordId});
         if (!user) {
             user = await User.create({
                 discord_id: discordId,
@@ -301,8 +301,8 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
     }
 
     await User.updateOne(
-        { _id: user._id },
-        { $inc: { reports_made: 1 } }
+        {_id: user._id},
+        {$inc: {reports_made: 1}}
     );
 
     const vulnerability = await Vulnerability.findById(vulnerabilityId);
@@ -321,8 +321,8 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
 
     // Grant visibility to POC submitter
     await Vulnerability.updateOne(
-        { _id: vulnerabilityId },
-        { $addToSet: { 'visibility.allowedUsers': user._id } }
+        {_id: vulnerabilityId},
+        {$addToSet: {'visibility.allowedUsers': user._id}}
     );
 
     // Add user to a random subset (80-95%) of field visibility lists
@@ -337,11 +337,11 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
         'availabilityImpact',
         'recoveryPotential'
     ];
-    
+
     // Calculate how many fields to reveal (80-95%)
     const revealPercent = (Math.random() * (95 - 80) + 80) / 100;
     const revealCount = Math.floor(fieldNames.length * revealPercent);
-    
+
     // Shuffle and pick
     const selectedFields = fieldNames
         .sort(() => 0.5 - Math.random())
@@ -354,8 +354,8 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
 
     if (Object.keys(addToSetObj).length > 0) {
         await Vulnerability.updateOne(
-            { _id: vulnerabilityId },
-            { $addToSet: addToSetObj }
+            {_id: vulnerabilityId},
+            {$addToSet: addToSetObj}
         );
     }
 

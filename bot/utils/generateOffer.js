@@ -2,13 +2,18 @@ const Company = require('../../models/Company');
 const BountyTier = require('../../models/BountyTiers');
 const CompanyOffer = require('../../models/CompanyOffers');
 const Items = require('../../models/Items');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { fetchInventoryItems, computeCompanyBonusPct, maybeConsumeLuckyToken, grantMerchantHatIfMissing } = require('./shopEffects');
+const {ActionRowBuilder, ButtonBuilder, ButtonStyle} = require('discord.js');
+const {
+    fetchInventoryItems,
+    computeCompanyBonusPct,
+    maybeConsumeLuckyToken,
+    grantMerchantHatIfMissing
+} = require('./shopEffects');
 const Users = require('../../models/Users');
 
 async function generateOffer(client, report, discordUser) {
     const company = await Company.findById(report.company_id).populate('bounty_tiers');
-    const tier = await BountyTier.findOne({ severity: report.volunerablity_sev });
+    const tier = await BountyTier.findOne({severity: report.volunerablity_sev});
 
     const min = parseFloat(tier?.min_value || 50);
     const max = parseFloat(tier?.max_value || 500);
@@ -32,7 +37,8 @@ async function generateOffer(client, report, discordUser) {
                 notes.push('Lucky Token doubled payout');
             }
         }
-    } catch (_) { /* ignore */ }
+    } catch (_) { /* ignore */
+    }
 
     // Maybe attach an item and reduce cash
     let attachedItems = [];
@@ -45,12 +51,12 @@ async function generateOffer(client, report, discordUser) {
 
     if (withItemsEnabled && Math.random() < attachChance) {
         try {
-            const pool = await Items.find({ enabled: true, type: { $in: ['merch', 'tool'] } }).lean();
+            const pool = await Items.find({enabled: true, type: {$in: ['merch', 'tool']}}).lean();
             if (pool.length) {
                 // Bias towards companyScoped (branded) items
                 const brandedPool = pool.filter(it => it.companyScoped);
                 const generalPool = pool.filter(it => !it.companyScoped);
-                
+
                 let candidates = [];
                 if (brandedPool.length && Math.random() < 0.7) {
                     candidates = brandedPool;
@@ -60,7 +66,7 @@ async function generateOffer(client, report, discordUser) {
 
                 const chosen = candidates.sort(() => 0.5 - Math.random()).slice(0, Math.min(1, maxItems));
                 for (const it of chosen) {
-                    const entry = { item_id: it._id, qty: 1, name: it.name };
+                    const entry = {item_id: it._id, qty: 1, name: it.name};
                     if (it.companyScoped) entry.company_id = company._id;
                     attachedItems.push(entry);
                 }
@@ -69,7 +75,8 @@ async function generateOffer(client, report, discordUser) {
                 offerAmount = Math.max(minCash, reduced);
                 reductionReason = 'item_bonus';
             }
-        } catch (e) { /* ignore */ }
+        } catch (e) { /* ignore */
+        }
     }
 
     const offer = await CompanyOffer.create({
@@ -96,12 +103,13 @@ async function generateOffer(client, report, discordUser) {
                 const granted = await grantMerchantHatIfMissing(report.user_id, company._id);
                 if (granted) grantMsg = `\nBonus item granted: Merchant Hat for ${company.name}!`;
             }
-        } catch (_) {}
+        } catch (_) {
+        }
 
         const itemsLine = attachedItems.length
             ? `\nIncluded Item${attachedItems.length > 1 ? 's' : ''}: ` + attachedItems.map(ai => {
-                return ai.name || '1x bonus item';
-            }).join(', ')
+            return ai.name || '1x bonus item';
+        }).join(', ')
             : '';
         await discordUser.send({
             content: `Reward Offer from ${company.name}\n` +
@@ -132,4 +140,4 @@ async function generateOffer(client, report, discordUser) {
     }
 }
 
-module.exports = generateOffer ;
+module.exports = generateOffer;

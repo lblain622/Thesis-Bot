@@ -26,12 +26,12 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        await interaction.deferReply({ flags: 64 });
+        await interaction.deferReply({flags: 64});
 
         try {
-            const user = await User.findOne({ discord_id: interaction.user.id });
+            const user = await User.findOne({discord_id: interaction.user.id});
             if (!user) {
-                return interaction.editReply({ content: 'User not found.', flags: 64 });
+                return interaction.editReply({content: 'User not found.', flags: 64});
             }
 
             const vulnIdentifier = interaction.options.getString('vulnerability');
@@ -65,7 +65,7 @@ module.exports = {
                 vulnerabilityId = vulnerability._id;
                 companyId = vulnerability.company_id;
                 const company = await Company.findById(companyId);
-                                platformId = company.platform_id;
+                platformId = company.platform_id;
 
                 const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId);
                 if (!confirmed) return;
@@ -113,7 +113,7 @@ module.exports = {
             });
 
             // Generate offer after delay
-const offerDelayMs = 30*1000; // 30 seconds
+            const offerDelayMs = 30 * 1000; // 30 seconds
 
             setTimeout(async () => {
                 try {
@@ -217,11 +217,11 @@ async function selectCompany(interaction) {
     if (!response) return null;
 
     if (response.customId === 'close') {
-        await response.update({ content: 'Report canceled.', components: [] });
+        await response.update({content: 'Report canceled.', components: []});
         return null;
     }
 
-    await response.update({ content: 'Company selected.', components: [] });
+    await response.update({content: 'Company selected.', components: []});
     return response.values[0];
 }
 
@@ -268,11 +268,11 @@ async function selectVulnerability(interaction, companyId) {
     if (!response) return null;
 
     if (response.customId === 'close') {
-        await response.update({ content: 'Report canceled.', components: [] });
+        await response.update({content: 'Report canceled.', components: []});
         return null;
     }
 
-    await response.update({ content: 'Vulnerability selected.', components: [] });
+    await response.update({content: 'Vulnerability selected.', components: []});
     return response.values[0];
 }
 
@@ -310,7 +310,7 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId) {
     if (!response) return null;
 
     if (response.customId === 'close') {
-        await response.update({ content: 'Submission canceled.', components: [] });
+        await response.update({content: 'Submission canceled.', components: []});
         return null;
     }
 
@@ -326,7 +326,7 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
         const discordId = interaction.user.id;
         const discordName = interaction.user.username;
 
-        user = await User.findOne({ discord_id: discordId });
+        user = await User.findOne({discord_id: discordId});
         if (!user) {
             user = await User.create({
                 discord_id: discordId,
@@ -337,8 +337,8 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
     }
 
     await User.updateOne(
-        { _id: user._id },
-        { $inc: { reports_made: 1 } }
+        {_id: user._id},
+        {$inc: {reports_made: 1}}
     );
 
     const vulnerability = await Vulnerability.findById(vulnerabilityId);
@@ -357,7 +357,7 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
 
     // Update vulnerability - mark as reported and add to reported_by
     await Vulnerability.updateOne(
-        { _id: vulnerabilityId },
+        {_id: vulnerabilityId},
         {
             $push: {
                 reported_by: {
@@ -375,11 +375,12 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
                 first_reported_at: new Date()
             }
         },
-        { upsert: false }
+        {upsert: false}
     );
 
     return report;
 }
+
 //
 ////TODO: lets now check explosits after the voln is resolved instead!
 //async function checkExploitsAfterReport(vulnerabilityId) {

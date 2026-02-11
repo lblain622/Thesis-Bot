@@ -1,5 +1,5 @@
 // bot/utils/loadData.js
-require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+require('dotenv').config({path: require('path').resolve(__dirname, '../../.env')});
 const mongoose = require('mongoose');
 const Company = require('../../models/Company');
 const Platform = require('../../models/Platform');
@@ -14,12 +14,13 @@ const Items = require('../../models/Items');
 const ItemStock = require('../../models/ItemStock');
 const ShopRotation = require('../../models/ShopRotation');
 const PlayerChoices = require('../../models/PlayerChoices');
-const { loadShopItems } = require('./loadShopItems');
+const {loadShopItems} = require('./loadShopItems');
+
 // Seed companies and related data assuming an active DB connection exists
 async function loadInitialData() {
     try {
         // Find or create platforms
-        let ultimatumPlatform = await Platform.findOne({ name: 'Ultimatum Test Platform' });
+        let ultimatumPlatform = await Platform.findOne({name: 'Ultimatum Test Platform'});
         if (!ultimatumPlatform) {
             ultimatumPlatform = await Platform.create({
                 name: 'Ultimatum Test Platform',
@@ -35,7 +36,7 @@ async function loadInitialData() {
             console.log('✓ Created Ultimatum Test Platform');
         }
 
-        let dictatorPlatform = await Platform.findOne({ name: 'Dictator Test Platform' });
+        let dictatorPlatform = await Platform.findOne({name: 'Dictator Test Platform'});
         if (!dictatorPlatform) {
             dictatorPlatform = await Platform.create({
                 name: 'Dictator Test Platform',
@@ -253,7 +254,7 @@ async function loadInitialData() {
         const severities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
         const inOneWeek = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-        const vulnsPayload = Array.from({ length: 15 }).map((_, i) => {
+        const vulnsPayload = Array.from({length: 15}).map((_, i) => {
             const company = companies[Math.floor(Math.random() * companies.length)];
             const type = vulnTypes[Math.floor(Math.random() * vulnTypes.length)];
             const sev = severities[Math.floor(Math.random() * severities.length)];
@@ -270,7 +271,7 @@ async function loadInitialData() {
                 reported_date: null,
                 is_resolved_date: null,
                 expiration_date: inOneWeek(),
-                visibility: { isGlobal: false, allowedUsers: [] },
+                visibility: {isGlobal: false, allowedUsers: []},
                 discovered_by: [],
             };
         });
@@ -281,13 +282,13 @@ async function loadInitialData() {
         }
 
         // Load/refresh shop catalog items
-        const shopResult = await loadShopItems().catch(() => ({ count: 0, error: true }));
+        const shopResult = await loadShopItems().catch(() => ({count: 0, error: true}));
 
         console.log('\n Data load completed successfully!');
         console.log(` Created ${companies.length} companies`);
         console.log(` Shop items loaded: ${shopResult?.count || 0}`);
 
-        return { companiesCreated: companies.length, shopItemsLoaded: shopResult?.count || 0 };
+        return {companiesCreated: companies.length, shopItemsLoaded: shopResult?.count || 0};
     } catch (err) {
         console.error('Error:', err);
         throw err;
@@ -317,26 +318,24 @@ async function clearCollections() {
 
         await Company.deleteMany({});
         console.log(' Cleared Company collection');
-        
+
         await Vulnerabilities.deleteMany({});
         console.log(' Cleared Vulnerabilities collection');
-        
+
         await Reports.deleteMany({});
         console.log(' Cleared Reports collection');
-        
+
         await CompanyOffers.deleteMany({});
         console.log('Cleared CompanyOffers collection');
-        
+
         await Trades.deleteMany({});
         console.log(' Cleared Trades collection');
-        
+
         await Expoits.deleteMany({});
         console.log(' Cleared Exploits collection');
 
         await Rounds.deleteMany({});
         console.log(' Cleared Rounds collection');
-
-
 
 
         console.log('All collections cleared successfully\n');

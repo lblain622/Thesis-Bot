@@ -22,24 +22,24 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        await interaction.deferReply({ flags: 64 });
+        await interaction.deferReply({flags: 64});
 
         try {
             const targetUser = interaction.options.getUser('user');
 
             if (targetUser.bot) {
-                return interaction.editReply({ content: 'You cannot trade with bots!', flags: 64 });
+                return interaction.editReply({content: 'You cannot trade with bots!', flags: 64});
             }
 
             if (targetUser.id === interaction.user.id) {
-                return interaction.editReply({ content: 'You cannot trade with yourself!', flags: 64 });
+                return interaction.editReply({content: 'You cannot trade with yourself!', flags: 64});
             }
 
-            const givingUser = await User.findOne({ discord_id: interaction.user.id });
-            const receivingUser = await User.findOne({ discord_id: targetUser.id });
+            const givingUser = await User.findOne({discord_id: interaction.user.id});
+            const receivingUser = await User.findOne({discord_id: targetUser.id});
 
             if (!givingUser || !receivingUser) {
-                return interaction.editReply({ content: 'One or both users not found in database.', flags: 64 });
+                return interaction.editReply({content: 'One or both users not found in database.', flags: 64});
             }
 
             // Step 1: Select what you're offering
@@ -153,8 +153,8 @@ async function selectOfferType(interaction, promptText) {
         .setCustomId('select_offer_type')
         .setPlaceholder('Select what to trade')
         .addOptions([
-            { label: 'Vulnerability', value: 'vulnerability', description: 'Trade a vulnerability' },
-            { label: 'Money', value: 'money', description: 'Trade money' }
+            {label: 'Vulnerability', value: 'vulnerability', description: 'Trade a vulnerability'},
+            {label: 'Money', value: 'money', description: 'Trade money'}
         ]);
 
     const row = new ActionRowBuilder().addComponents(selectMenu);
@@ -173,11 +173,11 @@ async function selectOfferType(interaction, promptText) {
 
     const response = await waitForComponent(message, interaction.user.id, ComponentType.StringSelect, ['select_offer_type', 'cancel'], 120000);
     if (!response || response.customId === 'cancel') {
-        await interaction.editReply({ content: 'Trade cancelled.', components: [] });
+        await interaction.editReply({content: 'Trade cancelled.', components: []});
         return null;
     }
 
-    await response.update({ content: `Selected: ${response.values[0]}`, components: [] });
+    await response.update({content: `Selected: ${response.values[0]}`, components: []});
     return response.values[0];
 }
 
@@ -216,7 +216,7 @@ async function selectVulnerability(interaction, userId) {
     const response = await waitForComponent(message, interaction.user.id, ComponentType.StringSelect, 'select_vulnerability', 120000);
     if (!response) return null;
 
-    await response.update({ content: 'Vulnerability selected.', components: [] });
+    await response.update({content: 'Vulnerability selected.', components: []});
     return response.values[0];
 }
 
@@ -227,30 +227,31 @@ async function enterAmount(interaction, maxAmount, promptText) {
     });
 
     const filter = (msg) => msg.author.id === interaction.user.id;
-    const collected = await interaction.channel.awaitMessages({ filter, max: 1, time: 120000 });
+    const collected = await interaction.channel.awaitMessages({filter, max: 1, time: 120000});
 
     if (!collected.size) {
-        await interaction.followUp({ content: 'Trade timed out.', flags: 64 });
+        await interaction.followUp({content: 'Trade timed out.', flags: 64});
         return null;
     }
 
     const amount = parseFloat(collected.first().content);
     if (isNaN(amount) || amount <= 0) {
-        await interaction.followUp({ content: 'Invalid amount.', flags: 64 });
+        await interaction.followUp({content: 'Invalid amount.', flags: 64});
         return null;
     }
 
     if (amount > maxAmount) {
-        await interaction.followUp({ content: 'You do not have enough money!', flags: 64 });
+        await interaction.followUp({content: 'You do not have enough money!', flags: 64});
         return null;
     }
 
-    await collected.first().delete().catch(() => {});
+    await collected.first().delete().catch(() => {
+    });
     return amount;
 }
 
 async function confirmTrade(interaction, tradeData) {
-    const { givingType, givingValue, requestType, receivingValue, targetUser } = tradeData;
+    const {givingType, givingValue, requestType, receivingValue, targetUser} = tradeData;
 
     const offerText = formatTradeOffer(givingType, givingValue, requestType, receivingValue);
 
@@ -273,13 +274,14 @@ async function confirmTrade(interaction, tradeData) {
 
     const response = await waitForComponent(message, interaction.user.id, ComponentType.Button, ['confirm', 'cancel'], 120000);
     if (!response || response.customId === 'cancel') {
-        await interaction.editReply({ content: 'Trade cancelled.', components: [] });
+        await interaction.editReply({content: 'Trade cancelled.', components: []});
         return false;
     }
 
-    await response.update({ content: 'Creating trade offer...', components: [] });
+    await response.update({content: 'Creating trade offer...', components: []});
     return true;
 }
+
 function formatTradeOffer(givingType, givingValue, requestType, receivingValue, givingVuln, receivingVuln) {
     let offerStr = '**You offer:** ';
 
@@ -316,7 +318,7 @@ async function waitForComponent(message, userId, componentType, customIds, time)
         });
     } catch (error) {
         console.error('Component wait error:', error);
-        await message.edit({ content: 'Selection timed out.', components: [] }).catch(console.error);
+        await message.edit({content: 'Selection timed out.', components: []}).catch(console.error);
         return null;
     }
 }
