@@ -25,9 +25,9 @@ module.exports = {
             option.setName('reported')
                 .setDescription('Filter by reported status')
                 .addChoices(
-                    {name: 'Reported', value: 'reported'},
-                    {name: 'Unreported', value: 'unreported'},
-                    {name: 'Any', value: 'any'}
+                    { name: 'Reported', value: 'reported' },
+                    { name: 'Unreported', value: 'unreported' },
+                    { name: 'Any', value: 'any' }
                 )
                 .setRequired(false)
         )
@@ -35,9 +35,9 @@ module.exports = {
             option.setName('resolved')
                 .setDescription('Filter by resolution status')
                 .addChoices(
-                    {name: 'Resolved', value: 'resolved'},
-                    {name: 'Unresolved', value: 'unresolved'},
-                    {name: 'Any', value: 'any'}
+                    { name: 'Resolved', value: 'resolved' },
+                    { name: 'Unresolved', value: 'unresolved' },
+                    { name: 'Any', value: 'any' }
                 )
                 .setRequired(false)
         )
@@ -48,12 +48,12 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        await interaction.deferReply({flags: 64});
+        await interaction.deferReply({ flags: 64 });
 
         try {
-            const user = await User.findOne({discord_id: interaction.user.id});
+            const user = await User.findOne({ discord_id: interaction.user.id });
             if (!user) {
-                return interaction.editReply({content: 'User not found.', flags: 64});
+                return interaction.editReply({ content: 'User not found.', flags: 64 });
             }
 
             const identifier = interaction.options.getString('identifier');
@@ -61,7 +61,7 @@ module.exports = {
 
             if (identifier) {
 
-                vulnerability = await Vulnerability.findOne({vuln_identifier: identifier})
+                vulnerability = await Vulnerability.findOne({ vuln_identifier: identifier })
                     .populate('company_id')
                     .populate('reported_by.user_id');
 
@@ -93,8 +93,8 @@ module.exports = {
 
                 const query = {
                     $or: [
-                        {'visibility.allowedUsers': user._id},
-                        {'visibility.isGlobal': true}
+                        { 'visibility.allowedUsers': user._id },
+                        { 'visibility.isGlobal': true }
                     ]
                 };
 
@@ -108,7 +108,7 @@ module.exports = {
 
                 if (excludeSelf) {
                     // Exclude vulnerabilities where current user is among reporters
-                    query.reported_by = {$not: {$elemMatch: {user_id: user._id}}};
+                    query.reported_by = { $not: { $elemMatch: { user_id: user._id } } };
                 }
 
                 const vulnerabilities = await Vulnerability.find(query)
@@ -156,7 +156,7 @@ module.exports = {
                     .populate('company_id')
                     .populate('reported_by.user_id');
 
-                await response.update({content: 'Loading vulnerability details...', components: []});
+                await response.update({ content: 'Loading vulnerability details...', components: [] });
             }
 
             const canSeeFields = vulnerability.visibility.allowedUsers.some(
@@ -190,7 +190,7 @@ module.exports = {
                 );
             // Field Analysis - only show if user can see
             if (canSeeFields) {
-                const fieldAnalysis = buildFieldAnalysis(vulnerability, user);
+                const fieldAnalysis = buildFieldAnalysis(vulnerability,user);
                 if (fieldAnalysis) {
                     embed.addFields({
                         name: '🔍 Field Analysis',
@@ -220,7 +220,7 @@ module.exports = {
                 });
             }
 
-            embed.setFooter({text: `Vulnerability ID: ${vulnerability._id}`});
+            embed.setFooter({ text: `Vulnerability ID: ${vulnerability._id}` });
             embed.setTimestamp(vulnerability.createdAt);
 
             await interaction.editReply({
@@ -238,20 +238,19 @@ module.exports = {
         }
     },
 };
-
 function buildFieldAnalysis(vulnerability, user) {
     const fields = [];
 
     const fieldDefinitions = [
-        {key: 'networkAccess', label: 'Network Access', icon: '🌐'},
-        {key: 'arbitraryCodeExecution', label: 'Arbitrary Code Execution', icon: '⚙️'},
-        {key: 'userInteraction', label: 'User Interaction Required', icon: '👤'},
-        {key: 'automatable', label: 'Exploit Automation', icon: '🤖'},
-        {key: 'privilegesRequired', label: 'Privileges Required', icon: '🔐'},
-        {key: 'confidentialityImpact', label: 'Confidentiality Impact', icon: '📖'},
-        {key: 'integrityImpact', label: 'Integrity Impact', icon: '✏️'},
-        {key: 'availabilityImpact', label: 'Availability Impact', icon: '🛑'},
-        {key: 'recoveryPotential', label: 'Recovery Potential', icon: '♻️'}
+        { key: 'networkAccess', label: 'Network Access', icon: '🌐' },
+        { key: 'arbitraryCodeExecution', label: 'Arbitrary Code Execution', icon: '⚙️' },
+        { key: 'userInteraction', label: 'User Interaction Required', icon: '👤' },
+        { key: 'automatable', label: 'Exploit Automation', icon: '🤖' },
+        { key: 'privilegesRequired', label: 'Privileges Required', icon: '🔐' },
+        { key: 'confidentialityImpact', label: 'Confidentiality Impact', icon: '📖' },
+        { key: 'integrityImpact', label: 'Integrity Impact', icon: '✏️' },
+        { key: 'availabilityImpact', label: 'Availability Impact', icon: '🛑' },
+        { key: 'recoveryPotential', label: 'Recovery Potential', icon: '♻️' }
     ];
 
     for (const field of fieldDefinitions) {
@@ -345,7 +344,7 @@ async function waitForComponent(message, userId, componentType, customIds, time 
         });
     } catch (error) {
         console.error('Component wait error:', error);
-        await message.edit({content: 'Selection timed out.', components: []}).catch(console.error);
+        await message.edit({ content: 'Selection timed out.', components: [] }).catch(console.error);
         return null;
     }
 }

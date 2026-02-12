@@ -17,24 +17,6 @@ const userSchema = new Schema({
         type: Number,
         default: 0
     },
-    // Main spendable balance used for purchases and trade thresholds
-    balance: {
-        type: Number,
-        default: 0
-    },
-    // Breakdown of balance sources
-    money_from_exploits: {
-        type: Number,
-        default: 0
-    },
-    money_from_reports: {
-        type: Number,
-        default: 0
-    },
-    money_from_trades: {
-        type: Number,
-        default: 0
-    },
     repuation_earned: {
         type: Number,
         default: 0
@@ -55,14 +37,6 @@ const userSchema = new Schema({
                 default: 0
             }
         }
-    ],
-    // Shop inventory entries
-    inventory: [
-        {
-            item_id: { type: Schema.Types.ObjectId, ref: 'Items', required: true },
-            company_id: { type: Schema.Types.ObjectId, ref: 'Company', default: null },
-            qty: { type: Number, default: 1, min: 0 }
-        }
     ]
 }, { timestamps: true });
 
@@ -70,6 +44,5 @@ const userSchema = new Schema({
 userSchema.index({ discord_id: 1 }, { unique: true });
 userSchema.index({ last_active: -1 });
 userSchema.index({ 'reputation_breakdown.company_id': 1 });
-userSchema.index({ 'inventory.item_id': 1 });
 
 module.exports = model('Users', userSchema);

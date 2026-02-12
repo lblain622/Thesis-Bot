@@ -6,12 +6,11 @@ const vulnerabilitySchema = new Schema({
         ref: 'Company',
         required: true
     },
-    // Round the vulnerability was generated in (legacy; optional in continuous mode)
+    // Round the vulnerability was generated in (used for round summaries)
     round_id: {
         type: Schema.Types.ObjectId,
         ref: 'Round',
-        required: false,
-        default: null
+        required: true
     },
 
     vuln_identifier: {

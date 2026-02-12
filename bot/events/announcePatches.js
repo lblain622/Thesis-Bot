@@ -1,5 +1,5 @@
 // bot/utils/announcements.js
-const {EmbedBuilder} = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
 const Company = require('../../models/Company');
@@ -57,13 +57,13 @@ async function announceVulnerabilityPatched(client, vulnerability, acceptedOffer
                 `A security researcher has identified and reported a vulnerability to **${company?.name || 'Unknown Company'}**.`
             )
             .addFields(
-                {name: 'Company', value: company?.name || 'Unknown', inline: true},
-                {name: 'Type', value: vulnerability.volun_type, inline: true},
-                {name: 'Reward', value: `$${acceptedOffer.offered_amount || '0'}`, inline: true},
-                {name: 'Reporter', value: reporterMention, inline: true},
-                {name: 'Status', value: 'Patched', inline: true}
+                { name: 'Company', value: company?.name || 'Unknown', inline: true },
+                { name: 'Type', value: vulnerability.volun_type, inline: true },
+                { name: 'Reward', value: `$${acceptedOffer.offered_amount || '0'}`, inline: true },
+                { name: 'Reporter', value: reporterMention, inline: true },
+                { name: 'Status', value: 'Patched', inline: true }
             )
-            .setFooter({text: 'Keep hunting for vulnerabilities! Use /report to submit your findings.'})
+            .setFooter({ text: 'Keep hunting for vulnerabilities! Use /report to submit your findings.' })
             .setTimestamp();
 
         await channel.send({
@@ -92,7 +92,7 @@ async function announceBatchPatches(client, vulnerabilities, channelId) {
                 `**${vulnerabilities.length} vulnerabilities** have been discovered and patched today!\n\n` +
                 `Security researchers have made our platforms more secure.`
             )
-            .setFooter({text: 'Great work, security researchers!'})
+            .setFooter({ text: 'Great work, security researchers!' })
             .setTimestamp();
 
         // Add each vulnerability as a field (max 25)
@@ -113,55 +113,13 @@ async function announceBatchPatches(client, vulnerabilities, channelId) {
             });
         }
 
-        await channel.send({embeds: [embed]});
+        await channel.send({ embeds: [embed] });
     } catch (err) {
         console.error('Error announcing batch patches:', err);
     }
 }
 
-async function announceExploitSummary(client, serverId, vulnIdentifier, summary) {
-    try {
-        if (!summary || summary.caughtCount === 0) return;
-
-        const guild = await client.guilds.fetch(serverId);
-        if (!guild) return;
-
-        let channel = guild.channels.cache.find(ch =>
-            ch.type === 0 && ch.name.toLowerCase().includes('general')
-        );
-
-        if (!channel) {
-            const textChannels = guild.channels.cache.filter(ch => ch.type === 0);
-            if (textChannels.size > 0) channel = textChannels.first();
-        }
-
-        if (!channel) return;
-
-        const embed = new EmbedBuilder()
-            .setTitle('🛡️ Anti-Exploit Enforcement')
-            .setColor('#FF0000')
-            .setDescription(
-                `Security teams have finished patching **${vulnIdentifier}**.\n\n` +
-                `During the patch process, several unauthorized exploits were detected and shut down.`
-            )
-            .addFields(
-                {name: 'Exploits Terminated', value: `${summary.caughtCount}`, inline: true},
-                {name: 'Total Fines Issued', value: `$${summary.totalFines}`, inline: true}
-            )
-            .setFooter({text: 'Exploiting vulnerabilities is a risky business. Report them for safe rewards!'})
-            .setTimestamp();
-
-        await channel.send({
-            content: `📢 **Exploit crackdown announced!**`,
-            embeds: [embed]
-        });
-    } catch (err) {
-        console.error('Error announcing exploit summary:', err);
-    }
-}
-
 module.exports = {
     announceVulnerabilityPatched,
-    announceBatchPatches,
-    announceExploitSummary
+    announceBatchPatches
 };
