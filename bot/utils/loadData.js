@@ -1,5 +1,5 @@
-// bot/utils/setupCompaniesEnhanced.js
-require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+// bot/utils/loadData.js
+require('dotenv').config({path: require('path').resolve(__dirname, '../../.env')});
 const mongoose = require('mongoose');
 const Company = require('../../models/Company');
 const Platform = require('../../models/Platform');
@@ -7,26 +7,49 @@ const Vulnerabilities = require('../../models/Vulnerabilities');
 const Reports = require('../../models/Reports');
 const CompanyOffers = require('../../models/CompanyOffers');
 const Trades = require('../../models/Trades');
-const Expoits = require('../../models/Exploit')
-const Rounds = require('../../models/Round')
-async function setup() {
+const Expoits = require('../../models/Exploit');
+const Rounds = require('../../models/Round');
+const Users = require('../../models/Users');
+const Items = require('../../models/Items');
+const ItemStock = require('../../models/ItemStock');
+const ShopRotation = require('../../models/ShopRotation');
+const PlayerChoices = require('../../models/PlayerChoices');
+const {loadShopItems} = require('./loadShopItems');
 
-
+// Seed companies and related data assuming an active DB connection exists
+async function loadInitialData() {
     try {
-        await mongoose.connect(process.env.MONGO_URI);
-        console.log('MongoDB connected');
-
-        // Clear all collections
-        console.log('Clearing existing data...');
-        await clearCollections();
-        
         // Find or create platforms
-        let ultimatumPlatform = await Platform.findOne({ name: 'Ultimatum Test Platform' });
-        let dictatorPlatform = await Platform.findOne({ name: 'Dictator Test Platform' });
+        let ultimatumPlatform = await Platform.findOne({name: 'Ultimatum Test Platform'});
+        if (!ultimatumPlatform) {
+            ultimatumPlatform = await Platform.create({
+                name: 'Ultimatum Test Platform',
+                description: 'A platform focused on fair trade and transparency.',
+                base_policies: {
+                    response_speed: 'Fast',
+                    safe_harbor: 'Full',
+                    payout_speed: 'Instant',
+                    overall_transparency: 'High',
+                    offer_multiplier: '1.2'
+                }
+            });
+            console.log('✓ Created Ultimatum Test Platform');
+        }
 
-        if (!ultimatumPlatform || !dictatorPlatform) {
-            console.log('Please run generateUltPlatform.js and generateDicPlatform.js first');
-            process.exit(1);
+        let dictatorPlatform = await Platform.findOne({name: 'Dictator Test Platform'});
+        if (!dictatorPlatform) {
+            dictatorPlatform = await Platform.create({
+                name: 'Dictator Test Platform',
+                description: 'A platform with strict rules and variable rewards.',
+                base_policies: {
+                    response_speed: 'Variable',
+                    safe_harbor: 'Partial',
+                    payout_speed: 'Standard',
+                    overall_transparency: 'Low',
+                    offer_multiplier: '1.0'
+                }
+            });
+            console.log('✓ Created Dictator Test Platform');
         }
 
         // Enhanced company configurations
@@ -226,43 +249,93 @@ async function setup() {
             console.log(`✓ Created ${config.name}`);
         }
 
+        // Seed 15 global vulnerabilities (unassigned) – discovered later via /search
+        const vulnTypes = ['XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR', 'Authentication', 'Authorization'];
+        const severities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+        const inOneWeek = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
+        const vulnsPayload = Array.from({length: 15}).map((_, i) => {
+            const company = companies[Math.floor(Math.random() * companies.length)];
+            const type = vulnTypes[Math.floor(Math.random() * vulnTypes.length)];
+            const sev = severities[Math.floor(Math.random() * severities.length)];
+            return {
+                company_id: company._id,
+                round_id: null,
+                vuln_identifier: `VULN-${Date.now()}-${i + 1}`,
+                volun_type: type,
+                severity: sev,
+                name: `${type} issue in ${company.name}`,
+                description: `Seeded ${type} vulnerability for ${company.name}. Discover it via /search.`,
+                isReported: false,
+                isResolved: false,
+                reported_date: null,
+                is_resolved_date: null,
+                expiration_date: inOneWeek(),
+                visibility: {isGlobal: false, allowedUsers: []},
+                discovered_by: [],
+            };
+        });
+
+        if (vulnsPayload.length) {
+            await Vulnerabilities.insertMany(vulnsPayload);
+            console.log(`✓ Seeded ${vulnsPayload.length} unassigned vulnerabilities`);
+        }
+
+        // Load/refresh shop catalog items
+        const shopResult = await loadShopItems().catch(() => ({count: 0, error: true}));
 
         console.log('\n Data load completed successfully!');
-        console.log(` Created ${companies.length} companies with vulnerabilities`);
+        console.log(` Created ${companies.length} companies`);
+        console.log(` Shop items loaded: ${shopResult?.count || 0}`);
 
+        return {companiesCreated: companies.length, shopItemsLoaded: shopResult?.count || 0};
     } catch (err) {
         console.error('Error:', err);
-    } finally {
-        mongoose.connection.close();
+        throw err;
     }
 }
 
 // Function to clear all collections
 async function clearCollections() {
     try {
+        await Users.deleteMany({});
+        console.log(' Cleared Users collection');
+
+        await Platform.deleteMany({});
+        console.log(' Cleared Platform collection');
+
+        await Items.deleteMany({});
+        console.log(' Cleared Items collection');
+
+        await ItemStock.deleteMany({});
+        console.log(' Cleared ItemStock collection');
+
+        await ShopRotation.deleteMany({});
+        console.log(' Cleared ShopRotation collection');
+
+        await PlayerChoices.deleteMany({});
+        console.log(' Cleared PlayerChoices collection');
+
         await Company.deleteMany({});
         console.log(' Cleared Company collection');
-        
+
         await Vulnerabilities.deleteMany({});
         console.log(' Cleared Vulnerabilities collection');
-        
+
         await Reports.deleteMany({});
         console.log(' Cleared Reports collection');
-        
+
         await CompanyOffers.deleteMany({});
         console.log('Cleared CompanyOffers collection');
-        
+
         await Trades.deleteMany({});
         console.log(' Cleared Trades collection');
-        
+
         await Expoits.deleteMany({});
         console.log(' Cleared Exploits collection');
 
         await Rounds.deleteMany({});
         console.log(' Cleared Rounds collection');
-
-
 
 
         console.log('All collections cleared successfully\n');
@@ -272,5 +345,29 @@ async function clearCollections() {
     }
 }
 
+// Standalone script entry point (connects/closes DB)
+async function setup() {
+    try {
+        await mongoose.connect(process.env.MONGO_URI);
+        console.log('MongoDB connected');
 
-setup();
+        console.log('Clearing existing data...');
+        await clearCollections();
+        await loadInitialData();
+    } catch (err) {
+        console.error('Error:', err);
+    } finally {
+
+        await mongoose.connection.close();
+    }
+}
+
+if (require.main === module) {
+
+    setup();
+}
+
+module.exports = {
+    clearCollections,
+    loadInitialData,
+};

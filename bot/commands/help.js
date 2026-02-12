@@ -37,6 +37,6 @@ module.exports = {
                 }
             );
 
-        await interaction.reply({ embeds: [embed], flags: 64 });
+        await interaction.reply({embeds: [embed], flags: 64});
     }
 };

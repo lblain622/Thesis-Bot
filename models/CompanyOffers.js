@@ -1,6 +1,9 @@
 const { Schema, model } = require('mongoose');
 
 const companyOfferSchema = new Schema({
+    // Linking
+    company_id: { type: Schema.Types.ObjectId, ref: 'Company', default: null },
+    user_id: { type: Schema.Types.ObjectId, ref: 'Users', default: null },
     report_id: {
         type: Schema.Types.ObjectId,
         ref: 'Report'
@@ -37,12 +40,29 @@ const companyOfferSchema = new Schema({
         type: Object,
         default: null,
       },
+    // Optional item bundle when an offer includes items (merch/tools)
+    items: [
+        {
+            item_id: { type: Schema.Types.ObjectId, ref: 'Items', required: true },
+            company_id: { type: Schema.Types.ObjectId, ref: 'Company', default: null },
+            qty: { type: Number, default: 1, min: 1 }
+        }
+    ],
+    // Audit field to mark why cash was reduced, e.g., 'item_bonus'
+    cash_reduction_reason: { type: String, default: null },
+    // Keep legacy fields for backward compatibility
     resloved_at: Date,
     counter_offered: Number,
+    // Canonical fields used by interaction handlers
+    resolved_at: { type: Date, default: null },
+    counter_offer: { type: Number, default: null },
 }, { timestamps: true });
 
 // Performance indexes
 companyOfferSchema.index({ report_id: 1 });
 companyOfferSchema.index({ status: 1, expires_at: 1 });
+companyOfferSchema.index({ company_id: 1 });
+companyOfferSchema.index({ user_id: 1 });
+companyOfferSchema.index({ 'items.item_id': 1 });
 
 module.exports = model('Company_Offer', companyOfferSchema);
