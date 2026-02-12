@@ -173,7 +173,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
 
         if (amount <= currentOffered) {
             accepted = true;
-            reason = "The company is happy to pay less than they offered!";
+            reason = "The company is happy to with what you ofered offered!";
         } else {
             const ratio = amount / originalBase;
             // 1.0 ratio -> 90% chance

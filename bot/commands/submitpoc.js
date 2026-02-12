@@ -103,8 +103,7 @@ module.exports = {
             await interaction.followUp({
                 content: `**POC Submitted Successfully!**\n\n` +
                     `**Report ID:** \`${report._id}\`\n` +
-                    `Your proof-of-concept has been submitted to the company.\n\n` +
-                    `💰 You might receive a reward for your report within the next 5 minutes.`,
+                    `Your proof-of-concept has been submitted.\n\n`,
                 flags: 64,
             });
 

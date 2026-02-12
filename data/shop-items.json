@@ -46,21 +46,6 @@
     "enabled": true
   },
   {
-    "key": "lucky_token",
-    "name": "Lucky Token",
-    "description": "Consumable: 10% chance to double your next offer payout.",
-    "type": "consumable",
-    "price": 400,
-    "stackable": true,
-    "companyScoped": false,
-    "effects": {
-      "consumable": {
-        "doubleNextOfferChancePct": 10
-      }
-    },
-    "enabled": true
-  },
-  {
     "key": "corp_hoodie",
     "name": "Corp Hoodie",
     "description": "Company-branded hoodie that gives +10% rewards with that company.",
@@ -69,7 +54,9 @@
     "stackable": false,
     "companyScoped": true,
     "effects": {
-      "offer": { "companyBonusPct": 10 }
+      "offer": {
+        "companyBonusPct": 10
+      }
     },
     "enabled": true
   },
@@ -82,20 +69,10 @@
     "stackable": false,
     "companyScoped": false,
     "effects": {
-      "search": { "extraDiscover": 1, "extraFields": 1 }
-    },
-    "enabled": true
-  },
-  {
-    "key": "brand_pass",
-    "name": "Brand Pass",
-    "description": "Consumable: Guarantees next offer from this company includes +5 reputation.",
-    "type": "consumable",
-    "price": 700,
-    "stackable": true,
-    "companyScoped": true,
-    "effects": {
-      "consumable": { "guaranteedRepBonus": 5 }
+      "search": {
+        "extraDiscover": 1,
+        "extraFields": 1
+      }
     },
     "enabled": true
   },
@@ -108,7 +85,296 @@
     "stackable": false,
     "companyScoped": true,
     "effects": {
-      "offer": { "companyBonusPct": 5 }
+      "offer": {
+        "companyBonusPct": 5
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "exploit_db_pro",
+    "name": "Exploit DB Pro",
+    "description": "Premium exploit database access. +25% critical hit chance on vulnerability submissions.",
+    "type": "tool",
+    "price": 2500,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "submission": {
+        "critChancePct": 25
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "ceh_certificate",
+    "name": "CEH Certificate",
+    "description": "Certified Ethical Hacker credential. Increases base bounty rewards by 8%.",
+    "type": "certification",
+    "price": 2000,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "global": {
+        "bountyBonusPct": 8
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "oscp_certificate",
+    "name": "OSCP Certificate",
+    "description": "Offensive Security Certified Professional. Increases base bounty rewards by 15%.",
+    "type": "certification",
+    "price": 3500,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "global": {
+        "bountyBonusPct": 15
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "burp_suite_pro",
+    "name": "Burp Suite Pro",
+    "description": "Professional web vulnerability scanner. Reveals +2 extra fields per discovered vulnerability.",
+    "type": "tool",
+    "price": 2200,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "search": {
+        "extraFields": 2
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "nmap_pro",
+    "name": "Nmap Pro",
+    "description": "Advanced network mapping tool. +20% chance to discover additional attack surface.",
+    "type": "tool",
+    "price": 1400,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "search": {
+        "extraSurfaceChancePct": 20
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "wireshark_analyzer",
+    "name": "Wireshark Analyzer",
+    "description": "Advanced packet analysis tool. +15% chance to find low-level protocol vulnerabilities.",
+    "type": "tool",
+    "price": 1300,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "search": {
+        "protocolVulnChancePct": 15
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "tech_giant_hoodie",
+    "name": "Tech Giant Hoodie",
+    "description": "TechCorp branded hoodie. +12% rewards from TechCorp.",
+    "type": "merch",
+    "price": 1300,
+    "stackable": false,
+    "companyScoped": true,
+    "effects": {
+      "offer": {
+        "companyBonusPct": 12
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "bank_vest",
+    "name": "Bank Vest",
+    "description": "Financial sector branded vest. +18% rewards from banking companies.",
+    "type": "merch",
+    "price": 1700,
+    "stackable": false,
+    "companyScoped": true,
+    "effects": {
+      "offer": {
+        "companyBonusPct": 18
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "healthcare_labcoat",
+    "name": "Healthcare Labcoat",
+    "description": "Medical sector branded labcoat. +20% rewards from healthcare companies.",
+    "type": "merch",
+    "price": 1900,
+    "stackable": false,
+    "companyScoped": true,
+    "effects": {
+      "offer": {
+        "companyBonusPct": 20
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "startup_tshirt",
+    "name": "Startup T-Shirt",
+    "description": "Early-stage company t-shirt. +8% rewards from startup companies.",
+    "type": "merch",
+    "price": 500,
+    "stackable": false,
+    "companyScoped": true,
+    "effects": {
+      "offer": {
+        "companyBonusPct": 8
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "retired_badge",
+    "name": "Retired Badge",
+    "description": "Veteran researcher badge. Reduces search cooldown by 10%.",
+    "type": "badge",
+    "price": 1800,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "global": {
+        "cooldownReductionPct": 10
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "hall_of_fame_plaque",
+    "name": "Hall of Fame Plaque",
+    "description": "Displayed in company headquarters. +5 reputation per submission with that company.",
+    "type": "merch",
+    "price": 1600,
+    "stackable": false,
+    "companyScoped": true,
+    "effects": {
+      "submission": {
+        "bonusReputation": 5
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "fuzzing_framework",
+    "name": "Fuzzing Framework",
+    "description": "Automated fuzzing suite. +30% chance to find memory corruption vulnerabilities.",
+    "type": "tool",
+    "price": 2800,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "search": {
+        "memoryCorruptionChancePct": 30
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "recon_platform",
+    "name": "Recon Platform",
+    "description": "Advanced reconnaissance platform. +1 maximum concurrent searches.",
+    "type": "tool",
+    "price": 2400,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "global": {
+        "maxConcurrentSearches": 1
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "darkweb_access",
+    "name": "Darkweb Access",
+    "description": "Underground forum credentials. +15% chance to find zero-day vulnerabilities.",
+    "type": "tool",
+    "price": 3200,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "search": {
+        "zeroDayChancePct": 15
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "automation_bot",
+    "name": "Automation Bot",
+    "description": "Automated scanning assistant. Reduces /search time by 20%.",
+    "type": "tool",
+    "price": 2100,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "global": {
+        "searchTimeReductionPct": 20
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "cve_editor",
+    "name": "CVE Editor",
+    "description": "Expedited CVE assignment for your submissions. 2x faster publishing time.",
+    "type": "tool",
+    "price": 3000,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "submission": {
+        "cveSpeedMultiplier": 2
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "gold_bug_bounty",
+    "name": "Gold Bug Bounty",
+    "description": "Prestigious bug bounty trophy. +25% payout from all companies.",
+    "type": "badge",
+    "price": 4000,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "global": {
+        "bountyBonusPct": 25
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "quantum_analyzer",
+    "name": "Quantum Analyzer",
+    "description": "Experimental quantum computing analysis tool. Reveals hidden vulnerability patterns.",
+    "type": "tool",
+    "price": 5000,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "search": {
+        "extraDiscover": 2,
+        "extraFields": 3,
+        "zeroDayChancePct": 10
+      }
     },
     "enabled": true
   }
