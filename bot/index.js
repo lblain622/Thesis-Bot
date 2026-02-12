@@ -62,15 +62,7 @@ async function ensureUserExists(discordUser) {
     try {
         if (!discordUser) return null;
 
-        // Check cache first
-        const cachedUser = cache.getUser(discordUser.id);
-        if (cachedUser) {
-            // Only update last_active if more than 1 minute has passed
-            const oneMinuteAgo = Date.now() - 60000;
-            if (cachedUser.last_active && new Date(cachedUser.last_active).getTime() > oneMinuteAgo) {
-                return cachedUser;
-            }
-        }
+
 
         // Update in database
         const user = await User.findOneAndUpdate(
@@ -87,8 +79,6 @@ async function ensureUserExists(discordUser) {
             { upsert: true, new: true }
         ).lean();
 
-        // Cache the result
-        cache.setUser(discordUser.id, user);
         return user;
     } catch (e) {
         // Non-fatal: bot should continue even if we fail to upsert user

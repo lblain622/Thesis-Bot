@@ -72,14 +72,14 @@ module.exports = {
                     });
                 }
 
-                // ----- FIX: Check if vulnerability is expired -----
+
                 if (vulnerability.expiration_date && new Date(vulnerability.expiration_date) <= now) {
                     return interaction.editReply({
                         content: `❌ This vulnerability expired on ${formatDate(vulnerability.expiration_date)} and is no longer accessible.`,
                         flags: 64
                     });
                 }
-                // ----- END FIX -----
+
 
                 // Check if user has access
                 const hasAccess = (vulnerability.visibility?.allowedUsers || []).some(
@@ -104,9 +104,9 @@ module.exports = {
                         {'visibility.allowedUsers': user._id},
                         {'visibility.isGlobal': true}
                     ],
-                    // ----- FIX: Exclude expired vulnerabilities from list -----
+
                     expiration_date: {$gt: now}
-                    // ----- END FIX -----
+
                 };
 
                 if (reportedFilter !== 'any') {
@@ -166,7 +166,7 @@ module.exports = {
                     .populate('company_id')
                     .populate('reported_by.user_id');
 
-                // ----- FIX: Double-check expiration after selection -----
+
                 if (vulnerability.expiration_date && new Date(vulnerability.expiration_date) <= now) {
                     await response.update({
                         content: `❌ This vulnerability expired on ${formatDate(vulnerability.expiration_date)} and is no longer accessible.`,
@@ -174,7 +174,7 @@ module.exports = {
                     });
                     return;
                 }
-                // ----- END FIX -----
+
 
                 await response.update({content: 'Loading vulnerability details...', components: []});
             }
@@ -188,7 +188,7 @@ module.exports = {
                 .setColor(canSeeFields ? getSeverityColor(vulnerability.severity) : '#808080')
                 .setDescription(vulnerability.description || 'No description provided');
 
-            // ----- FIX: Basic info with proper status display -----
+
             const isSelfReported = Array.isArray(vulnerability.reported_by) &&
                 vulnerability.reported_by.some(rb => rb.user_id?._id?.toString() === user._id.toString());
 

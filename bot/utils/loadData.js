@@ -256,7 +256,6 @@ async function loadInitialData() {
             companies.push(company);
         }
 
-        // ----- FIX: Properly generate vulnerabilities matching schema -----
         // Seed 15 global vulnerabilities (unassigned) – discovered later via /search
         const inOneWeek = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 

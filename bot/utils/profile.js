@@ -8,14 +8,12 @@ module.exports = {
 
 
     async execute(interaction) {
-        // Try cache first
-        let user = cache.getUser(interaction.user.id);
+
+
         if (!user) {
             user = await User.findOne({discord_id: interaction.user.id}).lean();
             if (!user) {
                 user = await User.create({ discord_id: interaction.user.id, username: interaction.user.username });
-            } else {
-                cache.setUser(interaction.user.id, user);
             }
         }
 
