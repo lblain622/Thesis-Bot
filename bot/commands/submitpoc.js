@@ -23,14 +23,9 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        await interaction.deferReply({flags: 64});
+        await interaction.deferReply({ flags: 64 });
 
         try {
-            const user = await User.findOne({discord_id: interaction.user.id});
-            if (!user) {
-                return interaction.editReply({content: 'User not found.', flags: 64});
-            }
-
             const vulnIdentifier = interaction.options.getString('vulnerability');
             let vulnerabilityId, companyId, platformId;
 
@@ -48,17 +43,6 @@ module.exports = {
                     return;
                 }
 
-                // Check for existing submissions
-                const existingReport = await Reports.findOne({
-                    user_id: user._id,
-                    vulnerability_id: vulnerability._id
-                });
-                if (existingReport) {
-                    return interaction.editReply({
-                        content: `You have already submitted a ${existingReport.is_poc_only ? 'POC' : 'report'} for this vulnerability. Only one submission is allowed.`,
-                    });
-                }
-
                 vulnerabilityId = vulnerability._id;
                 companyId = vulnerability.company_id;
                 const company = await Company.findById(companyId);
@@ -74,17 +58,6 @@ module.exports = {
                 vulnerabilityId = await selectVulnerability(interaction, companyId);
                 if (!vulnerabilityId) return;
 
-                // Check for existing submissions
-                const existingReport = await Reports.findOne({
-                    user_id: user._id,
-                    vulnerability_id: vulnerabilityId
-                });
-                if (existingReport) {
-                    return interaction.editReply({
-                        content: `You have already submitted a ${existingReport.is_poc_only ? 'POC' : 'report'} for this vulnerability. Only one submission is allowed.`,
-                    });
-                }
-
                 const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId);
                 if (!confirmed) return;
 
@@ -96,8 +69,7 @@ module.exports = {
                 interaction,
                 platformId,
                 companyId,
-                vulnerabilityId,
-                user
+                vulnerabilityId
             );
 
             await interaction.followUp({
@@ -184,11 +156,11 @@ async function selectCompany(interaction) {
     if (!response) return null;
 
     if (response.customId === 'close') {
-        await response.update({content: 'POC submission canceled.', components: []});
+        await response.update({ content: 'POC submission canceled.', components: [] });
         return null;
     }
 
-    await response.update({content: 'Company selected.', components: []});
+    await response.update({ content: 'Company selected.', components: [] });
     return response.values[0];
 }
 
@@ -235,11 +207,11 @@ async function selectVulnerability(interaction, companyId) {
     if (!response) return null;
 
     if (response.customId === 'close') {
-        await response.update({content: 'POC submission canceled.', components: []});
+        await response.update({ content: 'POC submission canceled.', components: [] });
         return null;
     }
 
-    await response.update({content: 'Vulnerability selected.', components: []});
+    await response.update({ content: 'Vulnerability selected.', components: [] });
     return response.values[0];
 }
 
@@ -273,7 +245,7 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId) {
     if (!response) return null;
 
     if (response.customId === 'close') {
-        await response.update({content: 'Submission canceled.', components: []});
+        await response.update({ content: 'Submission canceled.', components: [] });
         return null;
     }
 
@@ -284,24 +256,22 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId) {
     return true;
 }
 
-async function saveReport(interaction, platformId, companyId, vulnerabilityId, user) {
-    if (!user) {
-        const discordId = interaction.user.id;
-        const discordName = interaction.user.username;
+async function saveReport(interaction, platformId, companyId, vulnerabilityId) {
+    const discordId = interaction.user.id;
+    const discordName = interaction.user.username;
 
-        user = await User.findOne({discord_id: discordId});
-        if (!user) {
-            user = await User.create({
-                discord_id: discordId,
-                username: discordName,
-                reports_made: 0
-            });
-        }
+    let user = await User.findOne({ discord_id: discordId });
+    if (!user) {
+        user = await User.create({
+            discord_id: discordId,
+            username: discordName,
+            reports_made: 0
+        });
     }
 
     await User.updateOne(
-        {_id: user._id},
-        {$inc: {reports_made: 1}}
+        { _id: user._id },
+        { $inc: { reports_made: 1 } }
     );
 
     const vulnerability = await Vulnerability.findById(vulnerabilityId);
@@ -318,13 +288,36 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
 
     const report = await Reports.create(reportDoc);
 
+//    // Update vulnerability - mark as reported and add to reported_by
+//    await Vulnerability.updateOne(
+//        { _id: vulnerabilityId },
+//        {
+//            $push: {
+//                reported_by: {
+//                    user_id: user._id,
+//                    reported_at: new Date(),
+//                    report_id: report._id
+//                }
+//            },
+//            $set: {
+//                isReported: true,
+//                reported_date: new Date()
+//            },
+//            $setOnInsert: {
+//                first_reporter: user._id,
+//                first_reported_at: new Date()
+//            }
+//        },
+//        { upsert: false }
+//    );
+
     // Grant visibility to POC submitter
     await Vulnerability.updateOne(
-        {_id: vulnerabilityId},
-        {$addToSet: {'visibility.allowedUsers': user._id}}
+        { _id: vulnerabilityId },
+        { $addToSet: { 'visibility.allowedUsers': user._id } }
     );
 
-    // Add user to a random subset (80-95%) of field visibility lists
+    // Add user to all field visibility lists
     const fieldNames = [
         'networkAccess',
         'arbitraryCodeExecution',
@@ -336,27 +329,15 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
         'availabilityImpact',
         'recoveryPotential'
     ];
-
-    // Calculate how many fields to reveal (80-95%)
-    const revealPercent = (Math.random() * (95 - 80) + 80) / 100;
-    const revealCount = Math.floor(fieldNames.length * revealPercent);
-
-    // Shuffle and pick
-    const selectedFields = fieldNames
-        .sort(() => 0.5 - Math.random())
-        .slice(0, revealCount);
-
     const addToSetObj = {};
-    selectedFields.forEach(field => {
+    fieldNames.forEach(field => {
         addToSetObj[`${field}.visibleTo`] = user._id;
     });
 
-    if (Object.keys(addToSetObj).length > 0) {
-        await Vulnerability.updateOne(
-            {_id: vulnerabilityId},
-            {$addToSet: addToSetObj}
-        );
-    }
+    await Vulnerability.updateOne(
+        { _id: vulnerabilityId },
+        { $addToSet: addToSetObj }
+    );
 
     return report;
 }
