@@ -14,7 +14,7 @@ const Vulnerability = require('../../models/Vulnerabilities');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('submitpoc')
+        .setName('poc')
         .setDescription('Submit a proof-of-concept for a vulnerability')
         .addStringOption(option =>
             option.setName('vulnerability')

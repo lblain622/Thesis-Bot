@@ -16,7 +16,7 @@ const ShopRotation = require('../../models/ShopRotation');
 const PlayerChoices = require('../../models/PlayerChoices');
 const {loadShopItems} = require('./loadShopItems');
 const testVulnData = require('../../data/test-data.json');
-
+var corpora = require('corpora-project');
 // Seed companies and related data assuming an active DB connection exists
 async function loadInitialData() {
     try {
@@ -269,10 +269,12 @@ async function loadInitialData() {
             const data = vulnDataSource[Math.floor(Math.random() * vulnDataSource.length)];
 
             // Generate unique identifier
+            const noun = corpora.getCategories('words','nouns')[Math.floor(Math.random()*nounList.length)];
+            const adj = corpora.getCategories('words','adjectives')[Math.floor(Math.random()*adjList.length)];
             const vulnType = data.volun_type || data.type || ['XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR'][Math.floor(Math.random() * 5)];
             const companyCode = company.name?.toUpperCase()?.replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'COMP';
             const uniqueId = `${Date.now().toString().slice(-4)}${i}`;
-            const vulnIdentifier = `${vulnType}-${companyCode}-${uniqueId}`;
+            const vulnIdentifier = `${adj}-${noun}`;
 
 
             const isGlobal = false
@@ -294,8 +296,6 @@ async function loadInitialData() {
                 severity: data.severity || ['LOW', 'MEDIUM', 'HIGH'][Math.floor(Math.random() * 3)],
                 name: `${vulnType} vulnerability in ${company.name}`,
                 description: data.description || `A ${data.severity || 'security'} issue was discovered in ${company.name}.`,
-
-                // Field objects with answer AND visibleTo arrays
                 networkAccess: {
                     answer: getAnswer(data.networkAccess),
                     visibleTo: []

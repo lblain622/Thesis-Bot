@@ -12,6 +12,7 @@
   "description": "",
   "dependencies": {
     "axios": "^1.13.1",
+    "corpora-project": "^0.2.0",
     "discord.js": "^14.23.2",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
