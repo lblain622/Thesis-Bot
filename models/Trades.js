@@ -31,12 +31,9 @@ const tradeSchema = new Schema({
     },
     status: {
         type: String,
-<<<<<<< HEAD
-        // Expanded to cover all states used in the interaction handler
-        enum: ['pending', 'receiver_accepted', 'completed', 'rejected', 'expired'],
-=======
+
         enum: ['pending', 'accepted', 'rejected', 'expired'],
->>>>>>> c4e8d7b66858ab1ecaa582fc1f17cc3477b7e201
+
         default: 'pending'
     },
     created_at: {

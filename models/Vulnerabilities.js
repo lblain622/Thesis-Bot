@@ -11,8 +11,8 @@ const vulnerabilitySchema = new Schema({
     round_id: {
         type: Schema.Types.ObjectId,
         ref: 'Round',
-        required: false,
-        default: null
+        required: false},
+
 
 
     vuln_identifier: {
