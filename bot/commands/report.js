@@ -56,9 +56,9 @@ module.exports = {
                     user_id: user._id,
                     vulnerability_id: vulnerability._id
                 });
-                if (existingReport && existingReport.is_poc_only==false) {
+                if (existingReport) {
                     return interaction.editReply({
-                        content: `You have already submitted a Report} for this vulnerability. Only one submission is allowed.`,
+                        content: `You have already submitted a ${existingReport.is_poc_only ? 'POC' : 'report'} for this vulnerability. Only one submission is allowed.`,
                     });
                 }
 

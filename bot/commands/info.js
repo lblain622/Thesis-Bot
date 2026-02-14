@@ -56,11 +56,11 @@ module.exports = {
                 return interaction.editReply({content: 'User not found.', flags: 64});
             }
 
-            const now = new Date();
             const identifier = interaction.options.getString('identifier');
             let vulnerability;
 
             if (identifier) {
+
                 vulnerability = await Vulnerability.findOne({vuln_identifier: identifier})
                     .populate('company_id')
                     .populate('reported_by.user_id');
@@ -72,19 +72,10 @@ module.exports = {
                     });
                 }
 
-                // ----- FIX: Check if vulnerability is expired -----
-                if (vulnerability.expiration_date && new Date(vulnerability.expiration_date) <= now) {
-                    return interaction.editReply({
-                        content: `❌ This vulnerability expired on ${formatDate(vulnerability.expiration_date)} and is no longer accessible.`,
-                        flags: 64
-                    });
-                }
-                // ----- END FIX -----
-
                 // Check if user has access
-                const hasAccess = (vulnerability.visibility?.allowedUsers || []).some(
+                const hasAccess = vulnerability.visibility.allowedUsers.some(
                     u => u.toString() === user._id.toString()
-                ) || vulnerability.visibility?.isGlobal || false;
+                ) || vulnerability.visibility.isGlobal;
 
                 if (!hasAccess) {
                     return interaction.editReply({
@@ -94,19 +85,17 @@ module.exports = {
                 }
 
             } else {
+
                 // Build filters based on options
                 const reportedFilter = interaction.options.getString('reported') || 'any';
-                const resolvedFilter = interaction.options.getString('resolved') || 'unresolved';
+                const resolvedFilter = interaction.options.getString('resolved') || 'unresolved'; // default keeps previous behavior
                 const excludeSelf = interaction.options.getBoolean('exclude_self_reported') || false;
 
                 const query = {
                     $or: [
                         {'visibility.allowedUsers': user._id},
                         {'visibility.isGlobal': true}
-                    ],
-                    // ----- FIX: Exclude expired vulnerabilities from list -----
-                    expiration_date: {$gt: now}
-                    // ----- END FIX -----
+                    ]
                 };
 
                 if (reportedFilter !== 'any') {
@@ -118,6 +107,7 @@ module.exports = {
                 }
 
                 if (excludeSelf) {
+                    // Exclude vulnerabilities where current user is among reporters
                     query.reported_by = {$not: {$elemMatch: {user_id: user._id}}};
                 }
 
@@ -127,7 +117,7 @@ module.exports = {
 
                 if (!vulnerabilities.length) {
                     return interaction.editReply({
-                        content: 'You have no active vulnerabilities to view.',
+                        content: 'You have no vulnerabilities to view.',
                         flags: 64
                     });
                 }
@@ -166,113 +156,81 @@ module.exports = {
                     .populate('company_id')
                     .populate('reported_by.user_id');
 
-                // ----- FIX: Double-check expiration after selection -----
-                if (vulnerability.expiration_date && new Date(vulnerability.expiration_date) <= now) {
-                    await response.update({
-                        content: `❌ This vulnerability expired on ${formatDate(vulnerability.expiration_date)} and is no longer accessible.`,
-                        components: []
-                    });
-                    return;
-                }
-                // ----- END FIX -----
-
                 await response.update({content: 'Loading vulnerability details...', components: []});
             }
 
-            const canSeeFields = (vulnerability.visibility?.allowedUsers || []).some(
+            const canSeeFields = vulnerability.visibility.allowedUsers.some(
                 u => u.toString() === user._id.toString()
-            ) || vulnerability.visibility?.isGlobal || false;
-
+            );
             const embed = new EmbedBuilder()
                 .setTitle(`${vulnerability.vuln_identifier}`)
                 .setColor(canSeeFields ? getSeverityColor(vulnerability.severity) : '#808080')
                 .setDescription(vulnerability.description || 'No description provided');
 
-            // ----- FIX: Basic info with proper status display -----
-            const isSelfReported = Array.isArray(vulnerability.reported_by) &&
-                vulnerability.reported_by.some(rb => rb.user_id?._id?.toString() === user._id.toString());
-
-            let statusEmoji = '🔍';
-            let statusText = 'Unreported';
-
-            if (vulnerability.isResolved) {
-                statusEmoji = '✅';
-                statusText = 'Resolved';
-            } else if (vulnerability.isReported) {
-                statusEmoji = '📝';
-                statusText = 'Reported';
-            }
-
-            if (isSelfReported) {
-                statusText += ' (You reported)';
-            }
 
             embed.addFields({
                 name: '📋 Basic Information',
                 value: `**Company:** ${vulnerability.company_id?.name || 'Unknown'}\n` +
-                    `**Type:** ${vulnerability.volun_type || 'Unknown'}\n` +
-                    `**Status:** ${statusEmoji} ${statusText}`
+                    `**Type:** ${vulnerability.volun_type}\n` +
+                    `**Status:** ${vulnerability.isResolved ? '✅ Resolved' : vulnerability.isReported ? ' Reported' : 'Unreported'}`
             });
-            const fieldAnalysis = buildFieldAnalysis(vulnerability, user);
-            if (fieldAnalysis && fieldAnalysis.length > 0) {
+
+            const actionRow = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`report_${vulnerability._id}`)
+                        .setLabel('Report This Vulnerability')
+                        .setStyle(ButtonStyle.Primary)
+                        .setEmoji('📝'),
+                    new ButtonBuilder()
+                        .setCustomId(`submitpoc_${vulnerability._id}`)
+                        .setLabel('Submit POC')
+                        .setStyle(ButtonStyle.Secondary)
+                        .setEmoji('🔍')
+                );
+            // Field Analysis - only show if user can see
+            if (canSeeFields) {
+                const fieldAnalysis = buildFieldAnalysis(vulnerability, user);
+                if (fieldAnalysis) {
+                    embed.addFields({
+                        name: '🔍 Field Analysis',
+                        value: fieldAnalysis
+                    });
+                }
+
                 embed.addFields({
-                    name: '🔍 Field Analysis',
-                    value: fieldAnalysis
+                    name: 'Fields Unknown',
+                    value: 'Submit a **Report** or **POC** to reveal vulnerability details and field analysis.'
+                });
+
+            }
+
+            // Report Information
+            const reporters = vulnerability.reported_by || [];
+            if (reporters.length > 0 && canSeeFields) {
+                const reportersList = reporters.slice(0, 3).map(r => {
+                    const reporterUser = r.user_id;
+                    const isFirst = vulnerability.first_reporter?.toString() === reporterUser?._id.toString();
+                    return `${isFirst ? '🏆 ' : ''}${reporterUser?.discord_name || 'Unknown'}`;
+                }).join('\n');
+
+                embed.addFields({
+                    name: ` Reported By (${reporters.length})`,
+                    value: reportersList + (reporters.length > 3 ? `\n...and ${reporters.length - 3} more` : '')
                 });
             }
 
-            if (canSeeFields && vulnerability.isReported && !vulnerability.isResolved) {
-                const reporters = vulnerability.reported_by || [];
-                if (reporters.length > 0) {
-                    const reportersList = reporters.slice(0, 3).map(r => {
-                        const reporterUser = r.user_id;
-                        const isFirst = vulnerability.first_reporter?.toString() === reporterUser?._id.toString();
-                        const isYou = reporterUser?._id?.toString() === user._id.toString();
-                        let name = 'Unknown User';
-                        if (reporterUser?.discord_name) {
-                            name = reporterUser.discord_name;
-                        }
-                        if (isYou) {
-                            name = '**You**';
-                        }
-                        return `${isFirst ? '🏆 ' : ''}${name}`;
-                    }).join('\n');
-
-                    embed.addFields({
-                        name: `📢 Reported By (${reporters.length})`,
-                        value: reportersList + (reporters.length > 3 ? `\n...and ${reporters.length - 3} more` : '')
-                    });
-                }
-            }
-
-            const actionRow = new ActionRowBuilder();
-
-            if (canSeeFields && !vulnerability.isResolved) {
-                // actionRow.addComponents(
-                //     new ButtonBuilder()
-                //         .setCustomId(`report_${vulnerability._id}`)
-                //         .setLabel('Report This Vulnerability')
-                //         .setStyle(ButtonStyle.Primary)
-                //         .setEmoji('📝')
-                //         .setDisabled(vulnerability.isReported || vulnerability.isResolved),
-                //     new ButtonBuilder()
-                //         .setCustomId(`submitpoc_${vulnerability._id}`)
-                //         .setLabel('Submit POC')
-                //         .setStyle(ButtonStyle.Secondary)
-                //         .setEmoji('🔍')
-                //         .setDisabled(vulnerability.isResolved)
-                // );
-            }
-            // ----- END FIX -----
+            embed.setFooter({text: `Vulnerability ID: ${vulnerability._id}`});
+            embed.setTimestamp(vulnerability.createdAt);
 
             await interaction.editReply({
                 embeds: [embed],
-                components: actionRow.components.length > 0 ? [actionRow] : [],
                 flags: 64
             });
 
+
         } catch (err) {
-            console.error('Info command error:', err);
+            console.error(err);
             await interaction.editReply({
                 content: 'An error occurred while fetching vulnerability information.',
                 flags: 64
@@ -299,20 +257,16 @@ function buildFieldAnalysis(vulnerability, user) {
     for (const field of fieldDefinitions) {
         const fieldData = vulnerability[field.key];
 
-        // Skip if field doesn't exist in the vulnerability
         if (!fieldData) continue;
 
-        // Check if user can view this specific field
+
         const canView = fieldData.visibleTo?.some(
-            id => id.toString() === user._id.toString()
+            u => u.toString() === user._id.toString()
         ) || false;
 
-        let displayValue;
-        if (canView && fieldData.answer) {
-            displayValue = formatFieldAnswer(field.key, fieldData.answer);
-        } else {
-            displayValue = '❓ Unknown'; // Always show Unknown if not revealed
-        }
+        const displayValue = canView
+            ? formatFieldAnswer(field.key, fieldData.answer)
+            : formatFieldAnswer(field.key, 'Unknown');
 
         fields.push(`${field.icon} **${field.label}:** ${displayValue}`);
     }
@@ -321,16 +275,15 @@ function buildFieldAnalysis(vulnerability, user) {
 }
 
 function formatFieldAnswer(fieldKey, answer) {
-    // Handle null/undefined/empty
+    // Fallback for missing/undefined values
     if (answer === undefined || answer === null || answer === '') {
         return 'Unknown';
     }
-
     // Y/N fields
     if (['networkAccess', 'arbitraryCodeExecution', 'userInteraction', 'automatable'].includes(fieldKey)) {
         if (answer === 'Yes') return '✅ Yes';
         if (answer === 'No') return '❌ No';
-        return '❓ Unknown';
+        return 'Unknown';
     }
 
     // Privileges Required
@@ -340,7 +293,7 @@ function formatFieldAnswer(fieldKey, answer) {
             'Low': '🟡 Low',
             'High': '🔴 High'
         };
-        return map[answer] || '❓ Unknown';
+        return map[answer] || 'Unknown';
     }
 
     // Recovery Potential
@@ -350,7 +303,7 @@ function formatFieldAnswer(fieldKey, answer) {
             'User': '🟡 User Intervention',
             'Irrecoverable': '🔴 Irrecoverable'
         };
-        return map[answer] || '❓ Unknown';
+        return map[answer] || 'Unknown';
     }
 
     // CIA Impacts
@@ -361,39 +314,20 @@ function formatFieldAnswer(fieldKey, answer) {
             'Medium': '🟠 Medium',
             'High': '🔴 High'
         };
-        return map[answer] || '❓ Unknown';
+        return map[answer] || 'Unknown';
     }
 
-    return answer.toString() || 'Unknown';
+    return typeof answer === 'string' && answer.trim() ? answer : 'Unknown';
 }
 
 function getSeverityColor(severity) {
     const colors = {
-        'LOW': '#0D9373',
-        'MEDIUM': '#FFA500',
-        'HIGH': '#FF6347',
-        'CRITICAL': '#8B0000'
+        'Low': '#0D9373',
+        'Medium': '#FFA500',
+        'High': '#FF6347',
+        'Critical': '#8B0000'
     };
-    return colors[severity?.toUpperCase()] || '#808080';
-}
-
-function getSeverityEmoji(severity) {
-    const emojis = {
-        'LOW': '🟢',
-        'MEDIUM': '🟡',
-        'HIGH': '🟠',
-        'CRITICAL': '🔴'
-    };
-    return emojis[severity?.toUpperCase()] || '⚪';
-}
-
-function formatDate(date) {
-    return new Date(date).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+    return colors[severity] || '#808080';
 }
 
 async function waitForComponent(message, userId, componentType, customIds, time = 120000) {

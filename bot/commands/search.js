@@ -28,8 +28,6 @@ const REVEALABLE_FIELDS = [
     'recoveryPotential',
 ];
 
-const BASE_COOLDOWN_MS = 5 * 60 * 1000;
-
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('search')
@@ -46,81 +44,9 @@ module.exports = {
 
             const now = new Date();
 
-            // ---------- COOLDOWN CHECK ----------
-            // Fetch inventory items to get cooldown reduction effects
+            // Compute search boosts from inventory
             const invEntries = await fetchInventoryItems(user);
             const boosts = aggSearchBoosts(invEntries);
-
-            // Calculate effective cooldown
-            let cooldownReductionMs = 0;
-
-            // Check for cooldown reduction items
-            if (boosts.cooldownReductionPct) {
-                cooldownReductionMs = Math.floor(BASE_COOLDOWN_MS * (boosts.cooldownReductionPct / 100));
-            }
-
-            // Check for specific search time reduction
-            if (boosts.searchTimeReductionPct) {
-                cooldownReductionMs += Math.floor(BASE_COOLDOWN_MS * (boosts.searchTimeReductionPct / 100));
-            }
-
-            // Stackable cooldown items (e.g., multiple small reductions)
-            if (boosts.flatCooldownReductionMs) {
-                cooldownReductionMs += boosts.flatCooldownReductionMs;
-            }
-
-            // Cap cooldown reduction at 80% max
-            const maxReduction = Math.floor(BASE_COOLDOWN_MS * 0.8);
-            if (cooldownReductionMs > maxReduction) {
-                cooldownReductionMs = maxReduction;
-            }
-
-            const effectiveCooldownMs = BASE_COOLDOWN_MS - cooldownReductionMs;
-
-            // Check if user is on cooldown
-            if (user.last_search_time) {
-                const lastSearch = new Date(user.last_search_time);
-                const timeSinceLastSearch = now.getTime() - lastSearch.getTime();
-
-                if (timeSinceLastSearch < effectiveCooldownMs) {
-                    const remainingMs = effectiveCooldownMs - timeSinceLastSearch;
-                    const remainingMinutes = Math.floor(remainingMs / 60000);
-                    const remainingSeconds = Math.floor((remainingMs % 60000) / 1000);
-
-                    const cooldownEmbed = new EmbedBuilder()
-                        .setTitle('Search Cooldown')
-                        .setDescription(`You must wait before searching again.`)
-                        .setColor(0xFFA500)
-                        .addFields(
-                            {
-                                name: 'Time Remaining',
-                                value: `${remainingMinutes}m ${remainingSeconds}s`,
-                                inline: true
-                            },
-                            {
-                                name: 'Base Cooldown',
-                                value: `5 minutes`,
-                                inline: true
-                            },
-                            {
-                                name: 'Your Cooldown',
-                                value: `${(effectiveCooldownMs / 1000 / 60).toFixed(1)} minutes`,
-                                inline: true
-                            }
-                        )
-                        .setFooter({ text: 'Use items to reduce cooldown!' })
-                        .setTimestamp();
-
-                    return interaction.editReply({embeds: [cooldownEmbed], flags: 64});
-                }
-            }
-
-            // ---------- SEARCH EXECUTION ----------
-            // Update user's last search time
-            user.last_search_time = now;
-            await user.save();
-
-            // Compute search boosts from inventory (already fetched)
             // Candidates: currently active vulnerabilities
             const candidates = await Vulnerability.find({
                 isResolved: false,
@@ -150,7 +76,7 @@ module.exports = {
                 .slice(0, Math.min(baseDiscover, inaccessible.length));
 
             // Build the set of found vulnerabilities: already accessible + newly discovered (cap to 5 total)
-            const foundCap = 5;
+            const foundCap = 5; // keep global cap for balance
             const found = [...accessible, ...toDiscover].slice(0, foundCap);
 
             // Mutations to apply: add user to allowedUsers for discovered, reveal random fields, add discovered_by
@@ -203,24 +129,17 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setTitle('🔎 Search Results')
                 .setDescription('You scouted the landscape and found some leads:')
-                .setColor(0x00FF00)
                 .setTimestamp(new Date());
 
             for (const v of found) {
                 const companyName = v.company_id?.name || 'Unknown Company';
                 const remaining = v.expiration_date ? formatRemaining(v.expiration_date) : 'unknown';
                 embed.addFields({
-                    name: `${v.vuln_identifier}`,
+                    name: `${v.vuln_identifier} (${v.severity})`,
                     value: `Company: ${companyName}\nType: ${v.volun_type}\nTime left: ${remaining}`,
                     inline: false,
                 });
             }
-
-            // Add cooldown info to embed
-            const cooldownMinutes = (effectiveCooldownMs / 1000 / 60).toFixed(1);
-            embed.setFooter({
-                text: `Cooldown: ${cooldownMinutes} minutes | You can search again ${formatRemaining(new Date(now.getTime() + effectiveCooldownMs))}`
-            });
 
             await interaction.editReply({embeds: [embed], flags: 64});
         } catch (err) {
