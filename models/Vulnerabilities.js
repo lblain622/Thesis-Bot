@@ -21,8 +21,8 @@ const vulnerabilitySchema = new Schema({
 
     volun_type: {
         type: String,
-        enum: ['DoS','XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR', 'Authentication', 'Authorization',
-               'Information_Disclosure', 'Business_Logic', 'Cryptographic','Injection', 'Other'],
+        enum: ['XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR', 'Authentication', 'Authorization',
+               'Information_Disclosure', 'Business_Logic', 'Cryptographic', 'Other'],
         required: true
     },
     // Severity used by offers/reporting flows

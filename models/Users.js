@@ -17,10 +17,6 @@ const userSchema = new Schema({
         type: Number,
         default: 0
     },
-    last_search_time: {
-        type: Date,
-        default: null
-    },
     // Main spendable balance used for purchases and trade thresholds
     balance: {
         type: Number,
