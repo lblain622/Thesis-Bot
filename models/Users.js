@@ -35,6 +35,10 @@ const userSchema = new Schema({
         type: Number,
         default: 0
     },
+    money_fined:{
+    type:Number,
+    default:0
+    }
     repuation_earned: {
         type: Number,
         default: 0
