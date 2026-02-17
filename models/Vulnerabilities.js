@@ -6,12 +6,14 @@ const vulnerabilitySchema = new Schema({
         ref: 'Company',
         required: true
     },
-    // Round the vulnerability was generated in (used for round summaries)
+
+    // Round the vulnerability was generated in (legacy; optional in continuous mode)
     round_id: {
         type: Schema.Types.ObjectId,
         ref: 'Round',
-        required: true
-    },
+        required: false},
+
+
 
     vuln_identifier: {
         type: String,
@@ -21,8 +23,8 @@ const vulnerabilitySchema = new Schema({
 
     volun_type: {
         type: String,
-        enum: ['DoS','XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR', 'Authentication', 'Authorization',
-               'Information_Disclosure', 'Business_Logic', 'Cryptographic','Injection', 'Other'],
+        enum: ['XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR', 'Authentication', 'Authorization',
+               'Information_Disclosure', 'Business_Logic', 'Cryptographic', 'Other'],
         required: true
     },
     // Severity used by offers/reporting flows

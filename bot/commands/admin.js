@@ -4,14 +4,20 @@ const {
     PermissionFlagsBits,
     EmbedBuilder
 } = require('discord.js');
-const { generateDailyVulnerabilities, endRound, announceNewRound, startRound: startRoundScheduler } = require('../utils/roundSystem');
-const { announceVulnerabilityPatched } = require('../events/announcePatches');
+const {
+    generateDailyVulnerabilities,
+    endRound,
+    announceNewRound,
+    startRound: startRoundScheduler
+} = require('../utils/roundSystem');
+const {announceVulnerabilityPatched} = require('../events/announcePatches');
 const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
 const Report = require('../../models/Reports');
 const Company = require('../../models/Company');
 const Round = require('../../models/Round');
 const Exploit = require('../../models/Exploit');
+const {clearCollections, loadInitialData} = require('../utils/loadData');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -72,6 +78,11 @@ module.exports = {
                         .setDescription('Comma-separated Discord user IDs')
                         .setRequired(true)
                 )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('resetdata')
+                .setDescription('Reset all collections and reload seed data (DANGEROUS)')
         ),
 
 
@@ -108,9 +119,33 @@ module.exports = {
             case 'addusers':
                 await addUsersBulk(interaction);
                 break;
+            case 'resetdata':
+                await resetData(interaction);
+                break;
         }
     },
 };
+
+async function resetData(interaction) {
+    try {
+        await interaction.deferReply({ephemeral: true});
+        await clearCollections();
+        const result = await loadInitialData();
+
+        // Optionally, we could refresh any caches here if needed in the future
+        await interaction.editReply({
+            content: `✅ Data reset complete. Seeded ${result?.companiesCreated || 0} companies. Loaded ${result?.shopItemsLoaded || 0} shop items.`,
+        });
+    } catch (err) {
+        console.error('resetdata error:', err);
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({content: '❌ Failed to reset data. Check logs for details.'});
+        } else {
+            await interaction.reply({content: '❌ Failed to reset data. Check logs for details.', ephemeral: true});
+        }
+    }
+}
+
 async function addUsersBulk(interaction) {
     await interaction.deferReply();
 
@@ -140,7 +175,7 @@ async function addUsersBulk(interaction) {
                 }
 
                 // Check if user already exists in database
-                const existingUser = await User.findOne({ discord_id: userId });
+                const existingUser = await User.findOne({discord_id: userId});
                 if (existingUser) {
                     results.alreadyExists.push(discordUser.tag);
                     continue;
@@ -185,16 +220,17 @@ async function addUsersBulk(interaction) {
                     inline: true
                 }
             )
-            .setFooter({ text: `Processed ${userIds.length} users` })
+            .setFooter({text: `Processed ${userIds.length} users`})
             .setTimestamp();
 
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.editReply({embeds: [embed]});
 
     } catch (err) {
         console.error('Error in bulk user addition:', err);
         await interaction.editReply('Error processing bulk user addition.');
     }
 }
+
 async function startRoundCmd(interaction) {
     await interaction.deferReply();
 
@@ -236,7 +272,7 @@ async function resolveAllVulns(interaction) {
 
     try {
         const result = await Vulnerability.updateMany(
-            { isReported: true, isResolved: false },
+            {isReported: true, isResolved: false},
             {
                 $set: {
                     isResolved: true,
@@ -247,8 +283,8 @@ async function resolveAllVulns(interaction) {
 
         // Close all active exploits
         await Exploit.updateMany(
-            { is_caught: false },
-            { $set: { is_caught: true } }
+            {is_caught: false},
+            {$set: {is_caught: true}}
         );
 
         await interaction.editReply({
@@ -266,36 +302,36 @@ async function showStats(interaction) {
     try {
         const totalUsers = await User.countDocuments();
         const totalVulns = await Vulnerability.countDocuments();
-        const reportedVulns = await Vulnerability.countDocuments({ isReported: true });
-        const resolvedVulns = await Vulnerability.countDocuments({ isResolved: true });
+        const reportedVulns = await Vulnerability.countDocuments({isReported: true});
+        const resolvedVulns = await Vulnerability.countDocuments({isResolved: true});
         const totalReports = await Report.countDocuments();
         const totalExploits = await Exploit.countDocuments();
-        const activeExploits = await Exploit.countDocuments({ is_caught: false });
+        const activeExploits = await Exploit.countDocuments({is_caught: false});
         const totalCompanies = await Company.countDocuments();
         const totalRounds = await Round.countDocuments();
 
         const totalPayout = await Report.aggregate([
-            { $group: { _id: null, total: { $sum: '$offered_amount' } } }
+            {$group: {_id: null, total: {$sum: '$offered_amount'}}}
         ]);
 
         const embed = new EmbedBuilder()
             .setTitle('📊 Bot Statistics')
             .setColor('#0099ff')
             .addFields(
-                { name: '👥 Users', value: `${totalUsers}`, inline: true },
-                { name: ' Companies', value: `${totalCompanies}`, inline: true },
-                { name: 'Rounds', value: `${totalRounds}`, inline: true },
-                { name: 'Total Vulnerabilities', value: `${totalVulns}`, inline: true },
-                { name: 'Reported', value: `${reportedVulns}`, inline: true },
-                { name: 'Resolved', value: `${resolvedVulns}`, inline: true },
-                { name: 'Total Reports', value: `${totalReports}`, inline: true },
-                { name: ' Total Exploits', value: `${totalExploits}`, inline: true },
-                { name: ' Active Exploits', value: `${activeExploits}`, inline: true },
-                { name: 'Total Payouts', value: `$${totalPayout[0]?.total || 0}`, inline: false }
+                {name: '👥 Users', value: `${totalUsers}`, inline: true},
+                {name: ' Companies', value: `${totalCompanies}`, inline: true},
+                {name: 'Rounds', value: `${totalRounds}`, inline: true},
+                {name: 'Total Vulnerabilities', value: `${totalVulns}`, inline: true},
+                {name: 'Reported', value: `${reportedVulns}`, inline: true},
+                {name: 'Resolved', value: `${resolvedVulns}`, inline: true},
+                {name: 'Total Reports', value: `${totalReports}`, inline: true},
+                {name: ' Total Exploits', value: `${totalExploits}`, inline: true},
+                {name: ' Active Exploits', value: `${activeExploits}`, inline: true},
+                {name: 'Total Payouts', value: `$${totalPayout[0]?.total || 0}`, inline: false}
             )
             .setTimestamp();
 
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.editReply({embeds: [embed]});
     } catch (err) {
         console.error(err);
         await interaction.editReply(' Error fetching statistics.');
@@ -321,12 +357,11 @@ async function setAnnounceChannel(interaction) {
 }
 
 
-
 async function listUsers(interaction) {
     await interaction.deferReply();
 
     try {
-        const users = await User.find({}).sort({ money_earned: -1 }).limit(25);
+        const users = await User.find({}).sort({money_earned: -1}).limit(25);
 
         const embed = new EmbedBuilder()
             .setTitle('👥 Registered Users')
@@ -336,9 +371,9 @@ async function listUsers(interaction) {
                     `${idx + 1}. **${u.discord_name}** - $${u.money_earned} - ${u.reports_made} reports`
                 ).join('\n')
             )
-            .setFooter({ text: `Total: ${await User.countDocuments()} users` });
+            .setFooter({text: `Total: ${await User.countDocuments()} users`});
 
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.editReply({embeds: [embed]});
     } catch (err) {
         console.error(err);
         await interaction.editReply('Error listing users.');
@@ -349,9 +384,9 @@ async function showLeaderboard(interaction) {
     await interaction.deferReply();
 
     try {
-        const topEarners = await User.find({}).sort({ money_earned: -1 }).limit(10);
-        const topReporters = await User.find({}).sort({ reports_made: -1 }).limit(10);
-        const topReputation = await User.find({}).sort({ reputation_earned: -1 }).limit(10);
+        const topEarners = await User.find({}).sort({money_earned: -1}).limit(10);
+        const topReporters = await User.find({}).sort({reports_made: -1}).limit(10);
+        const topReputation = await User.find({}).sort({reputation_earned: -1}).limit(10);
 
         const embed = new EmbedBuilder()
             .setTitle('Leaderboard')
@@ -381,7 +416,7 @@ async function showLeaderboard(interaction) {
             )
             .setTimestamp();
 
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.editReply({embeds: [embed]});
     } catch (err) {
         console.error(err);
         await interaction.editReply('  Error generating leaderboard.');

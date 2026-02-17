@@ -31,7 +31,9 @@ const tradeSchema = new Schema({
     },
     status: {
         type: String,
+
         enum: ['pending', 'accepted', 'rejected', 'expired'],
+
         default: 'pending'
     },
     created_at: {
