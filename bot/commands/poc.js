@@ -15,7 +15,7 @@ const Vulnerability = require('../../models/Vulnerabilities');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('poc')
-        .setDescription('Submit a proof-of-concept for a vulnerability')
+        .setDescription('Develop a proof-of-concept for a vulnerability')
         .addStringOption(option =>
             option.setName('vulnerability')
                 .setDescription('Vulnerability identifier (e.g., CVE-2024-1234)')
@@ -102,7 +102,6 @@ module.exports = {
 
             await interaction.followUp({
                 content: `**POC Submitted Successfully!**\n\n` +
-                    `**Report ID:** \`${report._id}\`\n` +
                     `Your proof-of-concept has been submitted to the company.\n\n` +
                     `💰 You might receive a reward for your report within the next 5 minutes.`,
                 flags: 64,
