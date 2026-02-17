@@ -10,7 +10,7 @@ const {EmbedBuilder} = require('discord.js');
 const {announceExploitSummary} = require('../events/announcePatches');
 const {handleExploitCleanup} = require('./exploitUtils');
 const testVulnData = require('../../data/test-data.json');
-
+var corpora = require('corpora-project');
 // Intervals (ms)
 const GEN_MIN_MS = Number(process.env.CONT_GEN_MIN_MS || 5 * 60 * 1000); // 5 minutes
 const GEN_MAX_MS = Number(process.env.CONT_GEN_MAX_MS || 10 * 60 * 1000); // 10 minutes
@@ -69,6 +69,7 @@ async function generateOneVulnerability() {
     const users = await Users.find({});
     if (!companies.length || !users.length || !testVulnData?.length) return null;
 
+
     const company = companies[randBetween(0, companies.length - 1)];
     const data = testVulnData[randBetween(0, testVulnData.length - 1)];
 
@@ -78,7 +79,9 @@ async function generateOneVulnerability() {
         .slice(0, randBetween(1, Math.min(3, users.length)))
         .map(u => u._id);
 
-    const vulnIdentifier = `${data.type || 'XSS'}-${company.name?.toUpperCase()?.replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'COMP'}-${Date.now().toString().slice(-5)}`;
+    const noun = corpora.getCategories('words','nouns')[Math.floor(Math.random()*nounList.length)];
+    const adj = corpora.getCategories('words','adjectives')[Math.floor(Math.random()*adjList.length)];
+    const vulnIdentifier = `${adj}-${noun}`;
 
     const expiration = new Date(Date.now() + EXPIRE_AFTER_MS);
 
