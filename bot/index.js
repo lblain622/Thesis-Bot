@@ -5,7 +5,7 @@ const {connectDB} = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 const User = require('../models/Users');
-const roundSystem = require('./utils/roundSystem');
+
 const continuousMode = require('./utils/continuousMode');
 const cache = require('./utils/cache');
 const {loadShopItems} = require('./utils/loadShopItems');
@@ -104,9 +104,6 @@ function setupGracefulShutdown() {
                         continuousMode.cleanupTimers();
                         console.log('Cleaned up continuous mode timers');
                     }
-                } else if (typeof roundSystem.cleanupTimers === 'function') {
-                    roundSystem.cleanupTimers();
-                    console.log('Cleaned up round system timers');
                 }
                 // Cleanup shop rotation
                 if (typeof cleanupShopRotation === 'function') {
@@ -114,18 +111,7 @@ function setupGracefulShutdown() {
                     console.log('Cleaned up shop rotation timers');
                 }
 
-                // End any active round properly
-                if (process.env.CONTINUOUS_MODE !== 'true') {
-                    const activeRound = await roundSystem.getCurrentRound();
-                    if (activeRound) {
-                        console.log(`Ending active round ${activeRound.round_number} before shutdown...`);
-                        try {
-                            await roundSystem.endRound(client);
-                        } catch (e) {
-                            console.error('Error ending round on shutdown:', e);
-                        }
-                    }
-                }
+
 
                 // Destroy Discord client
                 if (client && !client.destroyed) {
@@ -162,7 +148,6 @@ client.once('clientReady', async () => {
 
         // Initialize game mode
 
-        // Continuous mode (no rounds)
         await continuousMode.initialize(client);
 
         const data = await rest.put(

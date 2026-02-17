@@ -4,12 +4,6 @@ const {
     PermissionFlagsBits,
     EmbedBuilder
 } = require('discord.js');
-const {
-    generateDailyVulnerabilities,
-    endRound,
-    announceNewRound,
-    startRound: startRoundScheduler
-} = require('../utils/roundSystem');
 const {announceVulnerabilityPatched} = require('../events/announcePatches');
 const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
@@ -24,26 +18,6 @@ module.exports = {
         .setName('admin')
         .setDescription('Admin commands for bot management')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('startround')
-                .setDescription('Start a new round and generate vulnerabilities')
-                .addChannelOption(option =>
-                    option.setName('channel')
-                        .setDescription('Channel to announce in')
-                        .setRequired(true)
-                )
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('endround')
-                .setDescription('End current round and show summary')
-                .addChannelOption(option =>
-                    option.setName('channel')
-                        .setDescription('Channel to announce in')
-                        .setRequired(true)
-                )
-        )
         .addSubcommand(subcommand =>
             subcommand
                 .setName('stats')
@@ -98,12 +72,6 @@ module.exports = {
         }
 
         switch (subcommand) {
-            case 'startround':
-                await startRoundCmd(interaction);
-                break;
-            case 'endround':
-                await endRoundCommand(interaction);
-                break;
             case 'stats':
                 await showStats(interaction);
                 break;
@@ -231,41 +199,6 @@ async function addUsersBulk(interaction) {
     }
 }
 
-async function startRoundCmd(interaction) {
-    await interaction.deferReply();
-
-    try {
-        const channel = interaction.options.getChannel('channel');
-
-        // Start the scheduled round system (enables auto-run after first admin start)
-        await startRoundScheduler(interaction.client, channel.id);
-
-        await interaction.editReply({
-            content: `New round started and scheduler enabled. Announcements in ${channel}.`
-        });
-    } catch (err) {
-        console.error(err);
-        await interaction.editReply('Error starting round.');
-    }
-}
-
-async function endRoundCommand(interaction) {
-    await interaction.deferReply();
-
-    try {
-        const channel = interaction.options.getChannel('channel');
-
-        // End round and show summary
-        await endRound(interaction.client, channel.id);
-
-        await interaction.editReply({
-            content: `   Round ended!\n\nSummary sent to ${channel}.`
-        });
-    } catch (err) {
-        console.error(err);
-        await interaction.editReply('  Error ending round.');
-    }
-}
 
 async function resolveAllVulns(interaction) {
     await interaction.deferReply();
@@ -283,8 +216,8 @@ async function resolveAllVulns(interaction) {
 
         // Close all active exploits
         await Exploit.updateMany(
-            {is_caught: false},
-            {$set: {is_caught: true}}
+            {status: 'Active'},
+            {$set: {status: 'Ended'}}
         );
 
         await interaction.editReply({
@@ -306,7 +239,7 @@ async function showStats(interaction) {
         const resolvedVulns = await Vulnerability.countDocuments({isResolved: true});
         const totalReports = await Report.countDocuments();
         const totalExploits = await Exploit.countDocuments();
-        const activeExploits = await Exploit.countDocuments({is_caught: false});
+        const activeExploits = await Exploit.countDocuments({status: 'Active'});
         const totalCompanies = await Company.countDocuments();
         const totalRounds = await Round.countDocuments();
 
