@@ -7,8 +7,6 @@ const {
     ComponentType,
 } = require('discord.js');
 const User = require('../../models/Users');
-// The following models may be used in future slides/interactions
-// Keeping imports to match project style and potential use
 const Vulnerability = require('../../models/Vulnerabilities');
 const Trade = require('../../models/Trades');
 
@@ -38,10 +36,10 @@ const slides = [
             "• Companies on different platforms  may offer different reward structures.",
     },
     {
-        title: 'Proof of Concepts (/submitpoc)',
+        title: 'Proof of Concepts (/poc)',
         content:
             "Sometimes a simple report isn't enough. A Proof of Concept (PoC) proves the impact.\n" +
-            "• Use `/submitpoc` to provide detailed steps and evidence for a vulnerability.\n" +
+            "• Use `/poc` to develop and collect evidence for a vulnerability.\n" +
             "• Successful PoCs can increase your rewards and reputation.",
     },
     {
@@ -59,39 +57,39 @@ const slides = [
             "• Use `/exploit collect` to gather your earnings—but beware, there's a risk of being caught!\n" +
             "• If caught, you'll face heavy fines. Use `/exploit stop` to cease operations .",
     },
-    {
-        title: 'Your Profile and Stats (/profile)',
-        content:
-            "Keep track of your progress as a security researcher.\n" +
-            "• Use `/profile` to view your total reports, balance, reputation points, and a preview of your inventory.\n" +
-            "• Your balance and reputation are key to your standing in HexaHive.",
-    },
-    {
-        title: 'The Shop (/shop)',
-        content:
-            "Spend your hard-earned money to boost your capabilities.\n" +
-            "• Use `/shop list` to see available items like tools, merch, and consumables.\n" +
-            "• Use `/shop buy` to purchase items that can double rewards, help discovery, or provide company-specific bonuses.\n" +
-            "• Use `/shop inventory` to see everything you own.",
-    },
-    {
-        title: 'Trading with Others (/trade)',
-        content:
-            "Collaborate or barter with other researchers.\n" +
-            "• Use `/trade @user` to propose a swap of vulnerabilities or money.\n" +
-            "• Both parties must confirm the trade for it to be completed.",
-    },
+//    {
+//        title: 'Your Profile and Stats (/profile)',
+//        content:
+//            "Keep track of your progress as a security researcher.\n" +
+//            "• Use `/profile` to view your total reports, balance, reputation points, and a preview of your inventory.\n" +
+//            "• Your balance and reputation are key to your standing in HexaHive.",
+//    },
+//    {
+//        title: 'The Shop (/shop)',
+//        content:
+//            "Spend your hard-earned money to boost your capabilities.\n" +
+//            "• Use `/shop list` to see available items like tools, merch, and consumables.\n" +
+//            "• Use `/shop buy` to purchase items that can double rewards, help discovery, or provide company-specific bonuses.\n" +
+//            "• Use `/shop inventory` to see everything you own.",
+//    },
+//    {
+//        title: 'Trading with Others (/trade)',
+//        content:
+//            "Collaborate or barter with other researchers.\n" +
+//            "• Use `/trade @user` to propose a swap of vulnerabilities or money.\n" +
+//            "• Both parties must confirm the trade for it to be completed.",
+//    },
     {
         title: 'Getting Help (/help)',
         content:
-            "Forgotten a command? Need a quick refresher?\n" +
+            "Forgotten a command? Need a quick refresher? See other available command?\n" +
             "• Use `/help` for a general overview of all available commands.\n" +
             "• This tutorial can always be restarted with `/verify` if you need a deeper dive.",
     },
     {
         title: 'Final Rules',
         content:
-            "General rules for a healthy community:\n" +
+            "General rules for the community:\n" +
             "• No harassment, spam, or abuse.\n" +
             "• Follow moderators' instructions.\n" +
             "• When in doubt, ask for guidance in the support channels.\n\n" +
@@ -204,6 +202,10 @@ module.exports = {
                         const existing = await User.findOne({discord_id: userId});
                         if (!existing) {
                             await User.create({discord_id: userId, discord_name: userTag});
+                            const role = await message.guild.roles.cache.find(r=> r.name==="playtest")
+                            const member = await guild.members.fetch(userId);
+                            await member.roles.add(role);
+                            console.log(`Added role ${role.name} to ${member.user.tag}`);
                         } else {
                             existing.last_active = new Date();
                             await existing.save();

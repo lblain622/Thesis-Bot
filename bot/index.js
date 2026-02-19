@@ -197,12 +197,8 @@ client.on('interactionCreate', async interaction => {
         // Gate commands: require verification except for /verify and /admin
         if (commandName !== 'verify' && commandName !== 'admin') {
             try {
-                const cached = cache.getUser(interaction.user.id);
-                let userDoc = cached;
-                if (!userDoc) {
-                    userDoc = await User.findOne({discord_id: interaction.user.id}).lean();
-                    if (userDoc) cache.setUser(interaction.user.id, userDoc);
-                }
+                   let  userDoc = await User.findOne({discord_id: interaction.user.id}).lean();
+
                 if (!userDoc) {
                     return interaction.reply({
                         content: 'You need to complete verification before using this command. Please run `/verify` first.',

@@ -63,6 +63,15 @@ function pickAnswer(val) {
     if (typeof val === 'object' && typeof val.answer === 'string') return val.answer;
     return undefined;
 }
+function loadWordList(filename, key) {
+    try {
+        const data = JSON.parse(fs.readFileSync(path.join(__dirname, filename), 'utf8'));
+        return key ? data[key] : data;
+    } catch (error) {
+        console.error(`Error loading ${filename}:`, error.message);
+        return [];
+    }
+}
 
 async function generateOneVulnerability() {
     const companies = await Company.find({});
@@ -78,9 +87,11 @@ async function generateOneVulnerability() {
         .sort(() => 0.5 - Math.random())
         .slice(0, randBetween(1, Math.min(3, users.length)))
         .map(u => u._id);
+    const nounList = loadWordList('../../data/nouns.json', 'nouns');
+    const adjList = loadWordList('../../data/adjs.json', 'adjs');
 
-    const noun = corpora.getCategories('words','nouns')[Math.floor(Math.random()*nounList.length)];
-    const adj = corpora.getCategories('words','adjectives')[Math.floor(Math.random()*adjList.length)];
+    const noun = nounList[Math.floor(Math.random()*nounList.length)];
+    const adj = adjList[Math.floor(Math.random()*adjList.length)];
     const vulnIdentifier = `${adj}-${noun}`;
 
     const expiration = new Date(Date.now() + EXPIRE_AFTER_MS);

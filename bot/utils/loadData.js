@@ -16,7 +16,20 @@ const ShopRotation = require('../../models/ShopRotation');
 const PlayerChoices = require('../../models/PlayerChoices');
 const {loadShopItems} = require('./loadShopItems');
 const testVulnData = require('../../data/test-data.json');
-var corpora = require('corpora-project');
+const fs = require('fs');
+const path = require('path');
+
+
+function loadWordList(filename, key) {
+    try {
+        const data = JSON.parse(fs.readFileSync(path.join(__dirname, filename), 'utf8'));
+        return key ? data[key] : data;
+    } catch (error) {
+        console.error(`Error loading ${filename}:`, error.message);
+        return [];
+    }
+}
+
 // Seed companies and related data assuming an active DB connection exists
 async function loadInitialData() {
     try {
@@ -263,14 +276,16 @@ async function loadInitialData() {
         const vulnDataSource = testVulnData && testVulnData.length ? testVulnData : generateFallbackVulnData();
 
         const vulnsPayload = [];
-
+       const nounList = loadWordList('../../data/nouns.json', 'nouns');
+        const adjList = loadWordList('../../data/adjs.json', 'adjs');
         for (let i = 0; i < 15; i++) {
             const company = companies[Math.floor(Math.random() * companies.length)];
             const data = vulnDataSource[Math.floor(Math.random() * vulnDataSource.length)];
 
             // Generate unique identifier
-            const noun = corpora.getCategories('words','nouns')[Math.floor(Math.random()*nounList.length)];
-            const adj = corpora.getCategories('words','adjectives')[Math.floor(Math.random()*adjList.length)];
+
+            const noun = nounList[Math.floor(Math.random()*nounList.length)];
+            const adj = adjList[Math.floor(Math.random()*adjList.length)];
             const vulnType = data.volun_type || data.type || ['XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR'][Math.floor(Math.random() * 5)];
             const companyCode = company.name?.toUpperCase()?.replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'COMP';
             const uniqueId = `${Date.now().toString().slice(-4)}${i}`;
