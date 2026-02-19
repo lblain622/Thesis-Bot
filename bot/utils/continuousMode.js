@@ -11,6 +11,10 @@ const {announceExploitSummary} = require('../events/announcePatches');
 const {handleExploitCleanup} = require('./exploitUtils');
 const testVulnData = require('../../data/test-data.json');
 var corpora = require('corpora-project');
+const fs = require('fs');
+const path = require('path');
+
+
 // Intervals (ms)
 const GEN_MIN_MS = Number(process.env.CONT_GEN_MIN_MS || 5 * 60 * 1000); // 5 minutes
 const GEN_MAX_MS = Number(process.env.CONT_GEN_MAX_MS || 10 * 60 * 1000); // 10 minutes
@@ -320,10 +324,19 @@ async function evaluateAutoOffers(client) {
                     if (lUser?.discord_id) {
                         const lDiscord = await client.users.fetch(lUser.discord_id).catch(() => null);
                         if (lDiscord) {
-                            await lDiscord.send({
-                                content: `Thanks for your report on ${vuln.vuln_identifier || 'the recent vulnerability'}. Another researcher received the main offer. You have been awarded $100 and a reputation bonus for your contribution.`
-                            }).catch(() => {
-                            });
+                            // Post bonus notification to server channel
+                            const {getAnnouncementChannel} = require('./announcementUtils');
+                            const guild = client.guilds.cache.get(process.env.GUILD_ID) || 
+                                         [...client.guilds.cache.values()][0];
+                            
+                            if (guild) {
+                                const channel = await getAnnouncementChannel(client, guild, 'offers');
+                                if (channel) {
+                                    await channel.send({
+                                        content: `${lDiscord} 📝 Thanks for your report on **${vuln.vuln_identifier || 'the recent vulnerability'}**. Another researcher received the main offer. You have been awarded $100 and a reputation bonus for your contribution.`
+                                    }).catch(() => {});
+                                }
+                            }
                         }
                     }
                     // Credit $100 and reputation bonus if not already granted

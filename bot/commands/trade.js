@@ -9,6 +9,7 @@ const {
 const User = require('../../models/Users');
 const Vulnerability = require('../../models/Vulnerabilities');
 const Trade = require('../../models/Trades');
+const {postAnnouncement} = require('../utils/announcementUtils');
 
 //TODO: Ensure Trading works correctly
 module.exports = {
@@ -97,7 +98,7 @@ module.exports = {
                 flags: 64
             });
 
-            // Send DM to target user
+            // Send server channel notification to target user
             try {
                 const givingVulnDoc = offerType === 'vulnerability'
                     ? await Vulnerability.findById(givingValue)
@@ -107,33 +108,38 @@ module.exports = {
                     ? await Vulnerability.findById(receivingValue)
                     : null;
 
-                // Notify User B
-                await targetUser.send({
-                    content: `**Trade Offer from ${interaction.user.username}**\n\n${formatTradeOffer(
-                        offerType,
-                        givingValue,
-                        requestType,
-                        receivingValue,
-                        givingVulnDoc,
-                        receivingVulnDoc
-                    )}`,
-                    components: [
-                        new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId(`trade_accept_${trade._id}`)
-                                .setLabel('Accept Trade')
-                                .setStyle(ButtonStyle.Success),
-                            new ButtonBuilder()
-                                .setCustomId(`trade_reject_${trade._id}`)
-                                .setLabel('Reject Trade')
-                                .setStyle(ButtonStyle.Danger)
-                        )
-                    ]
-                });
+                // Post to server channel - only visible to target user via mention
+                const {getAnnouncementChannel} = require('../utils/announcementUtils');
+                const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
+                
+                if (channel) {
+                    await channel.send({
+                        content: `${targetUser} 🤝 **Trade Offer from ${interaction.user.username}**\n\n${formatTradeOffer(
+                            offerType,
+                            givingValue,
+                            requestType,
+                            receivingValue,
+                            givingVulnDoc,
+                            receivingVulnDoc
+                        )}`,
+                        components: [
+                            new ActionRowBuilder().addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId(`trade_accept_${trade._id}`)
+                                    .setLabel('Accept Trade')
+                                    .setStyle(ButtonStyle.Success),
+                                new ButtonBuilder()
+                                    .setCustomId(`trade_reject_${trade._id}`)
+                                    .setLabel('Reject Trade')
+                                    .setStyle(ButtonStyle.Danger)
+                            )
+                        ]
+                    });
+                }
             } catch (err) {
-                console.error('Could not send DM to target user:', err);
+                console.error('Could not send trade notification to target user:', err);
                 await interaction.followUp({
-                    content: 'Trade created but could not notify the other user. They need to enable DMs.',
+                    content: 'Trade created! The other user will be notified in the server.',
                     flags: 64
                 });
             }
@@ -160,7 +166,7 @@ async function selectOfferType(interaction, promptText) {
     const row = new ActionRowBuilder().addComponents(selectMenu);
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('cancel')
+            .setCustomId('trade_cancel')
             .setLabel('Cancel')
             .setStyle(ButtonStyle.Danger)
     );
@@ -171,7 +177,7 @@ async function selectOfferType(interaction, promptText) {
         fetchReply: true
     });
 
-    const response = await waitForComponent(message, interaction.user.id, ComponentType.StringSelect, ['select_offer_type', 'cancel'], 120000);
+    const response = await waitForComponent(message, interaction.user.id, ComponentType.StringSelect, ['select_offer_type', 'trade_cancel'], 120000);
     if (!response || response.customId === 'cancel') {
         await interaction.editReply({content: 'Trade cancelled.', components: []});
         return null;
@@ -257,11 +263,11 @@ async function confirmTrade(interaction, tradeData) {
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('confirm')
+            .setCustomId('trade_confirm')
             .setLabel('Confirm Trade')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
-            .setCustomId('cancel')
+            .setCustomId('trade_cancel')
             .setLabel('Cancel')
             .setStyle(ButtonStyle.Danger)
     );
@@ -272,8 +278,8 @@ async function confirmTrade(interaction, tradeData) {
         fetchReply: true
     });
 
-    const response = await waitForComponent(message, interaction.user.id, ComponentType.Button, ['confirm', 'cancel'], 120000);
-    if (!response || response.customId === 'cancel') {
+    const response = await waitForComponent(message, interaction.user.id, ComponentType.Button, ['trade_confirm', 'trade_cancel'], 120000);
+    if (!response || response.customId === 'trade_cancel') {
         await interaction.editReply({content: 'Trade cancelled.', components: []});
         return false;
     }

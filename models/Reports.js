@@ -64,6 +64,11 @@ const reportSchema = new Schema({
     offered_amount: {
         type: Number,
         default: 0
+    },
+    VouchingUser:{
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
     }
 }, { timestamps: true });
 

@@ -23,7 +23,13 @@ module.exports = {
             option.setName('vulnerability')
                 .setDescription('Vulnerability identifier (e.g., CVE-2024-1234)')
                 .setRequired(false)
-        ),
+        )
+        .addStringOption(option =>
+                            option.setName('voucher')
+                                .setDescription('User you is assisting you in reporting')
+                                .setRequired(false)
+                        ),
+
 
     async execute(interaction) {
         await interaction.deferReply({flags: 64});
@@ -35,8 +41,18 @@ module.exports = {
             }
 
             const vulnIdentifier = interaction.options.getString('vulnerability');
+             const targetUser = interaction.options.getUser('voucher');
             let vulnerabilityId, companyId, platformId;
+             console.log(targetUser)
+                            if(targetUser){
+                             if (targetUser.bot) {
+                                            return interaction.editReply({content: 'You cannot have to bot vouch for you', flags: 64});
+                                        }
 
+                                        if (targetUser.id === interaction.user.id) {
+                                            return interaction.editReply({content: 'You cannot vouch for yourself', flags: 64});
+                                        }
+                                        }
             if (vulnIdentifier) {
                 // Direct submission via identifier
                 const vulnerability = await Vulnerability.findOne({
@@ -51,14 +67,16 @@ module.exports = {
                     return;
                 }
 
+
                 // Check for existing submissions
                 const existingReport = await Reports.findOne({
                     user_id: user._id,
-                    vulnerability_id: vulnerability._id
+                    vulnerability_id: vulnerability._id,
+                    is_poc_only:false
                 });
                 if (existingReport) {
                     return interaction.editReply({
-                        content: `You have already submitted a ${existingReport.is_poc_only ? 'POC' : 'report'} for this vulnerability. Only one submission is allowed.`,
+                        content: `You have already submitted a Report for this vulnerability. Only one submission is allowed.`,
                     });
                 }
 
@@ -66,6 +84,7 @@ module.exports = {
                 companyId = vulnerability.company_id;
                 const company = await Company.findById(companyId);
                 platformId = company.platform_id;
+
 
                 const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId);
                 if (!confirmed) return;
@@ -101,7 +120,8 @@ module.exports = {
                 platformId,
                 companyId,
                 vulnerabilityId,
-                user
+                user,
+                targetUser
             );
 
             await interaction.followUp({
@@ -201,7 +221,7 @@ async function selectCompany(interaction) {
     const row = new ActionRowBuilder().addComponents(selectMenu);
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('close')
+            .setCustomId('report_close')
             .setLabel('Close')
             .setStyle(ButtonStyle.Danger)
     );
@@ -212,10 +232,10 @@ async function selectCompany(interaction) {
         fetchReply: true
     });
 
-    const response = await waitForSelect(message, interaction.user.id, ['select_company', 'close']);
+    const response = await waitForSelect(message, interaction.user.id, ['select_company', 'report_close']);
     if (!response) return null;
 
-    if (response.customId === 'close') {
+    if (response.customId === 'report_close') {
         await response.update({content: 'Report canceled.', components: []});
         return null;
     }
@@ -252,7 +272,7 @@ async function selectVulnerability(interaction, companyId) {
     const row = new ActionRowBuilder().addComponents(selectMenu);
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('close')
+            .setCustomId('report_close')
             .setLabel('Close')
             .setStyle(ButtonStyle.Danger)
     );
@@ -263,10 +283,10 @@ async function selectVulnerability(interaction, companyId) {
         fetchReply: true
     });
 
-    const response = await waitForSelect(message, interaction.user.id, ['select_vulnerability', 'close']);
+    const response = await waitForSelect(message, interaction.user.id, ['select_vulnerability', 'report_close']);
     if (!response) return null;
 
-    if (response.customId === 'close') {
+    if (response.customId === 'report_close') {
         await response.update({content: 'Report canceled.', components: []});
         return null;
     }
@@ -290,11 +310,11 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId) {
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('submit')
+            .setCustomId('report_submit')
             .setLabel('Submit Report')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
-            .setCustomId('close')
+            .setCustomId('report_cancel')
             .setLabel('Cancel')
             .setStyle(ButtonStyle.Danger)
     );
@@ -305,10 +325,10 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId) {
         fetchReply: true
     });
 
-    const response = await waitForButton(message, interaction.user.id, ['submit', 'close']);
+    const response = await waitForButton(message, interaction.user.id, ['report_submit', 'report_cancel']);
     if (!response) return null;
 
-    if (response.customId === 'close') {
+    if (response.customId === 'report_cancel') {
         await response.update({content: 'Submission canceled.', components: []});
         return null;
     }
@@ -320,7 +340,7 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId) {
     return true;
 }
 
-async function saveReport(interaction, platformId, companyId, vulnerabilityId, user) {
+async function saveReport(interaction, platformId, companyId, vulnerabilityId, user,targetUser) {
     if (!user) {
         const discordId = interaction.user.id;
         const discordName = interaction.user.username;
@@ -349,7 +369,8 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
         vulnerability_id: vulnerabilityId,
         is_poc_only: false,
         status: 'open',
-        volunerablity_sev: vulnerability.severity || 'Medium'
+        volunerablity_sev: vulnerability.severity || 'Medium',
+        VouchingUser:targetUser
     };
 
     const report = await Reports.create(reportDoc);

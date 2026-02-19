@@ -108,29 +108,47 @@ async function generateDictatorOffer(client, report, discordUser) {
     const itemsLine = attachedItems.length
         ? `\nIncluded Item${attachedItems.length > 1 ? 's' : ''}: ` + attachedItems.map(ai => ai.name || '1x bonus item').join(', ')
         : '';
-    await discordUser.send({
-        content:
-            `Offer from ${company.name}\n Report\n` +
-            `Option 1: $${options.option1.money} + ${options.option1.rep} reputation\n` +
-            `Option 2: $${options.option2.money} + ${options.option2.rep} reputation` +
-            (reductionReason ? `\nNote: Cash reduced due to item bonus.` : '') +
-            (notes.length ? `\nApplied: ${notes.join(', ')}` : '') +
-            itemsLine +
-            `${grantMsg}\n\n` +
-            `Please choose one:`,
-        components: [
-            new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`dictator_option1_${offer._id}`)
-                    .setLabel('Choose Option 1')
-                    .setStyle(ButtonStyle.Success),
-                new ButtonBuilder()
-                    .setCustomId(`dictator_option2_${offer._id}`)
-                    .setLabel('Choose Option 2')
-                    .setStyle(ButtonStyle.Primary)
-            ),
-        ],
-    });
+    
+    const messageContent = `${discordUser} 🎲 **Dictator Offer from ${company.name}**\n` +
+        `Report received. Choose one option:\n` +
+        `Option 1: $${options.option1.money} + ${options.option1.rep} reputation\n` +
+        `Option 2: $${options.option2.money} + ${options.option2.rep} reputation` +
+        (reductionReason ? `\nNote: Cash reduced due to item bonus.` : '') +
+        (notes.length ? `\nApplied: ${notes.join(', ')}` : '') +
+        itemsLine +
+        `${grantMsg}\n\n` +
+        `Please choose one:`;
+
+    try {
+        // Post to server channel - only visible to this user via mention
+        const guild = client.guilds.cache.get(process.env.GUILD_ID) || 
+                     [...client.guilds.cache.values()][0];
+        
+        if (guild) {
+            const {getAnnouncementChannel} = require('./announcementUtils');
+            const channel = await getAnnouncementChannel(client, guild, 'offers');
+            
+            if (channel) {
+                await channel.send({
+                    content: messageContent,
+                    components: [
+                        new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId(`dictator_option1_${offer._id}`)
+                                .setLabel('Choose Option 1')
+                                .setStyle(ButtonStyle.Success),
+                            new ButtonBuilder()
+                                .setCustomId(`dictator_option2_${offer._id}`)
+                                .setLabel('Choose Option 2')
+                                .setStyle(ButtonStyle.Primary)
+                        ),
+                    ],
+                });
+            }
+        }
+    } catch (err) {
+        console.error('Error sending dictator offer:', err);
+    }
 }
 
 module.exports = generateDictatorOffer;

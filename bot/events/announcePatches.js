@@ -4,6 +4,7 @@ const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
 const Company = require('../../models/Company');
 const Report = require('../../models/Reports');
+const {getAnnouncementChannel} = require('../utils/announcementUtils');
 
 /**
  * Announce when a vulnerability is discovered and patched
@@ -19,19 +20,11 @@ async function announceVulnerabilityPatched(client, vulnerability, acceptedOffer
             return;
         }
 
-        let channel = guild.channels.cache.find(ch =>
-            ch.type === 0 && // GuildText type
-            ch.name.toLowerCase().includes('general')
-        );
-
-        // If no general channel, try to find the first text channel
+        // Get the configured announcement channel for vulnerabilities
+        const channel = await getAnnouncementChannel(client, guild, 'vulnerabilities');
         if (!channel) {
-            const textChannels = guild.channels.cache.filter(ch => ch.type === 0);
-            if (textChannels.size === 0) {
-                console.error('No text channels found in guild:', guild.name);
-                return;
-            }
-            channel = textChannels.first();
+            console.error('No announcement channel found for guild:', guild.name);
+            return;
         }
 
         const company = await Company.findById(vulnerability.company_id);
@@ -75,15 +68,23 @@ async function announceVulnerabilityPatched(client, vulnerability, acceptedOffer
     }
 }
 
-/**
- * Announce multiple discoveries in a batch (for efficiency)
- */
-async function announceBatchPatches(client, vulnerabilities, channelId) {
+async function announceBatchPatches(client, vulnerabilities, serverId) {
     try {
-        const channel = await client.channels.fetch(channelId);
-        if (!channel) return;
-
         if (vulnerabilities.length === 0) return;
+
+        // Find the server/guild
+        const guild = await client.guilds.fetch(serverId);
+        if (!guild) {
+            console.error('Guild not found:', serverId);
+            return;
+        }
+
+        // Get the configured announcement channel for vulnerabilities
+        const channel = await getAnnouncementChannel(client, guild, 'vulnerabilities');
+        if (!channel) {
+            console.error('No announcement channel found for guild:', guild.name);
+            return;
+        }
 
         const embed = new EmbedBuilder()
             .setTitle(' Multiple Vulnerabilities Patched!')
@@ -126,15 +127,8 @@ async function announceExploitSummary(client, serverId, vulnIdentifier, summary)
         const guild = await client.guilds.fetch(serverId);
         if (!guild) return;
 
-        let channel = guild.channels.cache.find(ch =>
-            ch.type === 0 && ch.name.toLowerCase().includes('general')
-        );
-
-        if (!channel) {
-            const textChannels = guild.channels.cache.filter(ch => ch.type === 0);
-            if (textChannels.size > 0) channel = textChannels.first();
-        }
-
+        // Get the configured announcement channel for exploits
+        const channel = await getAnnouncementChannel(client, guild, 'exploits');
         if (!channel) return;
 
         const embed = new EmbedBuilder()

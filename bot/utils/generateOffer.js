@@ -111,32 +111,50 @@ async function generateOffer(client, report, discordUser) {
             return ai.name || '1x bonus item';
         }).join(', ')
             : '';
-        await discordUser.send({
-            content: `Reward Offer from ${company.name}\n` +
-                `You have an offer of $${offerAmount} for your report.` +
-                (reductionReason ? `\nNote: Cash reduced due to item bonus.` : '') +
-                (notes.length ? `\nApplied: ${notes.join(', ')}` : '') +
-                `${itemsLine}${grantMsg}\n` +
-                `Do you accept this offer?`,
-            components: [
-                new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`offer_accept_${offer._id}`)
-                        .setLabel('Accept')
-                        .setStyle(ButtonStyle.Success),
-                    new ButtonBuilder()
-                        .setCustomId(`offer_reject_${offer._id}`)
-                        .setLabel('Reject')
-                        .setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder()
-                        .setCustomId(`offer_counter_${offer._id}`)
-                        .setLabel('Counter Offer')
-                        .setStyle(ButtonStyle.Secondary)
-                ),
-            ],
-        });
+        
+        const messageContent = `${discordUser} 💰 **Reward Offer from ${company.name}**\n` +
+            `You have an offer of $${offerAmount} for your report.` +
+            (reductionReason ? `\nNote: Cash reduced due to item bonus.` : '') +
+            (notes.length ? `\nApplied: ${notes.join(', ')}` : '') +
+            `${itemsLine}${grantMsg}\n` +
+            `Do you accept this offer?`;
+
+        try {
+            // Post to server channel - only visible to this user via mention
+            const guild = client.guilds.cache.get(process.env.GUILD_ID) || 
+                         [...client.guilds.cache.values()][0];
+            
+            if (guild) {
+                const {getAnnouncementChannel} = require('./announcementUtils');
+                const channel = await getAnnouncementChannel(client, guild, 'offers');
+                
+                if (channel) {
+                    await channel.send({
+                        content: messageContent,
+                        components: [
+                            new ActionRowBuilder().addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId(`offer_accept_${offer._id}`)
+                                    .setLabel('Accept')
+                                    .setStyle(ButtonStyle.Success),
+                                new ButtonBuilder()
+                                    .setCustomId(`offer_reject_${offer._id}`)
+                                    .setLabel('Reject')
+                                    .setStyle(ButtonStyle.Danger),
+                                new ButtonBuilder()
+                                    .setCustomId(`offer_counter_${offer._id}`)
+                                    .setLabel('Counter Offer')
+                                    .setStyle(ButtonStyle.Secondary)
+                            ),
+                        ],
+                    });
+                }
+            }
+        } catch (err) {
+            console.error('Error sending offer notification:', err);
+        }
     } catch (err) {
-        console.error('Could not send DM:', err);
+        console.error('Error generating offer:', err);
     }
 }
 

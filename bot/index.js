@@ -170,8 +170,8 @@ client.on('messageCreate', async (msg) => {
 
     // Only update existing users' activity; do NOT auto-create here
     try {
-        const cached = cache.getUser(msg.author.id);
-        let existing = cached;
+
+        let existing = null;
         if (!existing) {
             existing = await User.findOne({discord_id: msg.author.id}).lean();
             if (existing) cache.setUser(msg.author.id, existing);
@@ -215,7 +215,7 @@ client.on('interactionCreate', async interaction => {
                 }
             } catch (e) {
                 console.error('Verification gate error:', e);
-                return interaction.reply({content: 'Error verifying user status. Please try again.', ephemeral: true});
+                return interaction.reply({content: 'Error verifying user status. Please try again.' });
             }
         }
 
@@ -224,11 +224,11 @@ client.on('interactionCreate', async interaction => {
         } catch (err) {
             console.error(err);
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({content: 'There was an error executing this command.', ephemeral: true});
+                await interaction.followUp({content: 'There was an error executing this command.'});
             } else {
                 await interaction.reply({
                     content: 'There was an error executing this command.',
-                    ephemeral: true,
+
                 });
             }
         }

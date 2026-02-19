@@ -693,12 +693,20 @@ async function handleTrade(interaction, action, tradeId) {
             components: []
         });
 
-        // Notify other user
+        // Notify other user of trade rejection in server channel
         const other = isGiver ? receivingUser : givingUser;
         try {
             const discordOther = await interaction.client.users.fetch(other.discord_id);
-            await discordOther.send(` Your trade was rejected by ${interaction.user.username}.`);
-        } catch {
+            const {getAnnouncementChannel} = require('../utils/announcementUtils');
+            const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
+            
+            if (channel) {
+                await channel.send({
+                    content: `${discordOther} ❌ **Trade Rejected** - ${interaction.user.username} rejected your trade.`
+                });
+            }
+        } catch (err) {
+            console.error('Error notifying other user of trade rejection:', err);
         }
 
         return;
@@ -715,24 +723,29 @@ async function handleTrade(interaction, action, tradeId) {
             components: []
         });
 
-        // Notify giver for final confirmation
+        // Notify giver for final confirmation in server channel
         const giverDiscord = await interaction.client.users.fetch(givingUser.discord_id);
-        await giverDiscord.send({
-            content: `**${interaction.user.username} accepted your trade!**\n\nPlease confirm the trade:`,
-            components: [
-                new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        // Use a single token for the action to keep split('_') to 3 parts
-                        .setCustomId(`trade_acceptfinal_${trade._id}`)
-                        .setLabel('Accept Trade')
-                        .setStyle(ButtonStyle.Success),
-                    new ButtonBuilder()
-                        .setCustomId(`trade_reject_${trade._id}`)
-                        .setLabel('Reject Trade')
-                        .setStyle(ButtonStyle.Danger)
-                )
-            ]
-        });
+        const {ActionRowBuilder, ButtonBuilder, ButtonStyle} = require('discord.js');
+        const {getAnnouncementChannel} = require('../utils/announcementUtils');
+        const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
+        
+        if (channel) {
+            await channel.send({
+                content: `${giverDiscord} ✅ **Trade Accepted** - ${interaction.user.username} accepted your trade! Please confirm:`,
+                components: [
+                    new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`trade_acceptfinal_${trade._id}`)
+                            .setLabel('Accept Trade')
+                            .setStyle(ButtonStyle.Success),
+                        new ButtonBuilder()
+                            .setCustomId(`trade_reject_${trade._id}`)
+                            .setLabel('Reject Trade')
+                            .setStyle(ButtonStyle.Danger)
+                    )
+                ]
+            });
+        }
 
         return;
     }
@@ -753,9 +766,16 @@ async function handleTrade(interaction, action, tradeId) {
                 components: []
             });
 
-            // Notify receiver
+            // Notify receiver in server channel
             const recvDiscord = await interaction.client.users.fetch(receivingUser.discord_id);
-            await recvDiscord.send(`🎉 The trade with ${interaction.user.username} is complete!`);
+            const {getAnnouncementChannel} = require('../utils/announcementUtils');
+            const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
+            
+            if (channel) {
+                await channel.send({
+                    content: `${recvDiscord} 🎉 **Trade Completed** - Your trade with ${interaction.user.username} is complete!`
+                });
+            }
 
         } catch (err) {
             console.error('Final trade error:', err);

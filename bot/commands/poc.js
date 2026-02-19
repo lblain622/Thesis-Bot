@@ -102,8 +102,7 @@ module.exports = {
 
             await interaction.followUp({
                 content: `**POC Submitted Successfully!**\n\n` +
-                    `Your proof-of-concept has been submitted to the company.\n\n` +
-                    `💰 You might receive a reward for your report within the next 5 minutes.`,
+                    `Your proof-of-concept has been submitted to the company.\n\n`,
                 flags: 64,
             });
 
@@ -169,7 +168,7 @@ async function selectCompany(interaction) {
     const row = new ActionRowBuilder().addComponents(selectMenu);
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('close')
+            .setCustomId('poc_close')
             .setLabel('Close')
             .setStyle(ButtonStyle.Danger)
     );
@@ -180,10 +179,10 @@ async function selectCompany(interaction) {
         fetchReply: true
     });
 
-    const response = await waitForSelect(message, interaction.user.id, ['select_company', 'close']);
+    const response = await waitForSelect(message, interaction.user.id, ['select_company', 'poc_close']);
     if (!response) return null;
 
-    if (response.customId === 'close') {
+    if (response.customId === 'poc_close') {
         await response.update({content: 'POC submission canceled.', components: []});
         return null;
     }
@@ -220,7 +219,7 @@ async function selectVulnerability(interaction, companyId) {
     const row = new ActionRowBuilder().addComponents(selectMenu);
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('close')
+            .setCustomId('poc_close')
             .setLabel('Close')
             .setStyle(ButtonStyle.Danger)
     );
@@ -231,7 +230,7 @@ async function selectVulnerability(interaction, companyId) {
         fetchReply: true
     });
 
-    const response = await waitForSelect(message, interaction.user.id, ['select_vulnerability', 'close']);
+    const response = await waitForSelect(message, interaction.user.id, ['select_vulnerability', 'poc_close']);
     if (!response) return null;
 
     if (response.customId === 'close') {
@@ -254,11 +253,11 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId) {
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('submit')
+            .setCustomId('poc_submit')
             .setLabel('Submit POC')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
-            .setCustomId('close')
+            .setCustomId('poc_cancel')
             .setLabel('Cancel')
             .setStyle(ButtonStyle.Danger)
     );
@@ -269,10 +268,10 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId) {
         fetchReply: true
     });
 
-    const response = await waitForButton(message, interaction.user.id, ['submit', 'close']);
+    const response = await waitForButton(message, interaction.user.id, ['poc_submit', 'poc_cancel']);
     if (!response) return null;
 
-    if (response.customId === 'close') {
+    if (response.customId === 'poc_cancel') {
         await response.update({content: 'Submission canceled.', components: []});
         return null;
     }
@@ -299,10 +298,7 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
         }
     }
 
-    await User.updateOne(
-        {_id: user._id},
-        {$inc: {reports_made: 1}}
-    );
+
 
     const vulnerability = await Vulnerability.findById(vulnerabilityId);
 
