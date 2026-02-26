@@ -114,13 +114,7 @@ async function buyItem(interaction) {
         // Pre-calc desired quantity for stock and cost
         let qty = item.stackable ? Math.max(1, qtyArg) : 1;
 
-        // Check funds early
-        const costEarly = item.price * qty;
-        const available = Number(user.balance || 0);
-        if (available < costEarly) {
-            return interaction.editReply({content: `Insufficient funds. You need $${costEarly}, but you have $${available}.`});
-        }
-
+        
         // Enforce rotation membership and stock when enabled
         if (process.env.SHOP_ROTATE_ENABLED === 'true') {
             const rotation = await getActiveRotation();

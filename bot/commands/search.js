@@ -63,22 +63,6 @@ module.exports = {
                 }
             }
 
-            // Compute search boosts from inventory
-            const boosts2 = aggSearchBoosts(invEntries);
-            // Candidates: currently active vulnerabilities
-            const candidates = await Vulnerability.find({
-                isResolved: false,
-                isReported: false,
-                expiration_date: {$gt: now},
-            }).populate('company_id');
-
-            if (!candidates.length) {
-                return interaction.editReply({
-                    content: 'No active vulnerabilities available at the moment. Try again soon!',
-                    flags: 64
-                });
-            }
-
             // Update last_search timestamp
             await User.updateOne({_id: user._id}, {$set: {last_search: now}});
 
