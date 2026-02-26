@@ -225,7 +225,7 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
-        // ensure command is run in the user's dashboard channel if one exists
+       
         if (userDoc && userDoc.dashboard_channel_id && commandName !== 'verify' && commandName !== 'admin') {
             if (interaction.channelId !== userDoc.dashboard_channel_id) {
                 return interaction.reply({
