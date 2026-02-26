@@ -20,7 +20,16 @@ async function generateDictatorOffer(client, report, discordUser) {
 
     const min = matchingTier?.min_value || 100;
     const max = matchingTier?.max_value || 500;
-    let base = Math.floor(Math.random() * (max - min + 1)) + min;
+    // keep track of the starting base value for breakdown
+    const baseRand = Math.floor(Math.random() * (max - min + 1)) + min;
+    let base = baseRand;
+
+    // bonus breakdown structure (applies to base)
+    const bonusDetails = {
+        company: 0,
+        constant: 0,
+        luckyToken: 0
+    };
 
     // Apply shop effects: company bonus and lucky token (affect monetary parts)
     let notes = [];
@@ -30,17 +39,27 @@ async function generateDictatorOffer(client, report, discordUser) {
             const inv = await fetchInventoryItems(user);
             const bonusPct = computeCompanyBonusPct(inv, company._id);
             if (bonusPct > 0) {
-                const bonusAmt = Math.floor(base * (bonusPct / 100));
+                const bonusAmt = Math.floor(baseRand * (bonusPct / 100));
+                bonusDetails.company = bonusAmt;
                 base += bonusAmt; // scale base so both options scale
                 notes.push(`+${bonusPct}% company bonus`);
             }
             const luck = await maybeConsumeLuckyToken(user._id);
             if (luck.triggered) {
+                bonusDetails.luckyToken = base;
                 base *= 2;
                 notes.push('Lucky Token doubled payout');
             }
         }
     } catch (_) {
+    }
+
+    // constant reporting bonus (flat)
+    const CONSTANT_REPORT_BONUS = Number(process.env.CONSTANT_REPORT_BONUS || 0);
+    if (CONSTANT_REPORT_BONUS) {
+        bonusDetails.constant = CONSTANT_REPORT_BONUS;
+        base += CONSTANT_REPORT_BONUS;
+        notes.push(`+ $${CONSTANT_REPORT_BONUS} report bonus`);
     }
 
     // Optionally attach an item and reduce cash (applies to both options)
@@ -87,6 +106,8 @@ async function generateDictatorOffer(client, report, discordUser) {
         company_id: company._id,
         report_id: report._id,
         user_id: report.user_id,
+        base_amount: baseRand,
+        bonus_details: bonusDetails,
         dictator_options: options,
         status: 'pending',
         created_at: new Date(),
@@ -109,10 +130,18 @@ async function generateDictatorOffer(client, report, discordUser) {
         ? `\nIncluded Item${attachedItems.length > 1 ? 's' : ''}: ` + attachedItems.map(ai => ai.name || '1x bonus item').join(', ')
         : '';
     
+    // build breakdown for the base payout
+    let breakdown = `\n\n**Breakdown:**\n` +
+        `• Base payout: $${baseRand}`;
+    if (bonusDetails.company) breakdown += `\n• Company bonus: +$${bonusDetails.company}`;
+    if (bonusDetails.constant) breakdown += `\n• Reporting bonus: +$${bonusDetails.constant}`;
+    if (bonusDetails.luckyToken) breakdown += `\n• Lucky token added (payout doubled)`;
+
     const messageContent = `${discordUser} 🎲 **Dictator Offer from ${company.name}**\n` +
         `Report received. Choose one option:\n` +
         `Option 1: $${options.option1.money} + ${options.option1.rep} reputation\n` +
         `Option 2: $${options.option2.money} + ${options.option2.rep} reputation` +
+        breakdown +
         (reductionReason ? `\nNote: Cash reduced due to item bonus.` : '') +
         (notes.length ? `\nApplied: ${notes.join(', ')}` : '') +
         itemsLine +

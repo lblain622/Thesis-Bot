@@ -17,9 +17,21 @@ async function generateOffer(client, report, discordUser) {
 
     const min = parseFloat(tier?.min_value || 50);
     const max = parseFloat(tier?.max_value || 500);
-    let offerAmount = Math.floor(Math.random() * (max - min + 1)) + min;
+    // keep the original random base for breakdown
+    const baseAmount = Math.floor(Math.random() * (max - min + 1)) + min;
+    let offerAmount = baseAmount;
 
-    // Apply shop effects: company bonus and lucky token
+
+    const bonusDetails = {
+        company: 0,
+        reputation: 0,
+        preferred: 0,
+        constant: 0,
+        luckyToken: 0,
+        itemCashReduction: 0
+    };
+
+    // Apply shop effects: company bonus
     let notes = [];
     try {
         const user = await Users.findById(report.user_id).lean();
@@ -27,18 +39,44 @@ async function generateOffer(client, report, discordUser) {
             const inv = await fetchInventoryItems(user);
             const bonusPct = computeCompanyBonusPct(inv, company._id);
             if (bonusPct > 0) {
-                const bonusAmt = Math.floor(offerAmount * (bonusPct / 100));
+                const bonusAmt = Math.floor(baseAmount * (bonusPct / 100));
+                bonusDetails.company = bonusAmt;
                 offerAmount += bonusAmt;
                 notes.push(`+${bonusPct}% company bonus`);
             }
             const luck = await maybeConsumeLuckyToken(user._id);
             if (luck.triggered) {
+                bonusDetails.luckyToken = offerAmount; // doubled value, treat as extra = offerAmount
                 offerAmount *= 2;
                 notes.push('Lucky Token doubled payout');
             }
         }
     } catch (_) { /* ignore */
     }
+
+    // constant reporting bonus (flat amount added to every offer)
+    const CONSTANT_REPORT_BONUS = Number(process.env.CONSTANT_REPORT_BONUS || 0);
+    if (CONSTANT_REPORT_BONUS) {
+        bonusDetails.constant = CONSTANT_REPORT_BONUS;
+        offerAmount += CONSTANT_REPORT_BONUS;
+        notes.push(`+ $${CONSTANT_REPORT_BONUS} report bonus`);
+    }
+
+    // apply reputation / preferred vuln bonuses if present on the report (percentages)
+    try {
+        if (report.reputation_bonus) {
+            const repAmt = Math.floor(baseAmount * (report.reputation_bonus / 100));
+            bonusDetails.reputation = repAmt;
+            offerAmount += repAmt;
+            notes.push(`+${report.reputation_bonus}% rep bonus`);
+        }
+        if (report.preferred_vuln_bonus) {
+            const prefAmt = Math.floor(baseAmount * (report.preferred_vuln_bonus / 100));
+            bonusDetails.preferred = prefAmt;
+            offerAmount += prefAmt;
+            notes.push(`+${report.preferred_vuln_bonus}% preferred vuln bonus`);
+        }
+    } catch (_) {}
 
     // Maybe attach an item and reduce cash
     let attachedItems = [];
@@ -72,6 +110,9 @@ async function generateOffer(client, report, discordUser) {
                 }
                 // Reduce cash
                 const reduced = Math.floor(offerAmount * (1 - reducePct / 100));
+                // record how much cash was removed as item bonus
+                const reduction = offerAmount - Math.max(minCash, reduced);
+                bonusDetails.itemCashReduction = reduction;
                 offerAmount = Math.max(minCash, reduced);
                 reductionReason = 'item_bonus';
             }
@@ -83,6 +124,8 @@ async function generateOffer(client, report, discordUser) {
         company_id: company._id,
         report_id: report._id,
         user_id: report.user_id,
+        base_amount: baseAmount,
+        bonus_details: bonusDetails,
         original_amount: offerAmount,
         offered_amount: offerAmount,
         offer_percent: 100,
@@ -112,8 +155,19 @@ async function generateOffer(client, report, discordUser) {
         }).join(', ')
             : '';
         
+        // build breakdown snippet using the data we calculated earlier
+        let breakdown = `\n\n**Breakdown:**\n` +
+            `• Base payout: $${baseAmount}`;
+        if (bonusDetails.company) breakdown += `\n• Company bonus: +$${bonusDetails.company}`;
+        if (bonusDetails.reputation) breakdown += `\n• Reputation bonus: +$${bonusDetails.reputation}`;
+        if (bonusDetails.preferred) breakdown += `\n• Preferred vuln bonus: +$${bonusDetails.preferred}`;
+        if (bonusDetails.constant) breakdown += `\n• Reporting bonus: +$${bonusDetails.constant}`;
+        if (bonusDetails.luckyToken) breakdown += `\n• Lucky token added (payout doubled)`;
+        if (bonusDetails.itemCashReduction) breakdown += `\n• Cash reduced for included item: -$${bonusDetails.itemCashReduction}`;
+
         const messageContent = `${discordUser} 💰 **Reward Offer from ${company.name}**\n` +
             `You have an offer of $${offerAmount} for your report.` +
+            breakdown +
             (reductionReason ? `\nNote: Cash reduced due to item bonus.` : '') +
             (notes.length ? `\nApplied: ${notes.join(', ')}` : '') +
             `${itemsLine}${grantMsg}\n` +

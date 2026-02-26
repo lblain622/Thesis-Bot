@@ -43,10 +43,28 @@ module.exports = {
             }
 
             const now = new Date();
-
-            // Compute search boosts from inventory
+            
+            // Check search cooldown
+            const baseCooldownMs = 5 * 60 * 1000; // 5 minutes
             const invEntries = await fetchInventoryItems(user);
             const boosts = aggSearchBoosts(invEntries);
+            const cooldownReductionPct = boosts.cooldownReductionPct || 0;
+            const actualCooldownMs = baseCooldownMs * (1 - cooldownReductionPct / 100);
+            
+            if (user.last_search) {
+                const timeSinceLastSearch = now.getTime() - new Date(user.last_search).getTime();
+                if (timeSinceLastSearch < actualCooldownMs) {
+                    const remainingMs = actualCooldownMs - timeSinceLastSearch;
+                    const remainingMins = Math.ceil(remainingMs / 60000);
+                    return interaction.editReply({
+                        content: `⏳ Search cooldown active. Try again in **${remainingMins} minute(s)**.${cooldownReductionPct > 0 ? ` (reduced by ${cooldownReductionPct}% via items)` : ''}`,
+                        flags: 64
+                    });
+                }
+            }
+
+            // Compute search boosts from inventory
+            const boosts2 = aggSearchBoosts(invEntries);
             // Candidates: currently active vulnerabilities
             const candidates = await Vulnerability.find({
                 isResolved: false,
@@ -60,6 +78,9 @@ module.exports = {
                     flags: 64
                 });
             }
+
+            // Update last_search timestamp
+            await User.updateOne({_id: user._id}, {$set: {last_search: now}});
 
             // Split into accessible and inaccessible; allow discovering a few new ones
             const accessible = [];

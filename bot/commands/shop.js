@@ -162,9 +162,8 @@ async function buyItem(interaction) {
 
         const cost = item.price * qty;
 
-        // Deduct balance (use main balance)
         await Users.updateOne({_id: user._id}, {$inc: {balance: -cost}});
-        // Add to inventory (merge if same key and stackable)
+ 
         const existingIdx = (user.inventory || []).findIndex(e => String(e.item_id) === String(item._id) && String(e.company_id || '') === String(companyId || ''));
         if (existingIdx >= 0) {
             await Users.updateOne({_id: user._id}, {$inc: {[`inventory.${existingIdx}.qty`]: qty}});

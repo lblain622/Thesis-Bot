@@ -46,21 +46,6 @@
     "enabled": true
   },
   {
-    "key": "lucky_token",
-    "name": "Lucky Token",
-    "description": "Consumable: 10% chance to double your next offer payout.",
-    "type": "consumable",
-    "price": 400,
-    "stackable": true,
-    "companyScoped": false,
-    "effects": {
-      "consumable": {
-        "doubleNextOfferChancePct": 10
-      }
-    },
-    "enabled": true
-  },
-  {
     "key": "corp_hoodie",
     "name": "Corp Hoodie",
     "description": "Company-branded hoodie that gives +10% rewards with that company.",
@@ -86,19 +71,7 @@
     },
     "enabled": true
   },
-  {
-    "key": "brand_pass",
-    "name": "Brand Pass",
-    "description": "Consumable: Guarantees next offer from this company includes +5 reputation.",
-    "type": "consumable",
-    "price": 700,
-    "stackable": true,
-    "companyScoped": true,
-    "effects": {
-      "consumable": { "guaranteedRepBonus": 5 }
-    },
-    "enabled": true
-  },
+ 
   {
     "key": "company_keychain",
     "name": "Company Keychain",
@@ -109,6 +82,52 @@
     "companyScoped": true,
     "effects": {
       "offer": { "companyBonusPct": 5 }
+    },
+    "enabled": true
+  },
+  {
+    "key": "search_accelerator",
+    "name": "Search Accelerator",
+    "description": "Software that reduces the cooldown between vulnerability searches by 50% (2.5 min instead of 5).",
+    "type": "software",
+    "price": 1200,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "search": {
+        "cooldownReductionPct": 50
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "network_mapper",
+    "name": "Network Mapper",
+    "description": "Advanced mapping tool: reduces search cooldown by 75%, find +1 extra vulnerability per search.",
+    "type": "software",
+    "price": 2500,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "search": {
+        "cooldownReductionPct": 75,
+        "extraDiscover": 1
+      }
+    },
+    "enabled": true
+  },
+  {
+    "key": "exploit_shield",
+    "name": "Exploit Shield",
+    "description": "Security software that reduces penalties from caught exploits by 40%.",
+    "type": "software",
+    "price": 3000,
+    "stackable": false,
+    "companyScoped": false,
+    "effects": {
+      "exploit": {
+        "penaltyReductionPct": 40
+      }
     },
     "enabled": true
   }

@@ -14,6 +14,19 @@ const companyOfferSchema = new Schema({
         type: Number,
         default: 0
     },
+    // base amount before any bonuses or modifiers were applied
+    base_amount: {
+        type: Number,
+        default: 0
+    },
+    bonus_details: {
+        company: { type: Number, default: 0 },
+        reputation: { type: Number, default: 0 },
+        preferred: { type: Number, default: 0 },
+        constant: { type: Number, default: 0 },
+        luckyToken: { type: Number, default: 0 },
+        itemCashReduction: { type: Number, default: 0 }
+    },
     offered_amount: {
         type: Number,
         default: 0
@@ -58,9 +71,6 @@ const companyOfferSchema = new Schema({
     // Canonical fields used by interaction handlers
     resolved_at: { type: Date, default: null },
     counter_offer: { type: Number, default: null },
-
-    resloved_at: Date,
-    counter_offered: Number,
 
 }, { timestamps: true });
 

@@ -64,7 +64,8 @@ async function handleUltimatumGame(interaction, action, offerId) {
         const reputationBonus = (report.reputation_bonus || 0) / 100;
         const preferredBonus = (report.preferred_vuln_bonus || 0) / 100;
         const totalMultiplier = 1 + reputationBonus + preferredBonus;
-        const finalAmount = Math.floor(baseAmount * totalMultiplier);
+        const constBonus = Number(process.env.CONSTANT_REPORT_BONUS || 0);
+        const finalAmount = Math.floor(baseAmount * totalMultiplier) + constBonus;
 
         await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'accepted'}});
         await User.updateOne(
@@ -82,20 +83,31 @@ async function handleUltimatumGame(interaction, action, offerId) {
         // Update company reputation
         await updateCompanyReputation(user._id, report.company_id, 5);
 
+        // build bonus breakdown for message
+        let bonusBreakdown = `\n**Bonuses applied:**`;
+        const repPct = report.reputation_bonus || 0;
+        const prefPct = report.preferred_vuln_bonus || 0;
+        const repAmt = Math.floor(baseAmount * (repPct/100));
+        const prefAmt = Math.floor(baseAmount * (prefPct/100));
+        if (repPct) bonusBreakdown += `\n• Reputation (${repPct}%): +$${repAmt}`;
+        if (prefPct) bonusBreakdown += `\n• Preferred vuln (${prefPct}%): +$${prefAmt}`;
+        const constAmt = Number(process.env.CONSTANT_REPORT_BONUS || 0);
+        if (constAmt) bonusBreakdown += `\n• Reporting bonus: +$${constAmt}`;
+
+        const responseMsg = `You accepted the offer!\n` +
+            `**Base:** $${baseAmount}\n` +
+            `**With Bonuses:** $${finalAmount}` +
+            bonusBreakdown +
+            `\n**Reputation:** +${offer.reputation_offered || 0}`;
+
         if (interaction.deferred || interaction.replied) {
             await interaction.followUp({
-                content: `You accepted the offer!\n` +
-                    `**Base:** $${baseAmount}\n` +
-                    `**With Bonuses:** $${finalAmount}\n` +
-                    `**Reputation:** +${offer.reputation_offered || 0}`,
+                content: responseMsg,
                 ephemeral: true
             });
         } else {
             await interaction.update({
-                content: `You accepted the offer!\n` +
-                    `**Base:** $${baseAmount}\n` +
-                    `**With Bonuses:** $${finalAmount}\n` +
-                    `**Reputation:** +${offer.reputation_offered || 0}`,
+                content: responseMsg,
                 components: []
             });
         }
@@ -368,7 +380,7 @@ async function handleStandardOffer(interaction, action, offerId) {
         const money = Number(offer.offered_amount || 0);
         const repBonus = Number(offer.repuatation_offered || offer.reputation_offered || 0);
         if (money > 0) {
-            await User.updateOne({_id: u._id}, {$inc: {money_earned: money, repuation_earned: repBonus}});
+            await User.updateOne({_id: u._id}, {$inc: {money_earned: money, repuation_earned: repBonus, money_from_reports: money}});
         } else if (repBonus) {
             await User.updateOne({_id: u._id}, {$inc: {repuation_earned: repBonus}});
         }
@@ -424,7 +436,22 @@ async function handleStandardOffer(interaction, action, offerId) {
         }
 
         await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'accepted', resloved_at: new Date()}});
-        const msg = `You accepted the offer and received $${money}` + (offer.items?.length ? ` and ${offer.items.length} item(s).` : '.');
+
+        // compose breakdown message using stored base and bonus details if available
+        let breakdownMsg = '';
+        if (offer.base_amount || offer.bonus_details) {
+            const base = offer.base_amount || money;
+            const bd = offer.bonus_details || {};
+            breakdownMsg = `\n**Breakdown:**\n• Base: $${base}`;
+            if (bd.company) breakdownMsg += `\n• Company bonus: +$${bd.company}`;
+            if (bd.reputation) breakdownMsg += `\n• Reputation bonus: +$${bd.reputation}`;
+            if (bd.preferred) breakdownMsg += `\n• Preferred vuln bonus: +$${bd.preferred}`;
+            if (bd.constant) breakdownMsg += `\n• Reporting bonus: +$${bd.constant}`;
+            if (bd.luckyToken) breakdownMsg += `\n• Lucky token applied (payout doubled)`;
+            if (bd.itemCashReduction) breakdownMsg += `\n• Cash reduced for item: -$${bd.itemCashReduction}`;
+        }
+
+        const msg = `You accepted the offer and received $${money}` + (offer.items?.length ? ` and ${offer.items.length} item(s).` : '.') + breakdownMsg;
 
         const vulnerability = await Vulnerability.findById(report.vulnerability_id);
         if (vulnerability) {
@@ -616,7 +643,23 @@ async function handleDictatorOffer(interaction, action, offerId) {
         }
     }
 
-    const msg = `You chose ${choice === 'option1' ? 'Option 1' : 'Option 2'} and received $${money}${rep ? ` and +${rep} reputation` : ''}` + (offer.items?.length ? ` and ${offer.items.length} item(s).` : '.');
+    // construct breakdown if possible
+    let breakdownMsg = '';
+    if (offer.base_amount || offer.bonus_details) {
+        const baseAmt = offer.base_amount || money;
+        let chosenBase = baseAmt;
+        if (choice === 'option2') {
+            chosenBase = Math.floor(baseAmt * 0.7);
+        }
+        const bd = offer.bonus_details || {};
+        breakdownMsg = `\n**Breakdown:**\n• Base: $${chosenBase}`;
+        if (bd.company) breakdownMsg += `\n• Company bonus: +$${bd.company}`;
+        if (bd.constant) breakdownMsg += `\n• Reporting bonus: +$${bd.constant}`;
+        if (bd.luckyToken) breakdownMsg += `\n• Lucky token applied (payout doubled)`;
+        if (bd.itemCashReduction) breakdownMsg += `\n• Cash reduced for item: -$${bd.itemCashReduction}`;
+    }
+
+    const msg = `You chose ${choice === 'option1' ? 'Option 1' : 'Option 2'} and received $${money}${rep ? ` and +${rep} reputation` : ''}` + (offer.items?.length ? ` and ${offer.items.length} item(s).` : '.') + breakdownMsg;
     if (interaction.deferred || interaction.replied) {
         await interaction.followUp({content: msg, ephemeral: true});
     } else {
@@ -644,7 +687,8 @@ async function handleDictatorGame(interaction, action, offerId) {
     const reputationBonus = (report.reputation_bonus || 0) / 100;
     const preferredBonus = (report.preferred_vuln_bonus || 0) / 100;
     const totalMultiplier = 1 + reputationBonus + preferredBonus;
-    const finalMoney = Math.floor(selected.money * totalMultiplier);
+    const constBonus2 = Number(process.env.CONSTANT_REPORT_BONUS || 0);
+    const finalMoney = Math.floor(selected.money * totalMultiplier) + constBonus2;
 
     await CompanyOffer.updateOne(
         {_id: offer._id},
@@ -672,17 +716,26 @@ async function handleDictatorGame(interaction, action, offerId) {
 
     await updateCompanyReputation(user._id, report.company_id, 3);
 
+    // construct bonus breakdown for the user
+    let bonusMsg = '';
+    if (reputationBonus || preferredBonus || constBonus2) {
+        bonusMsg = `\n**Bonuses applied:**`;
+        if (reputationBonus) bonusMsg += `\n• Reputation (${reputationBonus*100}%): +$${Math.floor(selected.money * reputationBonus)}`;
+        if (preferredBonus) bonusMsg += `\n• Preferred vuln (${preferredBonus*100}%): +$${Math.floor(selected.money * preferredBonus)}`;
+        if (constBonus2) bonusMsg += `\n• Reporting bonus: +$${constBonus2}`;
+    }
+
     if (interaction.deferred || interaction.replied) {
         await interaction.followUp({
             content: `You chose **${action === 'option1' ? 'Option 1' : 'Option 2'}**\n` +
-                `**Money:** $${finalMoney} (base: $${selected.money})\n` +
+                `**Money:** $${finalMoney} (base: $${selected.money})` + bonusMsg + `\n` +
                 `**Reputation:** ${selected.rep}`,
             ephemeral: true,
         });
     } else {
         await interaction.update({
             content: `You chose **${action === 'option1' ? 'Option 1' : 'Option 2'}**\n` +
-                `**Money:** $${finalMoney} (base: $${selected.money})\n` +
+                `**Money:** $${finalMoney} (base: $${selected.money})` + bonusMsg + `\n` +
                 `**Reputation:** ${selected.rep}`,
             components: [],
         });
@@ -707,7 +760,7 @@ async function handleTrade(interaction, action, tradeId) {
         return interaction.reply({content: 'Trade not found.', ephemeral: true});
     }
 
-    // Fetch users in parallel
+  
     const [givingUser, receivingUser, currentUser] = await Promise.all([
         User.findById(trade.giving_user_id).lean(),
         User.findById(trade.receiving_user_id).lean(),

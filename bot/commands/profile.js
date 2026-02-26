@@ -47,9 +47,19 @@ module.exports = {
                 .setThumbnail(interaction.user.displayAvatarURL())
                 .addFields(
                     {name: "Reports Submitted", value: `${user.reports_made || 0} reports`, inline: true},
-                    {name: "Balance", value: `$${user.money_earned || 0}`, inline: true},
+                    {name: "Balance", value: `$${user.balance || 0}`, inline: true},
                     {name: "Reputation Given", value: `${user.reputation_earned || 0} points`, inline: true}
                 );
+            
+            // Show penalties
+            const totalPenalties = (fullUser.penalties || []).reduce((sum, p) => sum + (p.amount || 0), 0);
+            if (totalPenalties > 0) {
+                embdVar.addFields({name: "Total Penalties", value: `$${totalPenalties} in fines`});
+                const recentPenalties = (fullUser.penalties || []).slice(-5).map(p => `• $${p.amount} - ${p.reason} (${p.severity || 'unknown'} ${p.vuln_type || ''})`).join('\n');
+                if (recentPenalties) {
+                    embdVar.addFields({name: "Recent Penalties", value: recentPenalties});
+                }
+            }
 
             if (preview.length) {
                 let invText = preview.join("\n");

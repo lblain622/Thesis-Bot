@@ -32,7 +32,10 @@ module.exports = {
                         "• `/summary` - Display your five most recent actions. \n"+
                         "\n After verification a private dashboard channel will be created; run all commands there.\n"
 
-
+                },
+                {
+                    name: 'Offers & Bonuses',
+                    value: 'When you receive an offer you will now see a breakdown of the base payout and any bonuses (company items, reputation, preferred vuln, reporting bonus, lucky tokens, etc.). This helps you understand exactly how the final amount was calculated.'
                 },
 //                {
 //                    name: 'Core Concepts',

@@ -39,6 +39,18 @@ const userSchema = new Schema({
     type:Number,
     default:0
     },
+    penalties: [{
+        company_id: { type: Schema.Types.ObjectId, ref: 'Company', required: true },
+        amount: { type: Number, required: true },
+        reason: { type: String, enum: ['exploit_caught', 'report_penalty'], required: true },
+        vuln_type: String,
+        severity: String,
+        applied_at: { type: Date, default: Date.now }
+    }],
+    last_search: {
+        type: Date,
+        default: null
+    },
     reputation_earned: {
         type: Number,
         default: 0

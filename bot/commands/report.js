@@ -138,9 +138,13 @@ module.exports = {
                 targetUser
             );
 
+            // pull vuln/company data to give user more context
+            const vulnDoc = await Vulnerability.findById(vulnerabilityId).lean();
+            const companyDoc = await Company.findById(companyId).lean();
+
             await interaction.followUp({
                 content: `**Report Submitted Successfully!**\n\n` +
-                    `Your report has been submitted to the company.\n\n` +
+                    `You submitted **${vulnDoc?.vuln_identifier || 'a vulnerability'}** to **${companyDoc?.name || 'the company'}**.\n\n` +
                     `💰 You might receive a reward for your report within the next 5 minutes.`,
                 flags: 64,
             });
@@ -148,8 +152,9 @@ module.exports = {
             // notify user in dashboard channel
             try {
                 const { notifyUser } = require('../utils/logUtils');
+                const vulnDoc2 = await Vulnerability.findById(vulnerabilityId).lean();
                 await notifyUser(interaction.client, user._id,
-                    `✅ You submitted a vulnerability report (ID: ${vulnerabilityId}).`);
+                    `✅ You submitted a vulnerability report (${vulnDoc2?.vuln_identifier || vulnerabilityId}).`);
             } catch (e) {
                 console.error('Report dashboard notification error:', e);
             }
