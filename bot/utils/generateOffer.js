@@ -153,6 +153,32 @@ async function generateOffer(client, report, discordUser) {
         } catch (err) {
             console.error('Error sending offer notification:', err);
         }
+
+        // also notify via dashboard channel if available
+        try {
+            const { notifyUser } = require('./logUtils');
+            await notifyUser(client, report.user_id, messageContent, {
+                components: [
+                    new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`offer_accept_${offer._id}`)
+                            .setLabel('Accept')
+                            .setStyle(ButtonStyle.Success),
+                        new ButtonBuilder()
+                            .setCustomId(`offer_reject_${offer._id}`)
+                            .setLabel('Reject')
+                            .setStyle(ButtonStyle.Danger),
+                        new ButtonBuilder()
+                            .setCustomId(`offer_counter_${offer._id}`)
+                            .setLabel('Counter Offer')
+                            .setStyle(ButtonStyle.Secondary)
+                    ),
+                ],
+            });
+        } catch (e) {
+            // non-fatal
+            console.error('Dashboard offer notification failed:', e);
+        }
     } catch (err) {
         console.error('Error generating offer:', err);
     }

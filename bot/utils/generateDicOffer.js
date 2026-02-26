@@ -149,6 +149,27 @@ async function generateDictatorOffer(client, report, discordUser) {
     } catch (err) {
         console.error('Error sending dictator offer:', err);
     }
+
+    // also send the same message to the user's dashboard channel if they have one
+    try {
+        const { notifyUser } = require('./logUtils');
+        await notifyUser(client, report.user_id, messageContent, {
+            components: [
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`dictator_option1_${offer._id}`)
+                        .setLabel('Choose Option 1')
+                        .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId(`dictator_option2_${offer._id}`)
+                        .setLabel('Choose Option 2')
+                        .setStyle(ButtonStyle.Primary)
+                ),
+            ],
+        });
+    } catch (e) {
+        console.error('Dashboard dictator offer notify failed:', e);
+    }
 }
 
 module.exports = generateDictatorOffer;

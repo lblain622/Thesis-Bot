@@ -226,7 +226,14 @@ client.on('interactionCreate', async interaction => {
         }
 
        
-        if (userDoc && userDoc.dashboard_channel_id && commandName !== 'verify' && commandName !== 'admin') {
+        // allow /trade to be invoked outside dashboard so users can tag each other
+        if (
+            userDoc &&
+            userDoc.dashboard_channel_id &&
+            commandName !== 'verify' &&
+            commandName !== 'admin' &&
+            commandName !== 'trade'
+        ) {
             if (interaction.channelId !== userDoc.dashboard_channel_id) {
                 return interaction.reply({
                     content: `Please use your personal dashboard channel <#${userDoc.dashboard_channel_id}> for commands.`,

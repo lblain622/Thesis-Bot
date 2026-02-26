@@ -124,6 +124,18 @@ async function handleUltimatumGame(interaction, action, offerId) {
                         vulnerability.vuln_identifier,
                         exploitSummary
                     );
+
+                    // individual notifications
+                    try {
+                        const { notifyUser } = require('../utils/logUtils');
+                        for (const detail of exploitSummary.caughtDetails || []) {
+                            const note = `⚠️ Your exploit on **${vulnerability.vuln_identifier}** was caught during patching. ` +
+                                `A fine of $${detail.fineAmount} has been applied.`;
+                            await notifyUser(interaction.client, detail.userId, note);
+                        }
+                    } catch (e) {
+                        console.error('Error notifying dashboard for caught exploits:', e);
+                    }
                 }
             }
         }
@@ -297,6 +309,17 @@ async function handleUltimatumGame(interaction, action, offerId) {
                             vulnerability.vuln_identifier,
                             exploitSummary
                         );
+
+                        try {
+                            const { notifyUser } = require('../utils/logUtils');
+                            for (const detail of exploitSummary.caughtDetails || []) {
+                                const note = `⚠️ Your exploit on **${vulnerability.vuln_identifier}** was caught during patching. ` +
+                                    `A fine of $${detail.fineAmount} has been applied.`;
+                                await notifyUser(interaction.client, detail.userId, note);
+                            }
+                        } catch (e) {
+                            console.error('Error notifying dashboard for caught exploits:', e);
+                        }
                     }
                 }
             }
@@ -426,6 +449,17 @@ async function handleStandardOffer(interaction, action, offerId) {
                         vulnerability.vuln_identifier,
                         exploitSummary
                     );
+
+                    try {
+                        const { notifyUser } = require('../utils/logUtils');
+                        for (const detail of exploitSummary.caughtDetails || []) {
+                            const note = `⚠️ Your exploit on **${vulnerability.vuln_identifier}** was caught during patching. ` +
+                                `A fine of $${detail.fineAmount} has been applied.`;
+                            await notifyUser(interaction.client, detail.userId, note);
+                        }
+                    } catch (e) {
+                        console.error('Error notifying dashboard for caught exploits:', e);
+                    }
                 }
             }
         }
@@ -567,6 +601,17 @@ async function handleDictatorOffer(interaction, action, offerId) {
                     vulnerability.vuln_identifier,
                     exploitSummary
                 );
+
+                try {
+                    const { notifyUser } = require('../utils/logUtils');
+                    for (const detail of exploitSummary.caughtDetails || []) {
+                        const note = `⚠️ Your exploit on **${vulnerability.vuln_identifier}** was caught during patching. ` +
+                            `A fine of $${detail.fineAmount} has been applied.`;
+                        await notifyUser(interaction.client, detail.userId, note);
+                    }
+                } catch (e) {
+                    console.error('Error notifying dashboard for caught exploits:', e);
+                }
             }
         }
     }
@@ -700,10 +745,17 @@ async function handleTrade(interaction, action, tradeId) {
             const {getAnnouncementChannel} = require('../utils/announcementUtils');
             const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
             
+            const msg = {content: `${discordOther} ❌ **Trade Rejected** - ${interaction.user.username} rejected your trade.`};
             if (channel) {
-                await channel.send({
-                    content: `${discordOther} ❌ **Trade Rejected** - ${interaction.user.username} rejected your trade.`
-                });
+                await channel.send(msg);
+            }
+
+            // also notify in dashboard
+            try {
+                const { notifyUser } = require('../utils/logUtils');
+                await notifyUser(interaction.client, other._id, msg);
+            } catch (e) {
+                console.error('Dashboard trade rejection notify failed:', e);
             }
         } catch (err) {
             console.error('Error notifying other user of trade rejection:', err);
@@ -729,22 +781,30 @@ async function handleTrade(interaction, action, tradeId) {
         const {getAnnouncementChannel} = require('../utils/announcementUtils');
         const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
         
+        const notice = {
+            content: `${giverDiscord} ✅ **Trade Accepted** - ${interaction.user.username} accepted your trade! Please confirm:`,
+            components: [
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`trade_acceptfinal_${trade._id}`)
+                        .setLabel('Accept Trade')
+                        .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId(`trade_reject_${trade._id}`)
+                        .setLabel('Reject Trade')
+                        .setStyle(ButtonStyle.Danger)
+                )
+            ]
+        };
         if (channel) {
-            await channel.send({
-                content: `${giverDiscord} ✅ **Trade Accepted** - ${interaction.user.username} accepted your trade! Please confirm:`,
-                components: [
-                    new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(`trade_acceptfinal_${trade._id}`)
-                            .setLabel('Accept Trade')
-                            .setStyle(ButtonStyle.Success),
-                        new ButtonBuilder()
-                            .setCustomId(`trade_reject_${trade._id}`)
-                            .setLabel('Reject Trade')
-                            .setStyle(ButtonStyle.Danger)
-                    )
-                ]
-            });
+            await channel.send(notice);
+        }
+        // also send to giver's dashboard
+        try {
+            const { notifyUser } = require('../utils/logUtils');
+            await notifyUser(interaction.client, givingUser._id, notice);
+        } catch (e) {
+            console.error('Dashboard trade accept notify failed:', e);
         }
 
         return;
@@ -770,11 +830,17 @@ async function handleTrade(interaction, action, tradeId) {
             const recvDiscord = await interaction.client.users.fetch(receivingUser.discord_id);
             const {getAnnouncementChannel} = require('../utils/announcementUtils');
             const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
+            const msg = {content: `${recvDiscord} 🎉 **Trade Completed** - Your trade with ${interaction.user.username} is complete!`};
             
             if (channel) {
-                await channel.send({
-                    content: `${recvDiscord} 🎉 **Trade Completed** - Your trade with ${interaction.user.username} is complete!`
-                });
+                await channel.send(msg);
+            }
+            // notify dashboard
+            try {
+                const { notifyUser } = require('../utils/logUtils');
+                await notifyUser(interaction.client, receivingUser._id, msg);
+            } catch (e) {
+                console.error('Dashboard trade complete notify failed:', e);
             }
 
         } catch (err) {

@@ -23,14 +23,14 @@ module.exports = {
                         '• `/exploit stop [identifier]` — Stop exploiting a vulnerability.\n' +
                         '• `/exploit collect [identifier]` — Collect pending exploit earnings. There is a risk of being caught during collection.\n' +
                         '• `/exploit list` — View your active exploits and earnings.\n' +
-                        '• `/trade user:<user>` — Propose a trade (vulnerabilities or money) with another user.\n' +
+                        '• `/trade user:<user>` — Propose a trade (vulnerabilities or money) with another user. (can be used outside your dashboard)\n' +
                         "• `/profile` — View your profile (reports made, money earned, reputation).\n" +
                         "• `/profile user:<user>` — View another User's profile\n"+
                         "• `/shop list` - View the list of items available to buy. The shop resets every 30 minutes \n"+
                         "• `/shop buy` - Buy an available to buy in the shop \n"+
                         "• `/search` - Search for Vulnerabilities in the system. You may search every 5 minutes. \n"+
                         "• `/summary` - Display your five most recent actions. \n"+
-                        "\n⚠️ After verification a private dashboard channel will be created; run all commands there.\n"
+                        "\n After verification a private dashboard channel will be created; run all commands there.\n"
 
 
                 },

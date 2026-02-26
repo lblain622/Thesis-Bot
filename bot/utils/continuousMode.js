@@ -165,6 +165,18 @@ async function sweepExpirations() {
                         exploitSummary
                     );
                 }
+
+                // notify users in their dashboards as well
+                try {
+                    const { notifyUser } = require('./logUtils');
+                    for (const detail of exploitSummary.caughtDetails || []) {
+                        const note = `⚠️ Your exploit on **${v.vuln_identifier}** was caught during patching. ` +
+                            `A fine of $${detail.fineAmount} has been applied.`;
+                        await notifyUser(clientRef, detail.userId, note);
+                    }
+                } catch (e) {
+                    console.error('Error notifying dashboard in continuous mode:', e);
+                }
             }
         } catch (e) {
             console.error('expire save error:', e);

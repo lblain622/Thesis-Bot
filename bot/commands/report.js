@@ -131,6 +131,15 @@ module.exports = {
                 flags: 64,
             });
 
+            // notify user in dashboard channel
+            try {
+                const { notifyUser } = require('../utils/logUtils');
+                await notifyUser(interaction.client, user._id,
+                    `✅ You submitted a vulnerability report (ID: ${vulnerabilityId}).`);
+            } catch (e) {
+                console.error('Report dashboard notification error:', e);
+            }
+
             // Generate offer after delay
             const offerDelayMs = 30 * 1000; // 30 seconds
 

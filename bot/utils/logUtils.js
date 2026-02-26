@@ -1,12 +1,7 @@
 const Log = require('../../models/Log');
+const User = require('../../models/Users');
 
-/**
- * Record a user action in the log collection.
- *
- * @param {import('mongoose').Types.ObjectId} userId - the Mongo id of the user performing the action
- * @param {string} actionDesc - human-readable description of the action
- * @returns {Promise<void>}
- */
+
 async function logAction(userId, actionDesc) {
   if (!userId || !actionDesc) return;
   try {
@@ -16,4 +11,23 @@ async function logAction(userId, actionDesc) {
   }
 }
 
-module.exports = { logAction };
+
+async function notifyUser(client, userId, messageContent, options = {}) {
+  try {
+    const user = await User.findById(userId).lean();
+    if (!user || !user.dashboard_channel_id) return;
+    const channel = await client.channels.fetch(user.dashboard_channel_id).catch(() => null);
+    if (channel && channel.isTextBased()) {
+      if (typeof messageContent === 'string') {
+        await channel.send({content: messageContent, ...options});
+      } else {
+        // assume already an object
+        await channel.send(messageContent);
+      }
+    }
+  } catch (err) {
+    console.error('notifyUser error:', err);
+  }
+}
+
+module.exports = { logAction, notifyUser };

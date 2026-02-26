@@ -112,29 +112,39 @@ module.exports = {
                 const {getAnnouncementChannel} = require('../utils/announcementUtils');
                 const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
                 
+                const tradeMessage = {
+                    content: `${targetUser} **Trade Offer from ${interaction.user.username}**\n\n${formatTradeOffer(
+                        offerType,
+                        givingValue,
+                        requestType,
+                        receivingValue,
+                        givingVulnDoc,
+                        receivingVulnDoc
+                    )}`,
+                    components: [
+                        new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId(`trade_accept_${trade._id}`)
+                                .setLabel('Accept Trade')
+                                .setStyle(ButtonStyle.Success),
+                            new ButtonBuilder()
+                                .setCustomId(`trade_reject_${trade._id}`)
+                                .setLabel('Reject Trade')
+                                .setStyle(ButtonStyle.Danger)
+                        )
+                    ]
+                };
+
                 if (channel) {
-                    await channel.send({
-                        content: `${targetUser} 🤝 **Trade Offer from ${interaction.user.username}**\n\n${formatTradeOffer(
-                            offerType,
-                            givingValue,
-                            requestType,
-                            receivingValue,
-                            givingVulnDoc,
-                            receivingVulnDoc
-                        )}`,
-                        components: [
-                            new ActionRowBuilder().addComponents(
-                                new ButtonBuilder()
-                                    .setCustomId(`trade_accept_${trade._id}`)
-                                    .setLabel('Accept Trade')
-                                    .setStyle(ButtonStyle.Success),
-                                new ButtonBuilder()
-                                    .setCustomId(`trade_reject_${trade._id}`)
-                                    .setLabel('Reject Trade')
-                                    .setStyle(ButtonStyle.Danger)
-                            )
-                        ]
-                    });
+                    await channel.send(tradeMessage);
+                }
+
+                // also notify recipient in their dashboard channel
+                try {
+                    const { notifyUser } = require('../utils/logUtils');
+                    await notifyUser(interaction.client, receivingUser._id, tradeMessage);
+                } catch (e) {
+                    console.error('Dashboard trade notify failed:', e);
                 }
             } catch (err) {
                 console.error('Could not send trade notification to target user:', err);
