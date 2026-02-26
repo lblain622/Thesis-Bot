@@ -67,7 +67,11 @@ const userSchema = new Schema({
             company_id: { type: Schema.Types.ObjectId, ref: 'Company', default: null },
             qty: { type: Number, default: 1, min: 0 }
         }
-    ]
+    ],
+    dashboard_channel_id: {
+        type: String,
+        default: null,
+    }
 }, { timestamps: true });
 
 // Performance indexes

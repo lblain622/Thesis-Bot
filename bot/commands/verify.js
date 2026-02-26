@@ -5,6 +5,8 @@ const {
     EmbedBuilder,
     ButtonStyle,
     ComponentType,
+    ChannelType,
+    PermissionFlagsBits,
 } = require('discord.js');
 const User = require('../../models/Users');
 const Vulnerability = require('../../models/Vulnerabilities');
@@ -197,17 +199,54 @@ module.exports = {
                         }
                     }, 5000);
                 } else {
-                    // Complete and verify: add user to DB if not exists
+                    // Complete and verify: add user to DB if not exists, create dashboard channel if needed
                     try {
-                        const existing = await User.findOne({discord_id: userId});
+                        let existing = await User.findOne({discord_id: userId});
                         if (!existing) {
-                            await User.create({discord_id: userId, discord_name: userTag});
-                            const role = await message.guild.roles.cache.find(r=> r.name==="playtest")
-                            const member = await guild.members.fetch(userId);
+                            existing = await User.create({discord_id: userId, discord_name: userTag});
+                            const role = await message.guild.roles.cache.find(r=> r.name==="playtest");
+                            const member = await message.guild.members.fetch(userId);
                             await member.roles.add(role);
                             console.log(`Added role ${role.name} to ${member.user.tag}`);
                         } else {
                             existing.last_active = new Date();
+                            await existing.save();
+                        }
+
+                        // if user doesn't already have a dashboard channel, create one
+                        if (!existing.dashboard_channel_id && interaction.guild) {
+                            // find or create category
+                            let category = interaction.guild.channels.cache.find(c =>
+                                c.name === 'dashboard' && c.type === ChannelType.GuildCategory);
+                            if (!category) {
+                                category = await interaction.guild.channels.create({
+                                    name: 'dashboard',
+                                    type: ChannelType.GuildCategory,
+                                    permissionOverwrites: [
+                                        { id: interaction.guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+                                    ],
+                                });
+                            }
+
+                            // make unique channel name
+                            let chanName = `dashboard-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9\-]/g, '').slice(0, 80);
+                            // ensure no duplicate
+                            if (interaction.guild.channels.cache.some(c => c.name === chanName)) {
+                                chanName += `-${userId.slice(-4)}`;
+                            }
+
+                            const privateChannel = await interaction.guild.channels.create({
+                                name: chanName,
+                                type: ChannelType.GuildText,
+                                parent: category.id,
+                                permissionOverwrites: [
+                                    { id: interaction.guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+                                    { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+                                    { id: interaction.client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+                                ],
+                            });
+
+                            existing.dashboard_channel_id = privateChannel.id;
                             await existing.save();
                         }
                     } catch (dbErr) {
@@ -216,11 +255,17 @@ module.exports = {
                     }
 
                     userProgress.delete(userId);
+                    let description = 'You have completed the tutorial. You are now verified and have been added to the system (if not already).';
+                    // if we stored channel id, mention it
+                    const fresh = await User.findOne({discord_id: userId});
+                    if (fresh && fresh.dashboard_channel_id) {
+                        description += `\n\nYour personal dashboard channel has been created: <#${fresh.dashboard_channel_id}>. ` +
+                            'Please use that channel to issue commands going forward.';
+                    }
+
                     const doneEmbed = new EmbedBuilder()
                         .setTitle('Verification Complete')
-                        .setDescription(
-                            'You have completed the tutorial. You are now verified and have been added to the system (if not already).'
-                        );
+                        .setDescription(description);
                     await i.update({
                         embeds: [doneEmbed],
                         components: [
@@ -237,6 +282,7 @@ module.exports = {
                     collector.stop('completed');
                 }
             });
+
 
             collector.on('end', async () => {
 

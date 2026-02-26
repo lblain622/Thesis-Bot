@@ -194,29 +194,78 @@ client.on('interactionCreate', async interaction => {
         const command = client.commands.get(commandName);
         if (!command) return;
 
+        // make sure a database user doc exists (and update last_active/time)
+        let userDoc = null;
+        try {
+            userDoc = await ensureUserExists(interaction.user);
+        } catch (e) {
+            console.error('ensureUserExists error:', e);
+        }
+
         // Gate commands: require verification except for /verify and /admin
         if (commandName !== 'verify' && commandName !== 'admin') {
             try {
-                   let  userDoc = await User.findOne({discord_id: interaction.user.id}).lean();
-
                 if (!userDoc) {
                     return interaction.reply({
                         content: 'You need to complete verification before using this command. Please run `/verify` first.',
                         ephemeral: true,
                     });
                 } else {
-                    // Touch last_active for verified users
+                    // Touch last_active for verified users (ensureUserExists already did this but double-check)
                     await User.updateOne({_id: userDoc._id}, {
                         $set: {
                             last_active: new Date(),
-                            discord_name: interaction.user.tag
-                        }
+                            discord_name: interaction.user.tag,
+                        },
                     });
                 }
             } catch (e) {
                 console.error('Verification gate error:', e);
-                return interaction.reply({content: 'Error verifying user status. Please try again.' });
+                return interaction.reply({content: 'Error verifying user status. Please try again.'});
             }
+        }
+
+        // ensure command is run in the user's dashboard channel if one exists
+        if (userDoc && userDoc.dashboard_channel_id && commandName !== 'verify' && commandName !== 'admin') {
+            if (interaction.channelId !== userDoc.dashboard_channel_id) {
+                return interaction.reply({
+                    content: `Please use your personal dashboard channel <#${userDoc.dashboard_channel_id}> for commands.`,
+                    ephemeral: true,
+                });
+            }
+        }
+
+        // log the action before executing so we don't miss it if command errors
+        try {
+            const { logAction } = require('./utils/logUtils');
+            let actionDesc = `/${commandName}`;
+            
+            function describeOpts(opts) {
+                if (!opts || !opts.length) return '';
+                const pieces = [];
+                for (const o of opts) {
+                    // subcommand or group
+                    if (o.type === 1 || o.type === 2) {
+                        pieces.push(o.name);
+                        if (o.options) {
+                            const nested = describeOpts(o.options);
+                            if (nested) pieces.push(nested);
+                        }
+                    } else {
+                        pieces.push(`${o.name}:${o.value}`);
+                    }
+                }
+                return pieces.join(' ');
+            }
+            const opts = interaction.options?.data || [];
+            const optsDesc = describeOpts(opts);
+            if (optsDesc) actionDesc += ' ' + optsDesc;
+
+            if (userDoc && userDoc._id) {
+                await logAction(userDoc._id, actionDesc);
+            }
+        } catch (e) {
+            console.error('Error logging action:', e);
         }
 
         try {
@@ -228,7 +277,6 @@ client.on('interactionCreate', async interaction => {
             } else {
                 await interaction.reply({
                     content: 'There was an error executing this command.',
-
                 });
             }
         }
