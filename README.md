@@ -2,10 +2,6 @@
 
 HexaHive is a Discord bot built to support a game-theory themed vulnerability trading simulation. It provides commands for reporting, trading, and managing virtual exploits, shops, player profiles, and server announcements. The project was created as part of a thesis project and is implemented in Node.js.
 
-## Configuration
-
-- `CONSTANT_REPORT_BONUS` – optional flat bonus (USD) added to every received offer. Setting this environment variable will make the offer notifications include a breakdown of the base value plus this constant bonus.  Defaults to 0.
-
 ## Getting Started
 
 Requirements:
