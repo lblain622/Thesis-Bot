@@ -10,6 +10,7 @@ const {
 const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
 const Company = require('../../models/Company');
+const Exploit = require('../../models/Exploit');
 
 
 module.exports = {
@@ -45,6 +46,16 @@ module.exports = {
             option.setName('exclude_self_reported')
                 .setDescription('Exclude vulnerabilities you have reported')
                 .setRequired(false)
+        )
+        .addStringOption(option =>
+            option.setName('exploited')
+                .setDescription('Filter by exploitation status')
+                .addChoices(
+                    {name: 'Exploited', value: 'exploited'},
+                    {name: 'Not Exploited', value: 'not_exploited'},
+                    {name: 'Any', value: 'any'}
+                )
+                .setRequired(false)
         ),
 
     async execute(interaction) {
@@ -59,11 +70,27 @@ module.exports = {
             const identifier = interaction.options.getString('identifier');
             let vulnerability;
 
+            // gather user's active exploits to apply filters/warnings
+            const activeExploits = await Exploit.find({
+                user_id: user._id,
+                status: 'Active'
+            }).lean();
+            const exploitedIds = new Set(activeExploits.map(e => e.volunerability_id.toString()));
+
             if (identifier) {
 
                 vulnerability = await Vulnerability.findOne({vuln_identifier: identifier})
                     .populate('company_id')
                     .populate('reported_by.user_id');
+
+                // warn if exploiting
+                const isExploiting = exploitedIds.has(vulnerability._id.toString());
+                if (isExploiting) {
+                    // append warning to description so it appears in embed later
+                    vulnerability.description =
+                        `⚠️ **You are currently exploiting this vulnerability!**\n\n` +
+                        (vulnerability.description || '');
+                }
 
                 if (!vulnerability) {
                     return interaction.editReply({
@@ -90,6 +117,7 @@ module.exports = {
                 const reportedFilter = interaction.options.getString('reported') || 'any';
                 const resolvedFilter = interaction.options.getString('resolved') || 'unresolved'; // default keeps previous behavior
                 const excludeSelf = interaction.options.getBoolean('exclude_self_reported') || false;
+                const exploitedFilter = interaction.options.getString('exploited') || 'any';
 
                 const query = {
                     $or: [
@@ -98,6 +126,9 @@ module.exports = {
                     ]
                 };
 
+                if (exploitedFilter !== 'any') {
+                    // we'll filter after we fetch since query uses ids
+                }
                 if (reportedFilter !== 'any') {
                     query.isReported = (reportedFilter === 'reported');
                 }
@@ -111,10 +142,16 @@ module.exports = {
                     query.reported_by = {$not: {$elemMatch: {user_id: user._id}}};
                 }
 
-                const vulnerabilities = await Vulnerability.find(query)
+                let vulnerabilities = await Vulnerability.find(query)
                     .populate('company_id')
                     .populate('reported_by.user_id');
 
+                // apply exploitation filter if requested
+                if (exploitedFilter === 'exploited') {
+                    vulnerabilities = vulnerabilities.filter(v => exploitedIds.has(v._id.toString()));
+                } else if (exploitedFilter === 'not_exploited') {
+                    vulnerabilities = vulnerabilities.filter(v => !exploitedIds.has(v._id.toString()));
+                }
                 if (!vulnerabilities.length) {
                     return interaction.editReply({
                         content: 'You have no vulnerabilities to view.',
@@ -128,12 +165,14 @@ module.exports = {
                     .addOptions(
                         vulnerabilities.slice(0, 25).map(v => {
                             const selfReported = Array.isArray(v.reported_by) && v.reported_by.some(rb => rb.user_id && rb.user_id._id && rb.user_id._id.toString() === user._id.toString());
+                            const exploited = exploitedIds.has(v._id.toString());
                             const descParts = [
                                 v.volun_type,
                                 v.isReported ? 'Reported' : 'Unreported',
                                 v.isResolved ? 'Resolved' : 'Unresolved'
                             ];
                             if (selfReported) descParts.push('You reported');
+                            if (exploited) descParts.push('Exploiting');
                             return ({
                                 label: v.vuln_identifier,
                                 description: descParts.join(' • '),
@@ -159,13 +198,23 @@ module.exports = {
                 await response.update({content: 'Loading vulnerability details...', components: []});
             }
 
+            const vulIdString = vulnerability._id.toString();
             const canSeeFields = vulnerability.visibility.allowedUsers.some(
                 u => u.toString() === user._id.toString()
             );
+            const isExploitingFinal = exploitedIds.has(vulIdString);
+
             const embed = new EmbedBuilder()
                 .setTitle(`${vulnerability.vuln_identifier}`)
                 .setColor(canSeeFields ? getSeverityColor(vulnerability.severity) : '#808080')
                 .setDescription(vulnerability.description || 'No description provided');
+
+            if (isExploitingFinal) {
+                embed.addFields({
+                    name: '⚠️ Currently Exploiting',
+                    value: 'You are actively exploiting this vulnerability – reporting it or collecting earnings may increase your chance of getting caught.'
+                });
+            }
 
 
             embed.addFields({

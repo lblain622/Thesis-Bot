@@ -6,7 +6,7 @@ const LogSchema = new Schema({
     ref: 'Users',
     required: true,
   },
-  // textual description of the action performed (e.g. command + args)
+ 
   action: {
     type: String,
     required: true,

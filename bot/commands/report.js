@@ -11,6 +11,7 @@ const Company = require('../../models/Company');
 const Reports = require('../../models/Reports');
 const User = require('../../models/Users');
 const Vulnerability = require('../../models/Vulnerabilities');
+const Exploit = require('../../models/Exploit');
 const generateOffer = require('../utils/generateOffer');
 const generateDictatorOffer = require('../utils/generateDicOffer');
 const cache = require('../utils/cache');
@@ -85,8 +86,14 @@ module.exports = {
                 const company = await Company.findById(companyId);
                 platformId = company.platform_id;
 
+                // warn if user is currently exploiting this vuln
+                const isExploiting = await Exploit.exists({
+                    user_id: user._id,
+                    volunerability_id: vulnerabilityId,
+                    status: 'Active'
+                });
 
-                const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId);
+                const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId, isExploiting);
                 if (!confirmed) return;
             } else {
                 // Menu-based submission
@@ -107,7 +114,14 @@ module.exports = {
                     });
                 }
 
-                const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId);
+                // warn if user is currently exploiting this vuln
+                const isExploiting = await Exploit.exists({
+                    user_id: user._id,
+                    volunerability_id: vulnerabilityId,
+                    status: 'Active'
+                });
+
+                const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId, isExploiting);
                 if (!confirmed) return;
 
                 const vulnerability = await Vulnerability.findById(vulnerabilityId);
@@ -254,6 +268,14 @@ async function selectCompany(interaction) {
 }
 
 async function selectVulnerability(interaction, companyId) {
+    // also check which ones user is currently exploiting so we can warn in the menu
+    const user = await User.findOne({discord_id: interaction.user.id});
+    let exploitedIds = new Set();
+    if (user) {
+        const activeExploits = await Exploit.find({user_id: user._id, status: 'Active'}).lean();
+        exploitedIds = new Set(activeExploits.map(e => e.volunerability_id.toString()));
+    }
+
     const vulnerabilities = await Vulnerability.find({
         company_id: companyId,
         isResolved: false
@@ -271,11 +293,15 @@ async function selectVulnerability(interaction, companyId) {
         .setCustomId('select_vulnerability')
         .setPlaceholder('Select a vulnerability')
         .addOptions(
-            vulnerabilities.map(v => ({
-                label: v.vuln_identifier,
-                description: `${v.volun_type}`,
-                value: v._id.toString(),
-            }))
+            vulnerabilities.map(v => {
+                const exploited = exploitedIds.has(v._id.toString());
+                const desc = exploited ? `${v.volun_type} • Exploiting` : `${v.volun_type}`;
+                return {
+                    label: v.vuln_identifier,
+                    description: desc,
+                    value: v._id.toString(),
+                };
+            })
         );
 
     const row = new ActionRowBuilder().addComponents(selectMenu);
@@ -304,18 +330,22 @@ async function selectVulnerability(interaction, companyId) {
     return response.values[0];
 }
 
-async function confirmSubmission(interaction, companyId, vulnerabilityId) {
+async function confirmSubmission(interaction, companyId, vulnerabilityId, isExploiting = false) {
     // Parallel fetch for better performance
     const [company, vulnerability] = await Promise.all([
         Company.findById(companyId).lean(),
         Vulnerability.findById(vulnerabilityId).lean()
     ]);
 
-    const summaryContent = `**Full Report Summary**\n\n` +
+    let summaryContent = `**Full Report Summary**\n\n` +
         `**Company:** ${company.name}\n` +
         `**Vulnerability:** ${vulnerability.vuln_identifier}\n` +
         `**Type:** ${vulnerability.volun_type}\n\n` +
         `Click **Submit Report** to confirm.`;
+
+    if (isExploiting) {
+        summaryContent += `\n\n⚠️ **Warning:** You are currently exploiting this vulnerability. Reporting it may expose you and increase the risk of being caught.`;
+    }
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
