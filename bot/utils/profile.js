@@ -23,7 +23,7 @@ module.exports = {
             .addFields(
                 {name:"Reports Submitted", value: `${user.reports_made} reports`},
                 {name:"Money Earned", value:`$${user.money_earned}`},
-                {name:"Reputation Given",value:`${user.repuation_earned} points`}
+                {name:"Reputation Given",value:`${user.reputation_earned} points`}
             );
         await interaction.reply({embeds: [embdVar],flags: 64,});
 

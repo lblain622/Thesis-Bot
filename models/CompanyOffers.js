@@ -65,7 +65,7 @@ const companyOfferSchema = new Schema({
     ],
     // Audit field to mark why cash was reduced, e.g., 'item_bonus'
     cash_reduction_reason: { type: String, default: null },
-    // Keep legacy fields for backward compatibility
+   
     resloved_at: Date,
     counter_offered: Number,
     // fields for vouching payouts

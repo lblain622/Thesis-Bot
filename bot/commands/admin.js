@@ -84,6 +84,21 @@ module.exports = {
             subcommand
                 .setName('resetdata')
                 .setDescription('Reset all collections and reload seed data (DANGEROUS)')
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('resolveall')
+                .setDescription('Force-resolve all reported vulnerabilities (debug)')
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('runperiodic')
+                .setDescription('Manually trigger periodic leaderboard/grant tasks')
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('timers')
+                .setDescription('Show status of internal continuous timers')
         ),
 
 
@@ -119,6 +134,15 @@ module.exports = {
                 break;
             case 'resetdata':
                 await resetData(interaction);
+                break;
+            case 'resolveall':
+                await resolveAllVulns(interaction);
+                break;
+            case 'runperiodic':
+                await runPeriodic(interaction);
+                break;
+            case 'timers':
+                await showTimers(interaction);
                 break;
         }
     },
@@ -180,7 +204,7 @@ async function addUsersBulk(interaction) {
                 }
 
                 // Create new user
-                const newUser = await User.create({
+                await User.create({
                     discord_id: userId,
                     username: discordUser.username,
                     discord_name: discordUser.tag,
@@ -231,6 +255,7 @@ async function addUsersBulk(interaction) {
 
 
 async function resolveAllVulns(interaction) {
+    // already defined earlier
     await interaction.deferReply();
 
     try {
@@ -447,23 +472,26 @@ async function showLeaderboard(interaction) {
             .addFields(
                 {
                     name: '💰 Top Earners',
-                    value: topEarners.map((u, idx) =>
-                        `${['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`} ${u.discord_name} - $${u.money_earned}`
-                    ).join('\n'),
+                    value: topEarners.map((u, idx) => {
+                        const rank = ['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`;
+                        return `${rank} ${u.discord_name} - $${u.money_earned}`;
+                    }).join('\n'),
                     inline: true
                 },
                 {
                     name: '📊 Top Reporters',
-                    value: topReporters.map((u, idx) =>
-                        `${['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`} ${u.discord_name} - ${u.reports_made} reports`
-                    ).join('\n'),
+                    value: topReporters.map((u, idx) => {
+                        const rank = ['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`;
+                        return `${rank} ${u.discord_name} - ${u.reports_made} reports`;
+                    }).join('\n'),
                     inline: true
                 },
                 {
                     name: '⭐ Top Reputation',
-                    value: topReputation.map((u, idx) =>
-                        `${['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`} ${u.discord_name} - ${u.repuation_earned} pts`
-                    ).join('\n'),
+                    value: topReputation.map((u, idx) => {
+                        const rank = ['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`;
+                        return `${rank} ${u.discord_name} - ${u.reputation_earned} pts`;
+                    }).join('\n'),
                     inline: true
                 }
             )
@@ -473,5 +501,45 @@ async function showLeaderboard(interaction) {
     } catch (err) {
         console.error(err);
         await interaction.editReply('  Error generating leaderboard.');
+    }
+}
+
+// manual trigger for periodic tasks
+async function runPeriodic(interaction) {
+    await interaction.deferReply();
+    try {
+        const cont = require('../utils/continuousMode');
+        const success = await cont.triggerPeriodic();
+        if (success) {
+            await interaction.editReply('✅ Periodic tasks executed. Check announcements channel.');
+        } else {
+            await interaction.editReply('⚠️ Continuous mode not initialized yet.');
+        }
+    } catch (err) {
+        console.error('Error running periodic tasks:', err);
+        await interaction.editReply('❌ Failed to run periodic tasks.');
+    }
+}
+
+// display timer status
+async function showTimers(interaction) {
+    await interaction.deferReply({ephemeral: true});
+    try {
+        const cont = require('../utils/continuousMode');
+        const status = await cont.getTimerStatus();
+        const embed = new EmbedBuilder()
+            .setTitle('⏱️ Continuous Mode Timer Status')
+            .setColor('#00ffff')
+            .addFields(
+                { name: 'Generation', value: status.generation ? '🟢 active' : '🔴 off', inline: true },
+                { name: 'Sweep', value: status.sweep ? '🟢 active' : '🔴 off', inline: true },
+                { name: 'Tick', value: status.tick ? '🟢 active' : '🔴 off', inline: true },
+                { name: 'Leaderboard/Grants', value: status.leaderboard ? '🟢 active' : '🔴 off', inline: true }
+            )
+            .setTimestamp();
+        await interaction.editReply({ embeds: [embed] });
+    } catch (err) {
+        console.error('Error fetching timer status:', err);
+        await interaction.editReply('❌ Failed to retrieve timer status.');
     }
 }

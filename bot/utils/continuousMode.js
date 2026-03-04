@@ -13,6 +13,7 @@ const testVulnData = require('../../data/test-data.json');
 var corpora = require('corpora-project');
 const fs = require('fs');
 const path = require('path');
+const Items = require('../../models/Items');
 
 
 // Intervals (ms)
@@ -25,6 +26,7 @@ const CONT_TICK_MS = Number(process.env.CONT_TICK_MS || 5 * 60 * 1000); // 5-min
 let genTimeout = null;
 let sweepInterval = null;
 let tickInterval = null;
+let leaderboardInterval = null;
 let clientRef = null;
 
 function randBetween(min, max) {
@@ -319,9 +321,9 @@ async function evaluateAutoOffers(client) {
                         useDictator = nameHas || variantsHas;
                     }
                 }
-            } catch (_) { /* no-op */
+            } catch (e) {
+                console.error('Error determining offer type:', e);
             }
-
             if (useDictator) {
                 await generateDictatorOffer(client, chosenReport, duser);
             } else {
@@ -354,7 +356,7 @@ async function evaluateAutoOffers(client) {
                     // Credit $100 and reputation bonus if not already granted
                     const bonusRep = 10;
                     const updates = {
-                        $inc: {money_earned: 100, repuation_earned: bonusRep}
+                        $inc: {money_earned: 100, reputation_earned: bonusRep}
                     };
                     await Users.updateOne({_id: loser.user_id}, updates);
                     await Report.updateOne({_id: loser._id}, {
@@ -379,6 +381,83 @@ async function evaluateTick(client) {
     }
 }
 
+// ---- periodic leaderboard and company grant tasks ----
+async function postLeaderboard(client) {
+    try {
+        const channel = await resolveAnnouncementsChannel(client);
+        if (!channel) return;
+        const topEarners = await Users.find({}).sort({money_earned: -1}).limit(5);
+        const topReps = await Users.find({}).sort({reputation_earned: -1}).limit(5);
+        const embed = new EmbedBuilder()
+            .setTitle('🏆 10‑minute Leaderboard')
+            .setColor('#FFD700')
+            .addFields(
+                {
+                    name: '💰 Top Earners',
+                    value: topEarners.length ? topEarners.map((u, idx) =>
+                        `${['🥇','🥈','🥉'][idx] || `${idx+1}.`} ${u.discord_name} - $${u.money_earned}`
+                    ).join('\n') : 'No data',
+                    inline: true
+                },
+                {
+                    name: '⭐ Top Reputation',
+                    value: topReps.length ? topReps.map((u, idx) =>
+                        `${['🥇','🥈','🥉'][idx] || `${idx+1}.`} ${u.discord_name} - ${u.reputation_earned} pts`
+                    ).join('\n') : 'No data',
+                    inline: true
+                }
+            )
+            .setTimestamp();
+        await channel.send({embeds: [embed]});
+    } catch (err) {
+        console.error('Error posting periodic leaderboard:', err);
+    }
+}
+
+async function issueCompanyGrants(client) {
+    try {
+        const companies = await Company.find({});
+        if (!companies.length) return;
+        // choose 1-3 random companies
+        const count = randBetween(1, Math.min(3, companies.length));
+        const chosen = companies.sort(() => 0.5 - Math.random()).slice(0, count);
+        const channel = await resolveAnnouncementsChannel(client);
+        for (const comp of chosen) {
+            const topUsers = await Users.aggregate([
+                { $unwind: '$reputation_breakdown' },
+                { $match: { 'reputation_breakdown.company_id': comp._id } },
+                { $sort: { 'reputation_breakdown.trust_score': -1 } },
+                { $limit: 1 }
+            ]);
+            if (!topUsers.length) continue;
+            const top = topUsers[0];
+            const reward = randBetween(100, 500);
+            const update = { $inc: { balance: reward, money_earned: reward } };
+            // maybe give a random merch item
+            const merch = await Items.findOne({ type: 'merch', enabled: true });
+            if (merch) {
+                update.$push = {
+                    inventory: { item_id: merch._id, company_id: comp._id, qty: 1 }
+                };
+            }
+            await Users.updateOne({ _id: top._id }, update);
+            if (channel) {
+                let msg = `🏢 **${comp.name}** has awarded a research grant of $${reward} to <@${top.discord_id}> for their high reputation with the company!`;
+                if (merch) msg += ` They've also received **${merch.name}** merch.`;
+                channel.send(msg).catch(() => {});
+            }
+        }
+    } catch (err) {
+        console.error('Error issuing company grants:', err);
+    }
+}
+
+async function periodicTasks(client) {
+    await postLeaderboard(client);
+    await issueCompanyGrants(client);
+}
+
+
 async function initialize(client) {
     clientRef = client;
     if (!genTimeout) await scheduleNextGeneration();
@@ -389,6 +468,14 @@ async function initialize(client) {
     if (!tickInterval) tickInterval = setInterval(() => {
         evaluateTick(clientRef).catch(e => console.error('CONT tick error:', e));
     }, CONT_TICK_MS);
+    // Start leaderboard/grant interval every 10 minutes
+    if (!leaderboardInterval) {
+        leaderboardInterval = setInterval(() => {
+            periodicTasks(clientRef).catch(e => console.error('Periodic task error:', e));
+        }, 10 * 60 * 1000);
+        // run once immediately
+        periodicTasks(clientRef).catch(e => console.error('Periodic task initial error:', e));
+    }
 }
 
 function cleanupTimers() {
@@ -404,9 +491,32 @@ function cleanupTimers() {
         clearInterval(tickInterval);
         tickInterval = null;
     }
+    if (leaderboardInterval) {
+        clearInterval(leaderboardInterval);
+        leaderboardInterval = null;
+    }
+}
+
+async function getTimerStatus() {
+    return {
+        generation: !!genTimeout,
+        sweep: !!sweepInterval,
+        tick: !!tickInterval,
+        leaderboard: !!leaderboardInterval
+    };
+}
+
+async function triggerPeriodic() {
+    if (clientRef) {
+        await periodicTasks(clientRef);
+        return true;
+    }
+    return false;
 }
 
 module.exports = {
     initialize,
     cleanupTimers,
+    getTimerStatus,
+    triggerPeriodic
 };

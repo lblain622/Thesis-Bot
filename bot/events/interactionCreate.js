@@ -4,7 +4,7 @@ const Report = require('../../models/Reports');
 const Trade = require('../../models/Trades');
 const Vulnerability = require('../../models/Vulnerabilities');
 const {announceVulnerabilityPatched, announceExploitSummary} = require('../events/announcePatches');
-const {handleExploitCleanup} = require('../utils/exploitUtils');
+const {handleExploitCleanup, awardReporterBonus} = require('../utils/exploitUtils');
 const cache = require('../utils/cache');
 
 module.exports = {
@@ -114,6 +114,9 @@ async function handleUltimatumGame(interaction, action, offerId) {
 
             await vulnerability.save();
 
+            // Award bonus to reporter if they're not exploiting
+            const bonusResult = await awardReporterBonus(report.user_id, vulnerability._id);
+
             if (interaction.guild) {
                 // Pass the server ID (guild ID) to the announcement function
                 await announceVulnerabilityPatched(
@@ -125,6 +128,19 @@ async function handleUltimatumGame(interaction, action, offerId) {
 
                 // Handle exploit cleanup and announcement
                 const exploitSummary = await handleExploitCleanup(vulnerability._id);
+                
+                // Notify reporter about bonus
+                if (bonusResult.awarded) {
+                    try {
+                        const { notifyUser } = require('../utils/logUtils');
+                        const bonusMsg = `🎁 **Bonus Reward!** You caught ${bonusResult.exploiterCount} exploiter${bonusResult.exploiterCount > 1 ? 's' : ''} on **${vulnerability.vuln_identifier}** [${bonusResult.severity}]. ` +
+                            `You received a bonus of $${bonusResult.bonusAmount}!`;
+                        await notifyUser(interaction.client, report.user_id, bonusMsg);
+                    } catch (e) {
+                        console.error('Error notifying reporter bonus:', e);
+                    }
+                }
+                
                 if (exploitSummary.caughtCount > 0) {
                     await announceExploitSummary(
                         interaction.client,
@@ -426,6 +442,9 @@ async function handleStandardOffer(interaction, action, offerId) {
             vulnerability.is_resolved_date = new Date();
             await vulnerability.save();
 
+            // Award bonus to reporter if they're not exploiting
+            const bonusResult = await awardReporterBonus(report.user_id, vulnerability._id);
+
             if (interaction.guild) {
                 await announceVulnerabilityPatched(
                     interaction.client,
@@ -436,6 +455,19 @@ async function handleStandardOffer(interaction, action, offerId) {
 
                 // Handle exploit cleanup and announcement
                 const exploitSummary = await handleExploitCleanup(vulnerability._id);
+                
+                // Notify reporter about bonus
+                if (bonusResult.awarded) {
+                    try {
+                        const { notifyUser } = require('../utils/logUtils');
+                        const bonusMsg = `🎁 **Bonus Reward!** You caught ${bonusResult.exploiterCount} exploiter${bonusResult.exploiterCount > 1 ? 's' : ''} on **${vulnerability.vuln_identifier}** [${bonusResult.severity}]. ` +
+                            `You received a bonus of $${bonusResult.bonusAmount}!`;
+                        await notifyUser(interaction.client, report.user_id, bonusMsg);
+                    } catch (e) {
+                        console.error('Error notifying reporter bonus:', e);
+                    }
+                }
+                
                 if (exploitSummary.caughtCount > 0) {
                     await announceExploitSummary(
                         interaction.client,
@@ -594,6 +626,9 @@ async function handleDictatorOffer(interaction, action, offerId) {
         vulnerability.is_resolved_date = new Date();
         await vulnerability.save();
 
+        // Award bonus to reporter if they're not exploiting
+        const bonusResult = await awardReporterBonus(report.user_id, vulnerability._id);
+
         if (interaction.guild) {
             // Pass the server ID (guild ID) to the announcement function
             await announceVulnerabilityPatched(
@@ -605,6 +640,19 @@ async function handleDictatorOffer(interaction, action, offerId) {
 
             // Handle exploit cleanup and announcement
             const exploitSummary = await handleExploitCleanup(vulnerability._id);
+            
+            // Notify reporter about bonus
+            if (bonusResult.awarded) {
+                try {
+                    const { notifyUser } = require('../utils/logUtils');
+                    const bonusMsg = `🎁 **Bonus Reward!** You caught ${bonusResult.exploiterCount} exploiter${bonusResult.exploiterCount > 1 ? 's' : ''} on **${vulnerability.vuln_identifier}** [${bonusResult.severity}]. ` +
+                        `You received a bonus of $${bonusResult.bonusAmount}!`;
+                    await notifyUser(interaction.client, report.user_id, bonusMsg);
+                } catch (e) {
+                    console.error('Error notifying reporter bonus:', e);
+                }
+            }
+            
             if (exploitSummary.caughtCount > 0) {
                 await announceExploitSummary(
                     interaction.client,
