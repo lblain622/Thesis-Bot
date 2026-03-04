@@ -10,7 +10,6 @@ const {EmbedBuilder} = require('discord.js');
 const {announceExploitSummary} = require('../events/announcePatches');
 const {handleExploitCleanup} = require('./exploitUtils');
 const testVulnData = require('../../data/test-data.json');
-var corpora = require('corpora-project');
 const fs = require('fs');
 const path = require('path');
 const Items = require('../../models/Items');
@@ -83,7 +82,6 @@ async function generateOneVulnerability() {
     const companies = await Company.find({});
     const users = await Users.find({});
     if (!companies.length || !users.length || !testVulnData?.length) return null;
-
 
     const company = companies[randBetween(0, companies.length - 1)];
     const data = testVulnData[randBetween(0, testVulnData.length - 1)];
