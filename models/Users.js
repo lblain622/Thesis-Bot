@@ -31,6 +31,11 @@ const userSchema = new Schema({
         type: Number,
         default: 0
     },
+    // money earned by vouching for other users
+    money_from_vouches: {
+        type: Number,
+        default: 0
+    },
     money_from_trades: {
         type: Number,
         default: 0

@@ -21,6 +21,12 @@ async function generateOffer(client, report, discordUser) {
     const baseAmount = Math.floor(Math.random() * (max - min + 1)) + min;
     let offerAmount = baseAmount;
 
+    // determine voucher split now that we know base amount
+    let voucherShare = 0;
+    let voucherDoc = null;
+    if (report.VouchingUser) {
+        voucherDoc = await Users.findById(report.VouchingUser).lean();
+    }
 
     const bonusDetails = {
         company: 0,
@@ -33,6 +39,22 @@ async function generateOffer(client, report, discordUser) {
 
     // Apply shop effects: company bonus
     let notes = [];
+
+    // check reputation threshold for voucher eligibility
+    const repThresh = company.reputation_threshold || 0;
+    if (voucherDoc && repThresh > 0) {
+        const user = await Users.findById(report.user_id).lean();
+        const userMeets = user && (user.reputation || 0) >= repThresh;
+        const voucherMeets = (voucherDoc.reputation || 0) >= repThresh;
+        if (userMeets || voucherMeets) {
+            const pct = Number(process.env.VOUCHER_SHARE_PCT || 20);
+            voucherShare = Math.floor(offerAmount * (pct / 100));
+            if (voucherShare > 0) {
+                offerAmount -= voucherShare;
+                notes.push(`$${voucherShare} reserved for voucher (${voucherDoc.username || voucherDoc.discord_id})`);
+            }
+        }
+    }
     try {
         const user = await Users.findById(report.user_id).lean();
         if (user) {
@@ -126,7 +148,7 @@ async function generateOffer(client, report, discordUser) {
         user_id: report.user_id,
         base_amount: baseAmount,
         bonus_details: bonusDetails,
-        original_amount: offerAmount,
+        original_amount: offerAmount + voucherShare, // keep pre-split figure for record
         offered_amount: offerAmount,
         offer_percent: 100,
         reputation_offered: '10',
@@ -136,6 +158,8 @@ async function generateOffer(client, report, discordUser) {
         counter_offer: null,
         items: attachedItems,
         cash_reduction_reason: reductionReason,
+        voucher_user_id: voucherDoc?._id || null,
+        voucher_amount: voucherShare,
     });
 
     try {
@@ -165,9 +189,12 @@ async function generateOffer(client, report, discordUser) {
         if (bonusDetails.luckyToken) breakdown += `\n• Lucky token added (payout doubled)`;
         if (bonusDetails.itemCashReduction) breakdown += `\n• Cash reduced for included item: -$${bonusDetails.itemCashReduction}`;
 
-        const messageContent = `${discordUser} 💰 **Reward Offer from ${company.name}**\n` +
-            `You have an offer of $${offerAmount} for your report.` +
-            breakdown +
+        let messageContent = `${discordUser} 💰 **Reward Offer from ${company.name}**\n` +
+            `You have an offer of $${offerAmount} for your report.`;
+        if (voucherShare && voucherDoc) {
+            messageContent += `\n($${voucherShare} has been set aside for your voucher ${voucherDoc.username || voucherDoc.discord_id}).`;
+        }
+        messageContent += breakdown +
             (reductionReason ? `\nNote: Cash reduced due to item bonus.` : '') +
             (notes.length ? `\nApplied: ${notes.join(', ')}` : '') +
             `${itemsLine}${grantMsg}\n` +

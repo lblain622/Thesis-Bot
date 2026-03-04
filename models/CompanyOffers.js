@@ -68,6 +68,10 @@ const companyOfferSchema = new Schema({
     // Keep legacy fields for backward compatibility
     resloved_at: Date,
     counter_offered: Number,
+    // fields for vouching payouts
+    voucher_user_id: { type: Schema.Types.ObjectId, ref: 'Users', default: null },
+    voucher_amount: { type: Number, default: 0 },
+
     // Canonical fields used by interaction handlers
     resolved_at: { type: Date, default: null },
     counter_offer: { type: Number, default: null },

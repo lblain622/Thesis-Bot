@@ -228,6 +228,7 @@ async function loadInitialData() {
                 name: 'AI SecurityLab',
                 description: 'AI/ML security research and testing.',
                 product_type: 'ai_ml',
+                reputation_threshold: 100,
                 preferred_vulns: ['Business_Logic', 'Information_Disclosure', 'Other'],
                 reputation_tiers: [
                     {
@@ -259,6 +260,7 @@ async function loadInitialData() {
                     product_type: config.product_type,
                     preferred_vulns: config.preferred_vulns,
                     reputation_tiers: config.reputation_tiers,
+                    reputation_threshold: config.reputation_threshold || 0,
                     variants: [],
                     bounty_tiers: []
                 });

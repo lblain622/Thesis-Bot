@@ -67,7 +67,7 @@ const reportSchema = new Schema({
     },
     VouchingUser:{
         type: Schema.Types.ObjectId,
-        ref: 'User',
+        ref: 'Users',
         default: null
     }
 }, { timestamps: true });

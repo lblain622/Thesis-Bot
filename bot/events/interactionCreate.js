@@ -80,26 +80,22 @@ async function handleUltimatumGame(interaction, action, offerId) {
             }
         );
 
-        // Update company reputation
-        await updateCompanyReputation(user._id, report.company_id, 5);
-
-        // build bonus breakdown for message
-        let bonusBreakdown = `\n**Bonuses applied:**`;
-        const repPct = report.reputation_bonus || 0;
-        const prefPct = report.preferred_vuln_bonus || 0;
-        const repAmt = Math.floor(baseAmount * (repPct/100));
-        const prefAmt = Math.floor(baseAmount * (prefPct/100));
-        if (repPct) bonusBreakdown += `\n• Reputation (${repPct}%): +$${repAmt}`;
-        if (prefPct) bonusBreakdown += `\n• Preferred vuln (${prefPct}%): +$${prefAmt}`;
-        const constAmt = Number(process.env.CONSTANT_REPORT_BONUS || 0);
-        if (constAmt) bonusBreakdown += `\n• Reporting bonus: +$${constAmt}`;
-
-        const responseMsg = `You accepted the offer!\n` +
-            `**Base:** $${baseAmount}\n` +
-            `**With Bonuses:** $${finalAmount}` +
-            bonusBreakdown +
-            `\n**Reputation:** +${offer.reputation_offered || 0}`;
-
+        // voucher split
+        if (offer.voucher_user_id && offer.voucher_amount && offer.voucher_amount > 0) {
+            try {
+                await User.updateOne({_id: offer.voucher_user_id}, {
+                    $inc: {money_earned: offer.voucher_amount, balance: offer.voucher_amount, money_from_vouches: offer.voucher_amount}
+                });
+                const voucherDoc = await User.findById(offer.voucher_user_id).lean();
+                if (voucherDoc) {
+                    const { notifyUser } = require('../utils/logUtils');
+                    await notifyUser(interaction.client, voucherDoc._id,
+                        `💸 You received $${offer.voucher_amount} for vouching on a report!`);
+                }
+            } catch (e) {
+                console.error('Error paying voucher share (ultimatum):', e);
+            }
+        }
         if (interaction.deferred || interaction.replied) {
             await interaction.followUp({
                 content: responseMsg,
@@ -385,53 +381,25 @@ async function handleStandardOffer(interaction, action, offerId) {
             await User.updateOne({_id: u._id}, {$inc: {repuation_earned: repBonus}});
         }
 
-        // Grant attached items if any
-        if (Array.isArray(offer.items) && offer.items.length) {
-            const Items = require('../../models/Items');
-            const userDoc = await User.findById(u._id).lean();
-            const inv = Array.isArray(userDoc.inventory) ? userDoc.inventory : [];
-            for (const it of offer.items) {
-                try {
-                    const itemDoc = await Items.findById(it.item_id).lean();
-                    if (!itemDoc) continue;
-                    const companyIdStr = it.company_id ? String(it.company_id) : '';
-                    if (itemDoc.stackable) {
-                        const idx = inv.findIndex(e => String(e.item_id) === String(it.item_id) && String(e.company_id || '') === companyIdStr);
-                        if (idx >= 0) {
-                            await User.updateOne({_id: u._id}, {$inc: {[`inventory.${idx}.qty`]: it.qty || 1}});
-                        } else {
-                            await User.updateOne({_id: u._id}, {
-                                $push: {
-                                    inventory: {
-                                        item_id: it.item_id,
-                                        company_id: it.company_id || null,
-                                        qty: it.qty || 1
-                                    }
-                                }
-                            });
-                        }
-                    } else {
-                        // Non-stackable: prevent duplicates
-                        let exists = false;
-                        if (itemDoc.companyScoped) {
-                            exists = inv.some(e => String(e.item_id) === String(it.item_id) && String(e.company_id || '') === companyIdStr);
-                        } else {
-                            exists = inv.some(e => String(e.item_id) === String(it.item_id));
-                        }
-                        if (!exists) {
-                            await User.updateOne({_id: u._id}, {
-                                $push: {
-                                    inventory: {
-                                        item_id: it.item_id,
-                                        company_id: it.company_id || null,
-                                        qty: 1
-                                    }
-                                }
-                            });
-                        }
+        // voucher payout if applicable
+        if (offer.voucher_user_id && offer.voucher_amount && offer.voucher_amount > 0) {
+            try {
+                await User.updateOne({_id: offer.voucher_user_id}, {
+                    $inc: {money_earned: offer.voucher_amount, balance: offer.voucher_amount, money_from_vouches: offer.voucher_amount}
+                });
+                const voucherDoc = await User.findById(offer.voucher_user_id).lean();
+                if (voucherDoc) {
+                    // notify voucher via dashboard channel
+                    try {
+                        const { notifyUser } = require('../utils/logUtils');
+                        await notifyUser(interaction.client, voucherDoc._id,
+                            `💸 You received $${offer.voucher_amount} for vouching on a report!`);
+                    } catch (e) {
+                        console.error('Voucher notification failed:', e);
                     }
-                } catch (_) {
                 }
+            } catch (e) {
+                console.error('Error paying voucher share:', e);
             }
         }
 
@@ -447,7 +415,6 @@ async function handleStandardOffer(interaction, action, offerId) {
             if (bd.reputation) breakdownMsg += `\n• Reputation bonus: +$${bd.reputation}`;
             if (bd.preferred) breakdownMsg += `\n• Preferred vuln bonus: +$${bd.preferred}`;
             if (bd.constant) breakdownMsg += `\n• Reporting bonus: +$${bd.constant}`;
-            if (bd.luckyToken) breakdownMsg += `\n• Lucky token applied (payout doubled)`;
             if (bd.itemCashReduction) breakdownMsg += `\n• Cash reduced for item: -$${bd.itemCashReduction}`;
         }
 
@@ -546,6 +513,23 @@ async function handleDictatorOffer(interaction, action, offerId) {
             repuation_earned: rep
         }
     });
+
+    // voucher share
+    if (offer.voucher_user_id && offer.voucher_amount && offer.voucher_amount > 0) {
+        try {
+            await User.updateOne({_id: offer.voucher_user_id}, {
+                $inc: {money_earned: offer.voucher_amount, balance: offer.voucher_amount, money_from_vouches: offer.voucher_amount}
+            });
+            const voucherDoc = await User.findById(offer.voucher_user_id).lean();
+            if (voucherDoc) {
+                const { notifyUser } = require('../utils/logUtils');
+                await notifyUser(interaction.client, voucherDoc._id,
+                    `💸 You received $${offer.voucher_amount} for vouching on a report!`);
+            }
+        } catch (e) {
+            console.error('Error paying voucher share (dictator):', e);
+        }
+    }
 
     // Grant attached items if any
     if (Array.isArray(offer.items) && offer.items.length) {

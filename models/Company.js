@@ -37,7 +37,12 @@ const companySchema = new Schema({
     bounty_tiers: [{
         type: Schema.Types.ObjectId,
         ref: 'Bounty_tiers'
-    }]
+    }],
+    // minimum reputation required to submit reports / receive offers
+    reputation_threshold: {
+        type: Number,
+        default: 0
+    }
 }, { timestamps: true });
 
 module.exports = model('Company', companySchema);

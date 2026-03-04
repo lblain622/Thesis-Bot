@@ -25,9 +25,9 @@ module.exports = {
                 .setDescription('Vulnerability identifier (e.g., CVE-2024-1234)')
                 .setRequired(false)
         )
-        .addStringOption(option =>
+        .addUserOption(option =>
                             option.setName('voucher')
-                                .setDescription('User you is assisting you in reporting')
+                                .setDescription('User who is vouching for your report')
                                 .setRequired(false)
                         ),
 
@@ -42,18 +42,18 @@ module.exports = {
             }
 
             const vulnIdentifier = interaction.options.getString('vulnerability');
-             const targetUser = interaction.options.getUser('voucher');
+            const targetUser = interaction.options.getUser('voucher');
             let vulnerabilityId, companyId, platformId;
-             console.log(targetUser)
-                            if(targetUser){
-                             if (targetUser.bot) {
-                                            return interaction.editReply({content: 'You cannot have to bot vouch for you', flags: 64});
-                                        }
 
-                                        if (targetUser.id === interaction.user.id) {
-                                            return interaction.editReply({content: 'You cannot vouch for yourself', flags: 64});
-                                        }
-                                        }
+            
+            if (targetUser) {
+                if (targetUser.bot) {
+                    return interaction.editReply({content: 'You cannot have the bot vouch for you', flags: 64});
+                }
+                if (targetUser.id === interaction.user.id) {
+                    return interaction.editReply({content: 'You cannot vouch for yourself', flags: 64});
+                }
+            }
             if (vulnIdentifier) {
                 // Direct submission via identifier
                 const vulnerability = await Vulnerability.findOne({
@@ -85,6 +85,24 @@ module.exports = {
                 companyId = vulnerability.company_id;
                 const company = await Company.findById(companyId);
                 platformId = company.platform_id;
+
+                // reputation threshold check after company load
+                const repThresh = company.reputation_threshold || 0;
+                if (repThresh > 0) {
+                    const userDoc = await User.findOne({discord_id: interaction.user.id});
+                    let voucherDoc = null;
+                    if (targetUser) {
+                        voucherDoc = await User.findOne({discord_id: targetUser.id});
+                    }
+                    const userMeets = userDoc && userDoc.reputation >= repThresh;
+                    const voucherMeets = voucherDoc && voucherDoc.reputation >= repThresh;
+                    if (!userMeets && !voucherMeets) {
+                        return interaction.editReply({
+                            content: `Neither you nor your voucher meet the reputation threshold (${repThresh}) required to submit reports to **${company.name}**.`,
+                            flags: 64
+                        });
+                    }
+                }
 
                 // warn if user is currently exploiting this vuln
                 const isExploiting = await Exploit.exists({
@@ -127,6 +145,24 @@ module.exports = {
                 const vulnerability = await Vulnerability.findById(vulnerabilityId);
                 const company = await Company.findById(companyId);
                 platformId = company.platform_id;
+
+                // reputation threshold check for menu path
+                const repThresh = company.reputation_threshold || 0;
+                if (repThresh > 0) {
+                    const userDoc = await User.findOne({discord_id: interaction.user.id});
+                    let voucherDoc = null;
+                    if (targetUser) {
+                        voucherDoc = await User.findOne({discord_id: targetUser.id});
+                    }
+                    const userMeets = userDoc && userDoc.reputation >= repThresh;
+                    const voucherMeets = voucherDoc && voucherDoc.reputation >= repThresh;
+                    if (!userMeets && !voucherMeets) {
+                        return interaction.editReply({
+                            content: `Neither you nor your voucher meet the reputation threshold (${repThresh}) required to submit reports to **${company.name}**.`,
+                            flags: 64
+                        });
+                    }
+                }
             }
 
             const report = await saveReport(
@@ -135,17 +171,23 @@ module.exports = {
                 companyId,
                 vulnerabilityId,
                 user,
-                targetUser
+                targetUser // this is a Discord.User object
             );
 
             // pull vuln/company data to give user more context
             const vulnDoc = await Vulnerability.findById(vulnerabilityId).lean();
             const companyDoc = await Company.findById(companyId).lean();
 
-            await interaction.followUp({
-                content: `**Report Submitted Successfully!**\n\n` +
+            let followMsg = `**Report Submitted Successfully!**\n\n` +
                     `You submitted **${vulnDoc?.vuln_identifier || 'a vulnerability'}** to **${companyDoc?.name || 'the company'}**.\n\n` +
-                    `💰 You might receive a reward for your report within the next 5 minutes.`,
+                    `💰 You might receive a reward for your report within the next 5 minutes.`;
+            if (targetUser) {
+                followMsg += `\n
+Your voucher ${targetUser.username} has been notified.`;
+            }
+
+            await interaction.followUp({
+                content: followMsg,
                 flags: 64,
             });
 
@@ -239,11 +281,17 @@ async function selectCompany(interaction) {
         .setCustomId('select_company')
         .setPlaceholder('Select a Company')
         .addOptions(
-            companies.map(c => ({
-                label: c.name,
-                description: c.description?.slice(0, 80) || 'No description',
-                value: c._id.toString(),
-            }))
+            companies.map(c => {
+                let desc = c.description?.slice(0, 80) || 'No description';
+                if (c.reputation_threshold && c.reputation_threshold > 0) {
+                    desc += ` · rep≥${c.reputation_threshold}`;
+                }
+                return {
+                    label: c.name,
+                    description: desc,
+                    value: c._id.toString(),
+                };
+            })
         );
 
     const row = new ActionRowBuilder().addComponents(selectMenu);
@@ -384,7 +432,7 @@ async function confirmSubmission(interaction, companyId, vulnerabilityId, isExpl
     return true;
 }
 
-async function saveReport(interaction, platformId, companyId, vulnerabilityId, user,targetUser) {
+async function saveReport(interaction, platformId, companyId, vulnerabilityId, user, targetUser) {
     if (!user) {
         const discordId = interaction.user.id;
         const discordName = interaction.user.username;
@@ -406,6 +454,31 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
 
     const vulnerability = await Vulnerability.findById(vulnerabilityId);
 
+    // handle voucher user lookup and notification
+    let voucherId = null;
+    if (targetUser) {
+        let voucherDoc = await User.findOne({discord_id: targetUser.id});
+        if (!voucherDoc) {
+            voucherDoc = await User.create({
+                discord_id: targetUser.id,
+                username: targetUser.username,
+                reports_made: 0
+            });
+        }
+        voucherId = voucherDoc._id;
+
+        // send confirmation DM to voucher
+        try {
+            const discordVoucher = await interaction.client.users.fetch(targetUser.id);
+            await discordVoucher.send(
+                `You have vouched for ${interaction.user.username} on a report to a company. ` +
+                `If either of you meets the company's reputation threshold and an offer is generated, you will receive a share of the reward.`
+            );
+        } catch (e) {
+            console.error('Failed to send DM to voucher user', e);
+        }
+    }
+
     const reportDoc = {
         user_id: user._id,
         platform_id: platformId,
@@ -414,7 +487,7 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
         is_poc_only: false,
         status: 'open',
         volunerablity_sev: vulnerability.severity || 'Medium',
-        VouchingUser:targetUser
+        VouchingUser: voucherId
     };
 
     const report = await Reports.create(reportDoc);
