@@ -13,8 +13,6 @@ const {initializeShopRotation, cleanupShopRotation} = require('./utils/shopRotat
 const Company = require('../models/Company');
 const Platform = require('../models/Platform');
 
-//Some db interactions wont work based upon user privacy settings
-//look iinto have the private dms function inside through different channels  (see how much of a delay it might cause in the sever when many ppl interact)
 
 const client = new Client({
     intents:
@@ -60,7 +58,6 @@ const rest = new REST({version: '10'}).setToken(process.env.DISCORD_TOKEN);
 connectDB();
 
 // Ensure a Discord user exists in the database; create if not, update last_active/name if yes
-// Now with caching to reduce DB load
 async function ensureUserExists(discordUser) {
     try {
         if (!discordUser) return null;
@@ -226,13 +223,12 @@ client.on('interactionCreate', async interaction => {
         }
 
        
-        // allow /trade to be invoked outside dashboard so users can tag each other
+     
         if (
             userDoc &&
             userDoc.dashboard_channel_id &&
             commandName !== 'verify' &&
-            commandName !== 'admin' &&
-            commandName !== 'trade'
+            commandName !== 'admin'
         ) {
             if (interaction.channelId !== userDoc.dashboard_channel_id) {
                 return interaction.reply({

@@ -71,82 +71,73 @@ async function loadInitialData() {
             // Ultimatum Platform Companies
             {
                 platform: ultimatumPlatform._id,
-                name: 'FairCorp',
-                description: 'High transparency, fair offers. Focuses on web applications.',
+                name: 'BugBunny Labs',
+                description: 'BugBunny Labs delivers enterprise-grade web application security testing with data-driven payout policies and transparent reporting.',
                 product_type: 'web_app',
                 preferred_vulns: ['XSS', 'CSRF', 'Authentication'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
                         max_reputation: 50,
-                        bonus_multiplier: 1.0,
-                        special_perks: ['Standard response times']
+                        bonus_multiplier: 1.0
                     },
                     {
                         min_reputation: 51,
                         max_reputation: 100,
-                        bonus_multiplier: 1.15,
-                        special_perks: ['15% bonus on all reports', 'Priority review']
+                        bonus_multiplier: 1.15
                     },
                     {
                         min_reputation: 101,
                         max_reputation: 200,
-                        bonus_multiplier: 1.25,
-                        special_perks: ['25% bonus on all reports', 'Fast-track resolution', 'Private program access']
+                        bonus_multiplier: 1.25
                     },
                     {
                         min_reputation: 201,
                         max_reputation: 999999,
-                        bonus_multiplier: 1.5,
-                        special_perks: ['50% bonus on all reports', 'Direct contact with security team', 'Exclusive bounties']
+                        bonus_multiplier: 1.5
                     }
                 ]
             },
             {
                 platform: ultimatumPlatform._id,
-                name: 'Lowball Inc',
-                description: 'Low transparency, unfair offers. Mobile app security focus.',
+                name: 'PocketRaiders',
+                description: 'PocketRaiders is a fintech app vendor offering bug bounty rewards keyed to impact and coverage of mobile payment flows.',
                 product_type: 'mobile_app',
                 preferred_vulns: ['IDOR', 'Business_Logic'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
                         max_reputation: 100,
-                        bonus_multiplier: 1.0,
-                        special_perks: ['Standard processing']
+                        bonus_multiplier: 1.0
                     },
                     {
                         min_reputation: 101,
                         max_reputation: 999999,
-                        bonus_multiplier: 1.1,
-                        special_perks: ['10% bonus', 'Slightly faster response']
+                        bonus_multiplier: 1.1
                     }
                 ]
             },
             {
                 platform: ultimatumPlatform._id,
-                name: 'ReputationX',
-                description: 'Offers mix of money and reputation. API security specialists.',
+                name: 'HackHeroes',
+                description: 'HackHeroes is an API security service provider with a structured bug bounty program focused on auth and data exposure risks.',
                 product_type: 'api',
                 preferred_vulns: ['Authentication', 'Authorization', 'Information_Disclosure'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
                         max_reputation: 75,
-                        bonus_multiplier: 1.0,
-                        special_perks: ['Standard rewards']
+                        bonus_multiplier: 1.0
                     },
                     {
                         min_reputation: 76,
                         max_reputation: 150,
-                        bonus_multiplier: 1.2,
-                        special_perks: ['20% bonus', 'Reputation boost']
+                        bonus_multiplier: 1.2
                     },
                     {
                         min_reputation: 151,
                         max_reputation: 999999,
-                        bonus_multiplier: 1.35,
-                        special_perks: ['35% bonus', 'Hall of Fame entry', 'Swag rewards']
+                        bonus_multiplier: 1.35
                     }
                 ]
             },
@@ -154,43 +145,39 @@ async function loadInitialData() {
             // Dictator Platform Companies
             {
                 platform: dictatorPlatform._id,
-                name: 'CVE Secure',
-                description: 'Balanced cash + recognition. Infrastructure security.',
+                name: 'ZeroDay Zen',
+                description: 'ZeroDay Zen provides cloud infrastructure penetration rewards with SLA-backed triage and consistent compensation tiers.',
                 product_type: 'infrastructure',
                 preferred_vulns: ['RCE', 'SQLi', 'Cryptographic'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
                         max_reputation: 100,
-                        bonus_multiplier: 1.0,
-                        special_perks: ['Standard options']
+                        bonus_multiplier: 1.0
                     },
                     {
                         min_reputation: 101,
                         max_reputation: 999999,
-                        bonus_multiplier: 1.15,
-                        special_perks: ['15% bonus on all options']
+                        bonus_multiplier: 1.15
                     }
                 ]
             },
             {
                 platform: dictatorPlatform._id,
-                name: 'MoneyMax',
-                description: 'Monetary payouts over recognition. IoT security.',
+                name: 'CryptoWarden',
+                description: 'CryptoWarden is a connected device vendor offering structured bug bounties and rapid payments for IoT vulnerability findings.',
                 product_type: 'iot',
                 preferred_vulns: ['RCE', 'Authentication', 'Other'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
                         max_reputation: 50,
-                        bonus_multiplier: 1.0,
-                        special_perks: ['Cash-focused rewards']
+                        bonus_multiplier: 1.0
                     },
                     {
                         min_reputation: 51,
                         max_reputation: 999999,
-                        bonus_multiplier: 1.25,
-                        special_perks: ['25% cash bonus', 'Expedited payment']
+                        bonus_multiplier: 1.25
                     }
                 ]
             },
@@ -198,35 +185,32 @@ async function loadInitialData() {
             // Additional specialized companies
             {
                 platform: ultimatumPlatform._id,
-                name: 'BlockChainSafe',
-                description: 'Blockchain and crypto security specialists.',
+                name: 'BlockShield',
+                description: 'BlockShield secures blockchain platforms with an industry-recognized bug bounty program for critical cryptographic and business logic flaws.',
                 product_type: 'blockchain',
                 preferred_vulns: ['Cryptographic', 'Business_Logic', 'RCE'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
                         max_reputation: 100,
-                        bonus_multiplier: 1.0,
-                        special_perks: ['Standard rewards']
+                        bonus_multiplier: 1.0
                     },
                     {
                         min_reputation: 101,
                         max_reputation: 200,
-                        bonus_multiplier: 1.3,
-                        special_perks: ['30% bonus', 'Crypto payment options']
+                        bonus_multiplier: 1.3
                     },
                     {
                         min_reputation: 201,
                         max_reputation: 999999,
-                        bonus_multiplier: 1.6,
-                        special_perks: ['60% bonus', 'Token rewards', 'Early access to new products']
+                        bonus_multiplier: 1.6
                     }
                 ]
             },
             {
                 platform: dictatorPlatform._id,
-                name: 'AI SecurityLab',
-                description: 'AI/ML security research and testing.',
+                name: 'NeuralNightmare',
+                description: 'NeuralNightmare is an AI security research partner offering competitive bounties for high-impact logic and data exfiltration findings in machine learning systems.',
                 product_type: 'ai_ml',
                 reputation_threshold: 100,
                 preferred_vulns: ['Business_Logic', 'Information_Disclosure', 'Other'],
@@ -234,14 +218,12 @@ async function loadInitialData() {
                     {
                         min_reputation: 0,
                         max_reputation: 150,
-                        bonus_multiplier: 1.0,
-                        special_perks: ['Research collaboration opportunities']
+                        bonus_multiplier: 1.0
                     },
                     {
                         min_reputation: 151,
                         max_reputation: 999999,
-                        bonus_multiplier: 1.4,
-                        special_perks: ['40% bonus', 'Co-authorship on papers', 'Conference invitations']
+                        bonus_multiplier: 1.4
                     }
                 ]
             }
