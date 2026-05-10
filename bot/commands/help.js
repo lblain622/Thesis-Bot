@@ -18,7 +18,6 @@ module.exports = {
                     value:
                         '• `/info [identifier] [reported] [resolved] [exclude_self_reported]` — View details about vulnerabilities and filter results.\n' +
                         '• `/report [vulnerability]` — Submit a full vulnerability report to the company. May lead to offers.\n' +
-                        '• `/poc [vulnerability]` — Develop a proof-of-concept for a vulnerability.\n' +
                         '• `/exploit start [identifier]` — Start exploiting an accessible, unresolved vulnerability. Generates passive income but has risks.\n' +
                         '• `/exploit stop [identifier]` — Stop exploiting a vulnerability.\n' +
                         '• `/exploit collect [identifier]` — Collect pending exploit earnings. There is a risk of being caught during collection.\n' +

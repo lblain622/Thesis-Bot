@@ -38,13 +38,6 @@ const slides = [
             "• Companies on different platforms  may offer different reward structures.",
     },
     {
-        title: 'Proof of Concepts (/poc)',
-        content:
-            "Sometimes a simple report isn't enough. A Proof of Concept (PoC) proves the impact.\n" +
-            "• Use `/poc` to develop and collect evidence for a vulnerability.\n" +
-            "• Successful PoCs can increase your rewards and reputation.",
-    },
-    {
         title: 'Checking Vulnerability Info (/info)',
         content:
             "Need to see the details of what you've found?\n" +

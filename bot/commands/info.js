@@ -206,7 +206,7 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setTitle(`${vulnerability.vuln_identifier}`)
-                .setColor(canSeeFields ? getSeverityColor(vulnerability.severity) : '#808080')
+                .setColor('#3498db')
                 .setDescription(vulnerability.description || 'No description provided');
 
             if (isExploitingFinal) {
@@ -230,16 +230,11 @@ module.exports = {
                         .setCustomId(`report_${vulnerability._id}`)
                         .setLabel('Report This Vulnerability')
                         .setStyle(ButtonStyle.Primary)
-                        .setEmoji('📝'),
-                    new ButtonBuilder()
-                        .setCustomId(`submitpoc_${vulnerability._id}`)
-                        .setLabel('Submit POC')
-                        .setStyle(ButtonStyle.Secondary)
-                        .setEmoji('🔍')
+                        .setEmoji('📝')
                 );
             // Field Analysis - only show if user can see
             if (canSeeFields) {
-                const fieldAnalysis = buildFieldAnalysis(vulnerability, user);
+                const fieldAnalysis = this.buildFieldAnalysis(vulnerability, user);
                 if (fieldAnalysis) {
                     embed.addFields({
                         name: '🔍 Field Analysis',
@@ -249,7 +244,7 @@ module.exports = {
 
                 embed.addFields({
                     name: 'Fields Unknown',
-                    value: 'Submit a **Report** or **POC** to reveal vulnerability details and field analysis.'
+                    value: 'Submit a **Report** to reveal vulnerability details and field analysis.'
                 });
 
             }
@@ -286,115 +281,103 @@ module.exports = {
             });
         }
     },
+
+    buildFieldAnalysis: function(vulnerability, user) {
+        const fields = [];
+
+        const fieldDefinitions = [
+            {key: 'networkAccess', label: 'Network Access', icon: '🌐'},
+            {key: 'arbitraryCodeExecution', label: 'Arbitrary Code Execution', icon: '⚙️'},
+            {key: 'userInteraction', label: 'User Interaction Required', icon: '👤'},
+            {key: 'automatable', label: 'Exploit Automation', icon: '🤖'},
+            {key: 'privilegesRequired', label: 'Privileges Required', icon: '🔐'},
+            {key: 'confidentialityImpact', label: 'Confidentiality Impact', icon: '📖'},
+            {key: 'integrityImpact', label: 'Integrity Impact', icon: '✏️'},
+            {key: 'availabilityImpact', label: 'Availability Impact', icon: '🛑'},
+            {key: 'recoveryPotential', label: 'Recovery Potential', icon: '♻️'}
+        ];
+
+        for (const field of fieldDefinitions) {
+            const fieldData = vulnerability[field.key];
+
+            if (!fieldData) continue;
+
+
+            const canView = fieldData.visibleTo?.some(
+                u => u.toString() === user._id.toString()
+            ) || false;
+
+            const displayValue = this.formatFieldAnswer(field.key, fieldData.answer);
+
+            fields.push(`${field.icon} **${field.label}:** ${displayValue}`);
+        }
+
+        return fields.length > 0 ? fields.join('\n') : null;
+    },
+
+    formatFieldAnswer: function(fieldKey, answer) {
+        // Fallback for missing/undefined values
+        if (answer === undefined || answer === null || answer === '') {
+            return 'Unknown';
+        }
+        // Y/N fields
+        if (['networkAccess', 'arbitraryCodeExecution', 'userInteraction', 'automatable'].includes(fieldKey)) {
+            if (answer === 'Yes') return '✅ Yes';
+            if (answer === 'No') return '❌ No';
+            return 'Unknown';
+        }
+
+        // Privileges Required
+        if (fieldKey === 'privilegesRequired') {
+            const map = {
+                'None': '🟢 None',
+                'Low': '🟡 Low',
+                'High': '🔴 High'
+            };
+            return map[answer] || 'Unknown';
+        }
+
+        // Recovery Potential
+        if (fieldKey === 'recoveryPotential') {
+            const map = {
+                'Automatic': '🟢 Automatic',
+                'User': '🟡 User Intervention',
+                'Irrecoverable': '🔴 Irrecoverable'
+            };
+            return map[answer] || 'Unknown';
+        }
+
+        // CIA Impacts
+        if (['confidentialityImpact', 'integrityImpact', 'availabilityImpact'].includes(fieldKey)) {
+            const map = {
+                'None': '⚪ None',
+                'Low': '🟡 Low',
+                'Medium': '🟠 Medium',
+                'High': '🔴 High'
+            };
+            return map[answer] || 'Unknown';
+        }
+
+        return typeof answer === 'string' && answer.trim() ? answer : 'Unknown';
+    },
+
+    waitForComponent: async function(message, userId, componentType, customIds, time = 120000) {
+        try {
+            return await message.awaitMessageComponent({
+                componentType,
+                filter: i => {
+                    const isCorrectUser = i.user.id === userId;
+                    const isCorrectComponent = Array.isArray(customIds)
+                        ? customIds.includes(i.customId)
+                        : i.customId === customIds;
+                    return isCorrectUser && isCorrectComponent;
+                },
+                time
+            });
+        } catch (error) {
+            console.error('Component wait error:', error);
+            await message.edit({content: 'Selection timed out.', components: []}).catch(console.error);
+            return null;
+        }
+    },
 };
-
-function buildFieldAnalysis(vulnerability, user) {
-    const fields = [];
-
-    const fieldDefinitions = [
-        {key: 'networkAccess', label: 'Network Access', icon: '🌐'},
-        {key: 'arbitraryCodeExecution', label: 'Arbitrary Code Execution', icon: '⚙️'},
-        {key: 'userInteraction', label: 'User Interaction Required', icon: '👤'},
-        {key: 'automatable', label: 'Exploit Automation', icon: '🤖'},
-        {key: 'privilegesRequired', label: 'Privileges Required', icon: '🔐'},
-        {key: 'confidentialityImpact', label: 'Confidentiality Impact', icon: '📖'},
-        {key: 'integrityImpact', label: 'Integrity Impact', icon: '✏️'},
-        {key: 'availabilityImpact', label: 'Availability Impact', icon: '🛑'},
-        {key: 'recoveryPotential', label: 'Recovery Potential', icon: '♻️'}
-    ];
-
-    for (const field of fieldDefinitions) {
-        const fieldData = vulnerability[field.key];
-
-        if (!fieldData) continue;
-
-
-        const canView = fieldData.visibleTo?.some(
-            u => u.toString() === user._id.toString()
-        ) || false;
-
-        const displayValue = canView
-            ? formatFieldAnswer(field.key, fieldData.answer)
-            : formatFieldAnswer(field.key, 'Unknown');
-
-        fields.push(`${field.icon} **${field.label}:** ${displayValue}`);
-    }
-
-    return fields.length > 0 ? fields.join('\n') : null;
-}
-
-function formatFieldAnswer(fieldKey, answer) {
-    // Fallback for missing/undefined values
-    if (answer === undefined || answer === null || answer === '') {
-        return 'Unknown';
-    }
-    // Y/N fields
-    if (['networkAccess', 'arbitraryCodeExecution', 'userInteraction', 'automatable'].includes(fieldKey)) {
-        if (answer === 'Yes') return '✅ Yes';
-        if (answer === 'No') return '❌ No';
-        return 'Unknown';
-    }
-
-    // Privileges Required
-    if (fieldKey === 'privilegesRequired') {
-        const map = {
-            'None': '🟢 None',
-            'Low': '🟡 Low',
-            'High': '🔴 High'
-        };
-        return map[answer] || 'Unknown';
-    }
-
-    // Recovery Potential
-    if (fieldKey === 'recoveryPotential') {
-        const map = {
-            'Automatic': '🟢 Automatic',
-            'User': '🟡 User Intervention',
-            'Irrecoverable': '🔴 Irrecoverable'
-        };
-        return map[answer] || 'Unknown';
-    }
-
-    // CIA Impacts
-    if (['confidentialityImpact', 'integrityImpact', 'availabilityImpact'].includes(fieldKey)) {
-        const map = {
-            'None': '⚪ None',
-            'Low': '🟡 Low',
-            'Medium': '🟠 Medium',
-            'High': '🔴 High'
-        };
-        return map[answer] || 'Unknown';
-    }
-
-    return typeof answer === 'string' && answer.trim() ? answer : 'Unknown';
-}
-
-function getSeverityColor(severity) {
-    const colors = {
-        'Low': '#0D9373',
-        'Medium': '#FFA500',
-        'High': '#FF6347',
-        'Critical': '#8B0000'
-    };
-    return colors[severity] || '#808080';
-}
-
-async function waitForComponent(message, userId, componentType, customIds, time = 120000) {
-    try {
-        return await message.awaitMessageComponent({
-            componentType,
-            filter: i => {
-                const isCorrectUser = i.user.id === userId;
-                const isCorrectComponent = Array.isArray(customIds)
-                    ? customIds.includes(i.customId)
-                    : i.customId === customIds;
-                return isCorrectUser && isCorrectComponent;
-            },
-            time
-        });
-    } catch (error) {
-        console.error('Component wait error:', error);
-        await message.edit({content: 'Selection timed out.', components: []}).catch(console.error);
-        return null;
-    }
-}

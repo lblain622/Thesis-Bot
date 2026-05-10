@@ -36,15 +36,9 @@ const reportSchema = new Schema({
     report_title: String,
     report_description: String,
     impact_description: String,
-    poc_steps: [String],
-
-    is_poc_only: {
-        type: Boolean,
-        default: false
-    },
     status: {
         type: String,
-        enum: ['open', 'in_progress', 'resolved', 'closed', 'poc_submitted'],
+        enum: ['open', 'in_progress', 'resolved', 'closed'],
         default: 'open'
     },
     submitted_at: {

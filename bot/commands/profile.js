@@ -55,7 +55,7 @@ module.exports = {
             const totalPenalties = (fullUser.penalties || []).reduce((sum, p) => sum + (p.amount || 0), 0);
             if (totalPenalties > 0) {
                 embdVar.addFields({name: "Total Penalties", value: `$${totalPenalties} in fines`});
-                const recentPenalties = (fullUser.penalties || []).slice(-5).map(p => `• $${p.amount} - ${p.reason} (${p.severity || 'unknown'} ${p.vuln_type || ''})`).join('\n');
+                const recentPenalties = (fullUser.penalties || []).slice(-5).map(p => `• $${p.amount} - ${p.reason} (${p.vuln_type || ''})`).join('\n');
                 if (recentPenalties) {
                     embdVar.addFields({name: "Recent Penalties", value: recentPenalties});
                 }

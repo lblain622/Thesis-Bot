@@ -54,9 +54,6 @@ async function announceExpired(vuln) {
     const embed = new EmbedBuilder()
         .setTitle('🧯 Company Patched a Vulnerability')
         .setDescription(`The company has discovered and patched vulnerability ${vuln.vuln_identifier}.`)
-        .addFields(
-            {name: 'Severity', value: vuln.severity || 'LOW', inline: true},
-        )
         .setTimestamp(new Date());
     channel.send({embeds: [embed]}).catch(() => {
     });
@@ -184,7 +181,7 @@ async function sweepExpirations() {
     }
 }
 
-// ===== 5-MINUTE CHECKER (Reports/Offers/POC) =====
+// ===== 5-MINUTE CHECKER (Reports/Offers) =====
 const VISIBILITY_FIELDS = [
     'networkAccess',
     'arbitraryCodeExecution',
@@ -210,8 +207,8 @@ function countVisibleFieldsForUser(vuln, userId) {
 }
 
 async function evaluateAutoOffers(client) {
-    // Collect all non-POC-only reports that are attached to a vulnerability
-    const reports = await Report.find({is_poc_only: {$ne: true}, vulnerability_id: {$ne: null}});
+    // Collect all reports that are attached to a vulnerability
+    const reports = await Report.find({vulnerability_id: {$ne: null}});
     if (!reports.length) return;
 
     const byVuln = new Map();

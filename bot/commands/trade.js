@@ -217,7 +217,7 @@ async function selectVulnerability(interaction, userId) {
         .addOptions(
             vulnerabilities.slice(0, 25).map(v => ({
                 label: v.name || v.volun_type || 'Unknown',
-                description: `${v.severity} - ${v.description?.slice(0, 50) || 'No description'}`,
+                description: `${v.description?.slice(0, 50) || 'No description'}`,
                 value: v._id.toString()
             }))
         );

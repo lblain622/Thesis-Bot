@@ -101,7 +101,7 @@ async function loadInitialData() {
             {
                 platform: ultimatumPlatform._id,
                 name: 'PocketRaiders',
-                description: 'PocketRaiders is a fintech app vendor offering bug bounty rewards keyed to impact and coverage of mobile payment flows.',
+                description: '💰 PocketRaiders rewards mobile security heroes with cold, hard cash! Higher impact means bigger payouts - we pay what your findings are worth!',
                 product_type: 'mobile_app',
                 preferred_vulns: ['IDOR', 'Business_Logic'],
                 reputation_tiers: [
@@ -120,7 +120,7 @@ async function loadInitialData() {
             {
                 platform: ultimatumPlatform._id,
                 name: 'HackHeroes',
-                description: 'HackHeroes is an API security service provider with a structured bug bounty program focused on auth and data exposure risks.',
+                description: '🏆 HackHeroes honors elite researchers with premium bounties and exclusive credit bonuses! Prove your skills and earn the recognition you deserve!',
                 product_type: 'api',
                 preferred_vulns: ['Authentication', 'Authorization', 'Information_Disclosure'],
                 reputation_tiers: [
@@ -146,7 +146,7 @@ async function loadInitialData() {
             {
                 platform: dictatorPlatform._id,
                 name: 'ZeroDay Zen',
-                description: 'ZeroDay Zen provides cloud infrastructure penetration rewards with SLA-backed triage and consistent compensation tiers.',
+                description: '☁️ ZeroDay Zen delivers instant cash rewards for cloud warriors! Lightning-fast payouts and escalating bonuses for persistent researchers!',
                 product_type: 'infrastructure',
                 preferred_vulns: ['RCE', 'SQLi', 'Cryptographic'],
                 reputation_tiers: [
@@ -165,7 +165,7 @@ async function loadInitialData() {
             {
                 platform: dictatorPlatform._id,
                 name: 'CryptoWarden',
-                description: 'CryptoWarden is a connected device vendor offering structured bug bounties and rapid payments for IoT vulnerability findings.',
+                description: '🔌 CryptoWarden showers IoT innovators with generous cash flows! Smart device security pays off big - get rewarded for keeping the connected world safe!',
                 product_type: 'iot',
                 preferred_vulns: ['RCE', 'Authentication', 'Other'],
                 reputation_tiers: [
@@ -186,7 +186,7 @@ async function loadInitialData() {
             {
                 platform: ultimatumPlatform._id,
                 name: 'BlockShield',
-                description: 'BlockShield secures blockchain platforms with an industry-recognized bug bounty program for critical cryptographic and business logic flaws.',
+                description: '⛓️ BlockShield makes blockchain bounty hunters rich! Massive payouts for crypto-critical finds - your wallet will thank you!',
                 product_type: 'blockchain',
                 preferred_vulns: ['Cryptographic', 'Business_Logic', 'RCE'],
                 reputation_tiers: [
@@ -210,7 +210,7 @@ async function loadInitialData() {
             {
                 platform: dictatorPlatform._id,
                 name: 'NeuralNightmare',
-                description: 'NeuralNightmare is an AI security research partner offering competitive bounties for high-impact logic and data exfiltration findings in machine learning systems.',
+                description: '🧠 NeuralNightmare fuels AI researchers with explosive cash rewards! Unlock the secrets of machine learning and get paid handsomely for your discoveries!',
                 product_type: 'ai_ml',
                 reputation_threshold: 100,
                 preferred_vulns: ['Business_Logic', 'Information_Disclosure', 'Other'],
@@ -294,7 +294,7 @@ async function loadInitialData() {
                 volun_type: vulnType,
                 severity: data.severity || ['LOW', 'MEDIUM', 'HIGH'][Math.floor(Math.random() * 3)],
                 name: `${vulnType} vulnerability in ${company.name}`,
-                description: data.description || `A ${data.severity || 'security'} issue was discovered in ${company.name}.`,
+                description: data.description || `A security issue was discovered in ${company.name}.`,
                 networkAccess: {
                     answer: getAnswer(data.networkAccess),
                     visibleTo: []
@@ -346,7 +346,6 @@ async function loadInitialData() {
                 },
 
                 // Arrays
-                pocs_submitted: [],
                 reported_by: [],
                 discovered_by: [],
 

@@ -72,8 +72,7 @@ module.exports = {
                 // Check for existing submissions
                 const existingReport = await Reports.findOne({
                     user_id: user._id,
-                    vulnerability_id: vulnerability._id,
-                    is_poc_only:false
+                    vulnerability_id: vulnerability._id
                 });
                 if (existingReport) {
                     return interaction.editReply({
@@ -332,7 +331,7 @@ async function selectVulnerability(interaction, companyId) {
 
     const vulnerabilities = await Vulnerability.find({
         isResolved: false
-    }).lean();
+    }).populate('company_id', 'name').lean();
 
     if (!vulnerabilities.length) {
         await interaction.followUp({
@@ -346,12 +345,13 @@ async function selectVulnerability(interaction, companyId) {
         .setCustomId('select_vulnerability')
         .setPlaceholder('Select a vulnerability')
         .addOptions(
-            vulnerabilities.map(v => {
-                const exploited = exploitedIds.has(v._id.toString());
-                const desc = exploited ? `${v.volun_type} • Exploiting` : `${v.volun_type}`;
+            vulnerabilities.slice(0, 25).map(v => {
+                const companyName = v.company_id?.name || 'Unknown';
+                const status = v.isReported ? 'Reported' : 'Unreported';
+                const desc = `${companyName} • ${status} • ${v.volun_type}`;
                 return {
                     label: v.vuln_identifier,
-                    description: desc,
+                    description: desc.slice(0, 100), // Discord limit
                     value: v._id.toString(),
                 };
             })
@@ -484,7 +484,6 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
         platform_id: platformId,
         company_id: companyId,
         vulnerability_id: vulnerabilityId,
-        is_poc_only: false,
         status: 'open',
         volunerablity_sev: vulnerability.severity || 'Medium',
         VouchingUser: voucherId

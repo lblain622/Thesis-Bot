@@ -53,18 +53,6 @@ const vulnerabilitySchema = new Schema({
         answer: { type: String, enum: ['Yes', 'No'], },
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
-    confidentialityImpact: {
-        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High']},
-        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
-    },
-    integrityImpact: {
-        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'] },
-        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
-    },
-    availabilityImpact: {
-        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High']},
-        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
-    },
     privilegesRequired: {
         answer: { type: String, enum: ['None', 'Low', 'High']},
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
@@ -73,17 +61,6 @@ const vulnerabilitySchema = new Schema({
         answer: { type: String, enum: ['Automatic', 'User', 'Irrecoverable','Unknown'],},
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
-
-    
-    pocs_submitted: [{
-        user_id: { type: Schema.Types.ObjectId, ref: 'Users' },
-        submitted_at: Date,
-        poc_data: {
-            steps: [String],
-            screenshots: [String],
-            notes: String
-        }
-    }],
 
     reported_by: [{
         user_id: { type: Schema.Types.ObjectId, ref: 'Users' },

@@ -140,7 +140,7 @@ module.exports = {
                 const companyName = v.company_id?.name || 'Unknown Company';
                 const remaining = v.expiration_date ? formatRemaining(v.expiration_date) : 'unknown';
                 embed.addFields({
-                    name: `${v.vuln_identifier} (${v.severity})`,
+                    name: `${v.vuln_identifier}`,
                     value: `Company: ${companyName}\nType: ${v.volun_type}\nTime left: ${remaining}`,
                     inline: false,
                 });
