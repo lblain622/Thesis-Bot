@@ -72,7 +72,7 @@ const slides = [
 //            "Spend your hard-earned money to boost your capabilities.\n" +
 //            "• Use `/shop list` to see available items like tools, merch, and consumables.\n" +
 //            "• Use `/shop buy` to purchase items that can double rewards, help discovery, or provide company-specific bonuses.\n" +
-//            "• Use `/shop inventory` to see everything you own.",
+//            "• Use `/inventory` to see everything you own.",
 //    },
 //    {
 //        title: 'Trading with Others (/trade)',

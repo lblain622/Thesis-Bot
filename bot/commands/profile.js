@@ -64,7 +64,7 @@ module.exports = {
             if (preview.length) {
                 let invText = preview.join("\n");
                 const extra = Math.max(0, inv.length - previewMax);
-                if (extra > 0) invText += `\n+${extra} more — use /shop inventory for details`;
+                if (extra > 0) invText += `\n+${extra} more — use /inventory for details`;
 
                 embdVar.addFields({name: "Inventory", value: invText});
             }

@@ -34,16 +34,12 @@ module.exports = {
             .addStringOption(o => o.setName('company').setDescription('Company name (for company-scoped merch)').setRequired(false))
             .addIntegerOption(o => o.setName('qty').setDescription('Quantity (for stackable items)').setRequired(false))
         )
-        .addSubcommand(sc => sc
-            .setName('inventory')
-            .setDescription('View your owned items')
-        ),
+    ,
 
     async execute(interaction) {
         const sub = interaction.options.getSubcommand();
         if (sub === 'list') return listItems(interaction);
         if (sub === 'buy') return buyItem(interaction);
-        if (sub === 'inventory') return showInventory(interaction);
         return interaction.reply({content: 'Unknown subcommand.', flags: 64});
     }
 };

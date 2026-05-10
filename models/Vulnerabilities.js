@@ -4,7 +4,7 @@ const vulnerabilitySchema = new Schema({
     company_id: {
         type: Schema.Types.ObjectId,
         ref: 'Company',
-        required: true
+        required: false
     },
 
     // Round the vulnerability was generated in (legacy; optional in continuous mode)
@@ -121,7 +121,6 @@ const vulnerabilitySchema = new Schema({
 }, { timestamps: true });
 
 // Performance indexes
-vulnerabilitySchema.index({ vuln_identifier: 1 }, { unique: true });
 vulnerabilitySchema.index({ company_id: 1, isResolved: 1 });
 vulnerabilitySchema.index({ 'visibility.allowedUsers': 1, isResolved: 1 });
 vulnerabilitySchema.index({ isResolved: 1, isReported: 1 });

@@ -82,7 +82,9 @@ module.exports = {
                 }
 
                 vulnerabilityId = vulnerability._id;
-                companyId = vulnerability.company_id;
+                companyId = await selectCompany(interaction);
+                if (!companyId) return;
+
                 const company = await Company.findById(companyId);
                 platformId = company.platform_id;
 
@@ -142,7 +144,6 @@ module.exports = {
                 const confirmed = await confirmSubmission(interaction, companyId, vulnerabilityId, isExploiting);
                 if (!confirmed) return;
 
-                const vulnerability = await Vulnerability.findById(vulnerabilityId);
                 const company = await Company.findById(companyId);
                 platformId = company.platform_id;
 
@@ -330,13 +331,12 @@ async function selectVulnerability(interaction, companyId) {
     }
 
     const vulnerabilities = await Vulnerability.find({
-        company_id: companyId,
         isResolved: false
     }).lean();
 
     if (!vulnerabilities.length) {
         await interaction.followUp({
-            content: 'No vulnerabilities found for this company.',
+            content: 'No unresolved vulnerabilities are currently available.',
             flags: 64,
         });
         return null;
