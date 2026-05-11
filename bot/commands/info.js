@@ -188,7 +188,7 @@ module.exports = {
                     fetchReply: true
                 });
 
-                const response = await waitForComponent(message, interaction.user.id, ComponentType.StringSelect, 'select_vuln_info');
+                const response = await this.waitForComponent(message, interaction.user.id, ComponentType.StringSelect, 'select_vuln_info');
                 if (!response) return;
 
                 vulnerability = await Vulnerability.findById(response.values[0])

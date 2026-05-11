@@ -1,6 +1,9 @@
 const {
     SlashCommandBuilder,
     EmbedBuilder,
+    ActionRowBuilder,
+    StringSelectMenuBuilder,
+    ComponentType,
 } = require('discord.js');
 const Items = require('../../models/Items');
 const Users = require('../../models/Users');
@@ -61,11 +64,12 @@ async function listItems(interaction) {
         const q = {_id: {$in: ids}, enabled: true};
         if (type) q.type = type;
         items = await Items.find(q).sort({price: 1}).lean();
-        title = 'Shop — Rotating Selection (6 items)';
+        title = 'Shop — Rotating Selection (4 items)';
     } else {
         const query = {enabled: true};
         if (type) query.type = type;
-        items = await Items.find(query).sort({price: 1}).lean();
+        items = await Items.find(query).sort({price: 1}).limit(4).lean();
+        title = 'Shop Catalog (4 items)';
     }
 
     if (!items.length) return interaction.editReply({content: 'No items available right now.'});
@@ -109,12 +113,35 @@ async function buyItem(interaction) {
         // Pre-calc desired quantity for stock and cost
         let qty = item.stackable ? Math.max(1, qtyArg) : 1;
 
-        
+        let selectedCompany = null;
+        let companyId = null;
+        if (item.companyScoped) {
+            selectedCompany = companyName
+                ? await Company.findOne({name: new RegExp(`^${escapeRegExp(companyName)}$`, 'i')})
+                : await promptForCompany(interaction, item);
+            if (!selectedCompany) {
+                const missingMsg = companyName
+                    ? `Company "${companyName}" not found.`
+                    : 'Purchase cancelled. No company was selected.';
+                return interaction.editReply({content: missingMsg, components: []});
+            }
+            companyId = selectedCompany._id;
+            // Non-stackable merch: prevent duplicates for same company
+            if (!item.stackable) {
+                const already = (user.inventory || []).some(e => String(e.item_id) === String(item._id) && String(e.company_id || '') === String(companyId));
+                if (already) return interaction.editReply({content: `You already own ${item.name} for ${selectedCompany.name}.`, components: []});
+            }
+        } else if (!item.stackable) {
+            // Prevent duplicate non-stackable tools
+            const already = (user.inventory || []).some(e => String(e.item_id) === String(item._id));
+            if (already) return interaction.editReply({content: `You already own ${item.name}.`});
+        }
+
         // Enforce rotation membership and stock when enabled
         if (process.env.SHOP_ROTATE_ENABLED === 'true') {
             const rotation = await getActiveRotation();
             const inRotation = (rotation.item_ids || []).some(id => String(id) === String(item._id));
-            if (!inRotation) return interaction.editReply({content: 'This item is not available in the current rotation. Please check /shop list.'});
+            if (!inRotation) return interaction.editReply({content: 'This item is not available in the current rotation. Please check /shop list.', components: []});
             // Enforce daily stock cap
             const dayKey = getDayKey();
             const capDefault = Number(process.env.SHOP_DAILY_CAP_DEFAULT || 50);
@@ -126,27 +153,10 @@ async function buyItem(interaction) {
             );
             const want = qty;
             if ((st.sold + want) > (st.cap ?? capDefault)) {
-                return interaction.editReply({content: 'This item is out of stock for today. Check back after the daily reset.'});
+                return interaction.editReply({content: 'This item is out of stock for today. Check back after the daily reset.', components: []});
             }
             // Reserve stock
             await ItemStock.updateOne({_id: st._id, sold: st.sold}, {$inc: {sold: want}});
-        }
-
-        let companyId = null;
-        if (item.companyScoped) {
-            if (!companyName) return interaction.editReply({content: 'This item is company-specific. Please provide the company name via the company option.'});
-            const company = await Company.findOne({name: new RegExp(`^${escapeRegExp(companyName)}$`, 'i')});
-            if (!company) return interaction.editReply({content: `Company "${companyName}" not found.`});
-            companyId = company._id;
-            // Non-stackable merch: prevent duplicates for same company
-            if (!item.stackable) {
-                const already = (user.inventory || []).some(e => String(e.item_id) === String(item._id) && String(e.company_id || '') === String(companyId));
-                if (already) return interaction.editReply({content: `You already own ${item.name} for ${company.name}.`});
-            }
-        } else if (!item.stackable) {
-            // Prevent duplicate non-stackable tools
-            const already = (user.inventory || []).some(e => String(e.item_id) === String(item._id));
-            if (already) return interaction.editReply({content: `You already own ${item.name}.`});
         }
 
         const cost = item.price * qty;
@@ -168,15 +178,85 @@ async function buyItem(interaction) {
             });
         }
 
+        if (companyId) {
+            await updateCompanyReputation(user._id, companyId, 1);
+        }
+
         const embed = new EmbedBuilder()
             .setTitle('Purchase Confirmed')
-            .setDescription(`You bought ${qty}x ${item.name} for $${cost}.`)
+            .setDescription(`You bought ${qty}x ${item.name}${selectedCompany ? ` for ${selectedCompany.name}` : ''} for $${cost}.`)
             .setColor('#FFD166')
             .setTimestamp();
-        return interaction.editReply({embeds: [embed]});
+        return interaction.editReply({embeds: [embed], components: []});
     } catch (e) {
         console.error('shop buy error:', e);
         return interaction.editReply({content: 'There was an error processing your purchase.'});
+    }
+}
+
+async function promptForCompany(interaction, item) {
+    const sampleSize = Math.random() < 0.5 ? 2 : 3;
+    const choices = await Company.aggregate([{$sample: {size: sampleSize}}]);
+    if (!choices.length) return null;
+    if (choices.length === 1) return choices[0];
+
+    const customId = `shop_company_${interaction.id}`;
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId(customId)
+        .setPlaceholder('Choose a company')
+        .addOptions(choices.map(company => ({
+            label: company.name.slice(0, 100),
+            description: `Buy ${item.name} for this company`.slice(0, 100),
+            value: String(company._id)
+        })));
+
+    const row = new ActionRowBuilder().addComponents(menu);
+    const message = await interaction.editReply({
+        content: `Choose a company for **${item.name}**:`,
+        components: [row],
+        fetchReply: true
+    });
+
+    const response = await message.awaitMessageComponent({
+        componentType: ComponentType.StringSelect,
+        filter: i => i.user.id === interaction.user.id && i.customId === customId,
+        time: 120000
+    }).catch(() => null);
+
+    if (!response) return null;
+    const company = choices.find(c => String(c._id) === response.values[0]);
+    await response.update({
+        content: company ? `Selected **${company.name}**. Processing purchase...` : 'Processing purchase...',
+        components: []
+    });
+    return company || null;
+}
+
+async function updateCompanyReputation(userId, companyId, change) {
+    const user = await Users.findById(userId);
+    if (!user || !companyId) return;
+
+    const existingRep = user.reputation_breakdown?.find(
+        r => r.company_id?.toString() === companyId.toString()
+    );
+
+    if (existingRep) {
+        await Users.updateOne(
+            {_id: userId, 'reputation_breakdown.company_id': companyId},
+            {$inc: {'reputation_breakdown.$.trust_score': change}}
+        );
+    } else {
+        await Users.updateOne(
+            {_id: userId},
+            {
+                $push: {
+                    reputation_breakdown: {
+                        company_id: companyId,
+                        trust_score: Math.max(0, change)
+                    }
+                }
+            }
+        );
     }
 }
 

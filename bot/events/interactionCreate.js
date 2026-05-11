@@ -83,7 +83,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
                     money_earned: finalAmount,
                     balance: finalAmount,
                     money_from_reports: finalAmount,
-                    repuation_earned: parseInt(offer.reputation_offered || 0),
+                    reputation_earned: parseInt(offer.reputation_offered || offer.repuatation_offered || 0),
                 },
             }
         );
@@ -261,7 +261,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
                         money_earned: finalOfferAmount,
                         balance: finalOfferAmount,
                         money_from_reports: finalOfferAmount,
-                        repuation_earned: repBonus,
+                        reputation_earned: repBonus,
                     },
                 }
             );
@@ -406,11 +406,11 @@ async function handleStandardOffer(interaction, action, offerId) {
         // Credit money and reputation, grant items
         const u = await User.findById(report.user_id);
         const money = Number(offer.offered_amount || 0);
-        const repBonus = Number(offer.repuatation_offered || offer.reputation_offered || 0);
+        const repBonus = Number(offer.reputation_offered || offer.repuatation_offered || 0);
         if (money > 0) {
-            await User.updateOne({_id: u._id}, {$inc: {money_earned: money, repuation_earned: repBonus, money_from_reports: money}});
+            await User.updateOne({_id: u._id}, {$inc: {money_earned: money, reputation_earned: repBonus, money_from_reports: money}});
         } else if (repBonus) {
-            await User.updateOne({_id: u._id}, {$inc: {repuation_earned: repBonus}});
+            await User.updateOne({_id: u._id}, {$inc: {reputation_earned: repBonus}});
         }
 
         // voucher payout if applicable
@@ -435,7 +435,7 @@ async function handleStandardOffer(interaction, action, offerId) {
             }
         }
 
-        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'accepted', resloved_at: new Date(), user_responded: true, responded_at: new Date()}});
+        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'accepted', resolved_at: new Date(), user_responded: true, responded_at: new Date()}});
 
         // compose breakdown message using stored base and bonus details if available
         let breakdownMsg = '';
@@ -515,7 +515,7 @@ async function handleStandardOffer(interaction, action, offerId) {
     }
 
     if (action === 'reject') {
-        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'rejected', resloved_at: new Date(), user_responded: true, responded_at: new Date()}});
+        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'rejected', resolved_at: new Date(), user_responded: true, responded_at: new Date()}});
         if (interaction.deferred || interaction.replied) {
             await interaction.followUp({
                 content: `You rejected the offer of $${offer.offered_amount}.`,
@@ -567,7 +567,7 @@ async function handleDictatorOffer(interaction, action, offerId) {
             money_earned: money,
             balance: money,
             money_from_reports: money,
-            repuation_earned: rep
+            reputation_earned: rep
         }
     });
 
@@ -641,7 +641,7 @@ async function handleDictatorOffer(interaction, action, offerId) {
         $set: {
             status: 'accepted',
             dictator_choice: choice,
-            resloved_at: new Date(),
+            resolved_at: new Date(),
             user_responded: true,
             responded_at: new Date()
         }
@@ -768,7 +768,7 @@ async function handleDictatorGame(interaction, action, offerId) {
                 money_earned: finalMoney,
                 balance: finalMoney,
                 money_from_reports: finalMoney,
-                repuation_earned: selected.rep,
+                reputation_earned: selected.rep,
             },
         }
     );

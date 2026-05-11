@@ -507,7 +507,7 @@ async function selectVulnerability(interaction) {
         fetchReply: true
     });
 
-    const response = await waitForSelect(message, interaction.user.id, ['select_vulnerability', 'report_close']);
+    const response = await waitForAnyComponent(message, interaction.user.id, ['select_vulnerability', 'report_close']);
     if (!response) return null;
 
     if (response.customId === 'report_close') {

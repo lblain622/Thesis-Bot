@@ -20,7 +20,7 @@ const reportSchema = new Schema({
     },
     vulnerability_id: {
         type: Schema.Types.ObjectId,
-        ref: 'Volunerabilies'
+        ref: 'Vulnerabilities'
     },
    
     vuln_identifier: String,

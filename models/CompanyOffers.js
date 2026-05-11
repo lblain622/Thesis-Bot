@@ -35,6 +35,7 @@ const companyOfferSchema = new Schema({
         type: Number,
         default: 0
     },
+    reputation_offered: Number,
     repuatation_offered: Number,
     status: {
         type: String,

@@ -68,7 +68,7 @@ const userSchema = new Schema({
         {
             company_id: {
                 type: Schema.Types.ObjectId,
-                ref: 'Companies',
+                ref: 'Company',
                 required: true
             },
             trust_score: {
