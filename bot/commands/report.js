@@ -81,7 +81,7 @@ module.exports = {
                 }
 
                 vulnerabilityId = vulnerability._id;
-                companyId = await selectCompany(interaction);
+                companyId = await selectCompanyAdvanced(interaction);
                 if (!companyId) return;
 
                 const company = await Company.findById(companyId);
@@ -116,11 +116,11 @@ module.exports = {
                 if (!confirmed) return;
             } else {
                 // Menu-based submission
-                companyId = await selectCompany(interaction);
-                if (!companyId) return;
-
-                vulnerabilityId = await selectVulnerability(interaction, companyId);
+                vulnerabilityId = await selectVulnerability(interaction);
                 if (!vulnerabilityId) return;
+
+                companyId = await selectCompanyAdvanced(interaction);
+                if (!companyId) return;
 
                 // Check for existing submissions
                 const existingReport = await Reports.findOne({
@@ -261,8 +261,20 @@ async function waitForButton(message, userId, allowedCustomIds) {
     }
 }
 
+async function waitForAnyComponent(message, userId, allowedCustomIds) {
+    // Wait for either StringSelect or Button components
+    try {
+        return await message.awaitMessageComponent({
+            filter: i => i.user.id === userId && allowedCustomIds.includes(i.customId),
+            time: 300_000
+        });
+    } catch (err) {
+        return null;
+    }
+}
 
-async function selectCompany(interaction) {
+
+async function selectCompanyAdvanced(interaction) {
     // Try to get companies from cache first
     const companies = await Company.find({}).lean();
 
@@ -297,18 +309,27 @@ async function selectCompany(interaction) {
     const row = new ActionRowBuilder().addComponents(selectMenu);
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
+            .setCustomId('report_type_dropdown')
+            .setLabel('📋 Use Dropdown')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId('report_type_search')
+            .setLabel('🔍 Search by Name')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
             .setCustomId('report_close')
-            .setLabel('Close')
+            .setLabel('❌ Close')
             .setStyle(ButtonStyle.Danger)
     );
 
     const message = await interaction.editReply({
-        content: 'Select a Company:',
+        content: 'Select a Company (Use dropdown above or search by name):',
         components: [row, buttons],
         fetchReply: true
     });
 
-    const response = await waitForSelect(message, interaction.user.id, ['select_company', 'report_close']);
+    // Wait for either a menu selection or button click
+    const response = await waitForAnyComponent(message, interaction.user.id, ['select_company', 'report_type_dropdown', 'report_type_search', 'report_close']);
     if (!response) return null;
 
     if (response.customId === 'report_close') {
@@ -316,11 +337,81 @@ async function selectCompany(interaction) {
         return null;
     }
 
-    await response.update({content: 'Company selected.', components: []});
-    return response.values[0];
+    if (response.customId === 'select_company') {
+        await response.update({content: 'Company selected.', components: []});
+        return response.values[0];
+    }
+
+    if (response.customId === 'report_type_dropdown') {
+        await response.deferUpdate();
+        // Show dropdown menu again
+        const dropdownMessage = await interaction.followUp({
+            content: 'Select a Company from the list:',
+            components: [row],
+            fetchReply: true
+        });
+        const dropdownResponse = await waitForSelect(dropdownMessage, interaction.user.id, ['select_company']);
+        if (!dropdownResponse) return null;
+        await dropdownResponse.deferUpdate();
+        return dropdownResponse.values[0];
+    }
+
+    if (response.customId === 'report_type_search') {
+        await response.deferUpdate();
+        return await searchCompanyByName(interaction, companies);
+    }
+
+    return null;
 }
 
-async function selectVulnerability(interaction, companyId) {
+async function searchCompanyByName(interaction, companies) {
+    const userId = interaction.user.id;
+    
+    // Prompt for company name
+    const prompt = await interaction.followUp({
+        content: `\n📝 **Type the name of the company you want to report to:**\n\nAvailable companies:\n${companies.map(c => `• **${c.name}**`).join('\n')}`,
+        flags: 64,
+        fetchReply: true
+    });
+
+    try {
+        // Wait for a message from the user
+        const collected = await interaction.channel.awaitMessages({
+            filter: m => m.author.id === userId,
+            max: 1,
+            time: 300_000
+        });
+
+        if (collected.size === 0) {
+            return null;
+        }
+
+        const userInput = collected.first().content.trim().toLowerCase();
+        
+        // Find matching company (case-insensitive)
+        const matchedCompany = companies.find(c => c.name.toLowerCase() === userInput);
+        
+        if (!matchedCompany) {
+            await interaction.followUp({
+                content: `❌ No company found with the name "${userInput}". Please try again.`,
+                flags: 64
+            });
+            return null;
+        }
+
+        await interaction.followUp({
+            content: `✅ Company "${matchedCompany.name}" selected.`,
+            flags: 64
+        });
+
+        return matchedCompany._id.toString();
+    } catch (err) {
+        console.error('Error in searchCompanyByName:', err);
+        return null;
+    }
+}
+
+async function selectVulnerability(interaction) {
     // also check which ones user is currently exploiting so we can warn in the menu
     const user = await User.findOne({discord_id: interaction.user.id});
     let exploitedIds = new Set();
@@ -331,7 +422,7 @@ async function selectVulnerability(interaction, companyId) {
 
     const vulnerabilities = await Vulnerability.find({
         isResolved: false
-    }).populate('company_id', 'name').lean();
+    }).lean();
 
     if (!vulnerabilities.length) {
         await interaction.followUp({
@@ -346,9 +437,8 @@ async function selectVulnerability(interaction, companyId) {
         .setPlaceholder('Select a vulnerability')
         .addOptions(
             vulnerabilities.slice(0, 25).map(v => {
-                const companyName = v.company_id?.name || 'Unknown';
                 const status = v.isReported ? 'Reported' : 'Unreported';
-                const desc = `${companyName} • ${status} • ${v.volun_type}`;
+                const desc = `${status} • ${v.volun_type}`;
                 return {
                     label: v.vuln_identifier,
                     description: desc.slice(0, 100), // Discord limit

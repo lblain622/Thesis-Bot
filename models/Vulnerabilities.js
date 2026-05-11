@@ -24,7 +24,12 @@ const vulnerabilitySchema = new Schema({
     volun_type: {
         type: String,
         enum: ['XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR', 'Authentication', 'Authorization',
-               'Information_Disclosure', 'Business_Logic', 'Cryptographic', 'Other'],
+               'Information_Disclosure', 'Business_Logic', 'Cryptographic', 'Other',
+               'Authentication_Bypass', 'Buffer_Overflow', 'Command_Injection',
+               'Cross_Site_Scripting', 'Denial_of_Service', 'Insecure_Deserialization',
+               'Open_Redirect', 'Path_Traversal', 'Privilege_Escalation',
+               'Race_Condition', 'Remote_Code_Execution', 'SQL_Injection', 'SSRF',
+               'XML_External_Entity'],
         required: true
     },
     // Severity used by offers/reporting flows
@@ -59,6 +64,18 @@ const vulnerabilitySchema = new Schema({
     },
     recoveryPotential: {
         answer: { type: String, enum: ['Automatic', 'User', 'Irrecoverable','Unknown'],},
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
+    },
+    confidentialityImpact: {
+        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'] },
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
+    },
+    integrityImpact: {
+        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'] },
+        visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
+    },
+    availabilityImpact: {
+        answer: { type: String, enum: ['None', 'Low', 'Medium', 'High'] },
         visibleTo: [{ type: Schema.Types.ObjectId, ref: 'Users' }]
     },
 

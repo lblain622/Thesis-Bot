@@ -149,38 +149,7 @@ async function generateDictatorOffer(client, report, discordUser) {
         `Please choose one:`;
 
     try {
-        // Post to server channel - only visible to this user via mention
-        const guild = client.guilds.cache.get(process.env.GUILD_ID) || 
-                     [...client.guilds.cache.values()][0];
-        
-        if (guild) {
-            const {getAnnouncementChannel} = require('./announcementUtils');
-            const channel = await getAnnouncementChannel(client, guild, 'offers');
-            
-            if (channel) {
-                await channel.send({
-                    content: messageContent,
-                    components: [
-                        new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId(`dictator_option1_${offer._id}`)
-                                .setLabel('Choose Option 1')
-                                .setStyle(ButtonStyle.Success),
-                            new ButtonBuilder()
-                                .setCustomId(`dictator_option2_${offer._id}`)
-                                .setLabel('Choose Option 2')
-                                .setStyle(ButtonStyle.Primary)
-                        ),
-                    ],
-                });
-            }
-        }
-    } catch (err) {
-        console.error('Error sending dictator offer:', err);
-    }
-
-    // also send the same message to the user's dashboard channel if they have one
-    try {
+        // Send private notification to the user only (not public channel)
         const { notifyUser } = require('./logUtils');
         await notifyUser(client, report.user_id, messageContent, {
             components: [
@@ -197,7 +166,7 @@ async function generateDictatorOffer(client, report, discordUser) {
             ],
         });
     } catch (e) {
-        console.error('Dashboard dictator offer notify failed:', e);
+        console.error('Dictator offer notification failed:', e);
     }
 }
 

@@ -28,6 +28,29 @@ const REVEALABLE_FIELDS = [
     'recoveryPotential',
 ];
 
+const FIELD_LABELS = {
+    networkAccess: 'Network access',
+    arbitraryCodeExecution: 'Arbitrary code execution',
+    userInteraction: 'User interaction',
+    automatable: 'Automatable',
+    confidentialityImpact: 'Confidentiality impact',
+    integrityImpact: 'Integrity impact',
+    availabilityImpact: 'Availability impact',
+    privilegesRequired: 'Privileges required',
+    recoveryPotential: 'Recovery potential',
+};
+
+function hasUserId(ids, userId) {
+    return (ids || []).some(id => id.toString() === userId.toString());
+}
+
+function getUnrevealedFields(vulnerability, userId) {
+    return REVEALABLE_FIELDS.filter(field => {
+        const value = vulnerability[field];
+        return value?.answer && !hasUserId(value.visibleTo, userId);
+    });
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('search')
@@ -66,11 +89,24 @@ module.exports = {
             // Update last_search timestamp
             await User.updateOne({_id: user._id}, {$set: {last_search: now}});
 
-            // Split into accessible and inaccessible; allow discovering a few new ones
+            // Query all active vulnerabilities (non-expired, not resolved)
+            const candidates = await Vulnerability.find({
+                expiration_date: {$gt: now},
+                isResolved: false
+            }).populate('company_id', 'name');
+
+            if (!candidates.length) {
+                return interaction.editReply({
+                    content: '🔍 No active vulnerabilities found. The landscape is quiet for now...',
+                    flags: 64
+                });
+            }
+
+            // Split into new discoveries and previously discovered vulnerabilities that still have hidden data.
             const accessible = [];
             const inaccessible = [];
             for (const v of candidates) {
-                const isAccessible = v.visibility?.isGlobal || (v.visibility?.allowedUsers || []).some(u => u.toString() === user._id.toString());
+                const isAccessible = v.visibility?.isGlobal || hasUserId(v.visibility?.allowedUsers, user._id);
                 (isAccessible ? accessible : inaccessible).push(v);
             }
 
@@ -80,18 +116,26 @@ module.exports = {
                 .sort(() => 0.5 - Math.random())
                 .slice(0, Math.min(baseDiscover, inaccessible.length));
 
-            // Build the set of found vulnerabilities: already accessible + newly discovered (cap to 5 total)
+            const accessibleWithHiddenInfo = accessible.filter(v => getUnrevealedFields(v, user._id).length > 0);
+
+            // Build the set of found vulnerabilities: new discoveries first, then new intel for old discoveries.
             const foundCap = 5; // keep global cap for balance
-            const found = [...accessible, ...toDiscover].slice(0, foundCap);
+            const found = [
+                ...toDiscover,
+                ...accessibleWithHiddenInfo.sort(() => 0.5 - Math.random())
+            ].slice(0, foundCap);
 
             // Mutations to apply: add user to allowedUsers for discovered, reveal random fields, add discovered_by
             const savePromises = [];
+            const resultDetails = [];
             for (const v of found) {
-                const wasAccessible = v.visibility?.isGlobal || (v.visibility?.allowedUsers || []).some(u => u.toString() === user._id.toString());
+                const wasAccessible = v.visibility?.isGlobal || hasUserId(v.visibility?.allowedUsers, user._id);
                 if (!wasAccessible) {
                     v.visibility = v.visibility || {isGlobal: false, allowedUsers: []};
                     v.visibility.allowedUsers = v.visibility.allowedUsers || [];
-                    v.visibility.allowedUsers.push(user._id);
+                    if (!hasUserId(v.visibility.allowedUsers, user._id)) {
+                        v.visibility.allowedUsers.push(user._id);
+                    }
                 }
 
                 // Track discovery
@@ -106,26 +150,35 @@ module.exports = {
                 const baseMax = 4;
                 const randBase = Math.min(baseMax, Math.max(baseMin, Math.ceil(Math.random() * baseMax)));
                 const revealCount = Math.min(baseMax + (boosts.extraFields || 0), randBase + (boosts.extraFields || 0));
-                const fieldsToReveal = REVEALABLE_FIELDS
+                const fieldsToReveal = getUnrevealedFields(v, user._id)
                     .sort(() => 0.5 - Math.random())
                     .slice(0, revealCount);
+                const revealedFields = [];
                 for (const field of fieldsToReveal) {
-                    if (!v[field]) continue;
+                    if (!v[field]?.answer) continue;
                     v[field].visibleTo = v[field].visibleTo || [];
-                    if (!v[field].visibleTo.some(id => id.toString() === user._id.toString())) {
+                    if (!hasUserId(v[field].visibleTo, user._id)) {
                         v[field].visibleTo.push(user._id);
+                        revealedFields.push(field);
                     }
                 }
 
-                savePromises.push(v.save());
+                if (!wasAccessible || revealedFields.length) {
+                    resultDetails.push({
+                        vulnerability: v,
+                        isNewDiscovery: !wasAccessible,
+                        revealedFields
+                    });
+                    savePromises.push(v.save());
+                }
             }
 
             await Promise.all(savePromises);
 
             // If still nothing accessible after attempt
-            if (!found.length) {
+            if (!resultDetails.length) {
                 return interaction.editReply({
-                    content: 'You didn\'t find anything this time. Try again in a bit!',
+                    content: 'You didn\'t find any new vulnerabilities or new details this time. Try again in a bit!',
                     flags: 64
                 });
             }
@@ -133,15 +186,22 @@ module.exports = {
             // Build response embed
             const embed = new EmbedBuilder()
                 .setTitle('🔎 Search Results')
-                .setDescription('You scouted the landscape and found some leads:')
+                .setDescription('You scouted the landscape and found useful leads:')
                 .setTimestamp(new Date());
 
-            for (const v of found) {
+            for (const detail of resultDetails) {
+                const v = detail.vulnerability;
                 const companyName = v.company_id?.name || 'Unknown Company';
                 const remaining = v.expiration_date ? formatRemaining(v.expiration_date) : 'unknown';
+                const status = detail.isNewDiscovery
+                    ? 'New discovery'
+                    : 'New intel on a previously discovered vulnerability';
+                const revealed = detail.revealedFields.length
+                    ? `\nLearned: ${detail.revealedFields.map(field => FIELD_LABELS[field] || field).join(', ')}`
+                    : '';
                 embed.addFields({
                     name: `${v.vuln_identifier}`,
-                    value: `Company: ${companyName}\nType: ${v.volun_type}\nTime left: ${remaining}`,
+                    value: `Status: ${status}\nCompany: ${companyName}\nType: ${v.volun_type}\nTime left: ${remaining}${revealed}`,
                     inline: false,
                 });
             }

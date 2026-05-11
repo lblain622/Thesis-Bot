@@ -76,6 +76,10 @@ const companyOfferSchema = new Schema({
     resolved_at: { type: Date, default: null },
     counter_offer: { type: Number, default: null },
 
+    // Spam prevention: track if user already responded to this offer
+    user_responded: { type: Boolean, default: false },
+    responded_at: { type: Date, default: null },
+
 }, { timestamps: true });
 
 // Performance indexes

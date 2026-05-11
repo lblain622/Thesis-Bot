@@ -98,7 +98,7 @@ module.exports = {
                 flags: 64
             });
 
-            // Send server channel notification to target user
+            // Send private notification to recipient only
             try {
                 const givingVulnDoc = offerType === 'vulnerability'
                     ? await Vulnerability.findById(givingValue)
@@ -108,12 +108,8 @@ module.exports = {
                     ? await Vulnerability.findById(receivingValue)
                     : null;
 
-                // Post to server channel - only visible to target user via mention
-                const {getAnnouncementChannel} = require('../utils/announcementUtils');
-                const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
-                
                 const tradeMessage = {
-                    content: `${targetUser} **Trade Offer from ${interaction.user.username}**\n\n${formatTradeOffer(
+                    content: `**Trade Offer from ${interaction.user.username}**\n\n${formatTradeOffer(
                         offerType,
                         givingValue,
                         requestType,
@@ -135,21 +131,21 @@ module.exports = {
                     ]
                 };
 
-                if (channel) {
-                    await channel.send(tradeMessage);
-                }
-
-                // also notify recipient in their dashboard channel
+                // Notify recipient in their private channel (dashboard)
                 try {
                     const { notifyUser } = require('../utils/logUtils');
                     await notifyUser(interaction.client, receivingUser._id, tradeMessage);
                 } catch (e) {
                     console.error('Dashboard trade notify failed:', e);
+                    await interaction.followUp({
+                        content: 'Trade created but could not notify the recipient. They will see it in their dashboard.',
+                        flags: 64
+                    });
                 }
             } catch (err) {
                 console.error('Could not send trade notification to target user:', err);
                 await interaction.followUp({
-                    content: 'Trade created! The other user will be notified in the server.',
+                    content: 'Trade created! The other user will be notified.',
                     flags: 64
                 });
             }

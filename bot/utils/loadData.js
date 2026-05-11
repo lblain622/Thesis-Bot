@@ -15,7 +15,7 @@ const ItemStock = require('../../models/ItemStock');
 const ShopRotation = require('../../models/ShopRotation');
 const PlayerChoices = require('../../models/PlayerChoices');
 const {loadShopItems} = require('./loadShopItems');
-const testVulnData = require('../../data/test-data.json');
+const vulnSeedData = require('../../data/voln-data.json');
 const fs = require('fs');
 const path = require('path');
 
@@ -28,6 +28,58 @@ function loadWordList(filename, key) {
         console.error(`Error loading ${filename}:`, error.message);
         return [];
     }
+}
+
+const VULN_TYPE_MAP = {
+    SQLi: 'SQL_Injection',
+    XSS: 'Cross_Site_Scripting',
+    RCE: 'Remote_Code_Execution',
+    Authentication: 'Authentication_Bypass',
+    Authorization: 'Privilege_Escalation',
+    Other: 'Other'
+};
+
+function normalizeVulnType(value) {
+    const sanitized = String(value || 'Other')
+        .trim()
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    return VULN_TYPE_MAP[sanitized] || sanitized || 'Other';
+}
+
+function normalizeSeverity(value) {
+    const severity = String(value || '').toUpperCase();
+    return ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(severity) ? severity : 'LOW';
+}
+
+function normalizeRecoveryPotential(value) {
+    const recovery = String(value || '').trim();
+    if (['Automatic', 'User', 'Irrecoverable', 'Unknown'].includes(recovery)) return recovery;
+    if (recovery === 'Manual') return 'User';
+    return 'Unknown';
+}
+
+function getSourceIdentifier(data, fallbackIndex) {
+    return data.id || data.cve_id || data.vuln_identifier || data.vulnerability_id || `seed-${fallbackIndex}`;
+}
+
+function dedupeVulnData(source) {
+    const seen = new Set();
+    return source.filter((data, index) => {
+        const key = getSourceIdentifier(data, index) || `${data.volun_type || data.vuln_type}:${data.description}`;
+        const normalizedKey = String(key).trim().toLowerCase();
+        if (seen.has(normalizedKey)) return false;
+        seen.add(normalizedKey);
+        return true;
+    });
+}
+
+function slugifyIdentifier(value) {
+    return String(value || '')
+        .trim()
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80);
 }
 
 // Seed companies and related data assuming an active DB connection exists
@@ -74,7 +126,7 @@ async function loadInitialData() {
                 name: 'BugBunny Labs',
                 description: 'BugBunny Labs delivers enterprise-grade web application security testing with data-driven payout policies and transparent reporting.',
                 product_type: 'web_app',
-                preferred_vulns: ['XSS', 'CSRF', 'Authentication'],
+                preferred_vulns: ['Cross_Site_Scripting', 'Open_Redirect', 'Authentication_Bypass'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
@@ -103,7 +155,7 @@ async function loadInitialData() {
                 name: 'PocketRaiders',
                 description: '💰 PocketRaiders rewards mobile security heroes with cold, hard cash! Higher impact means bigger payouts - we pay what your findings are worth!',
                 product_type: 'mobile_app',
-                preferred_vulns: ['IDOR', 'Business_Logic'],
+                preferred_vulns: ['Path_Traversal', 'Race_Condition'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
@@ -122,7 +174,7 @@ async function loadInitialData() {
                 name: 'HackHeroes',
                 description: '🏆 HackHeroes honors elite researchers with premium bounties and exclusive credit bonuses! Prove your skills and earn the recognition you deserve!',
                 product_type: 'api',
-                preferred_vulns: ['Authentication', 'Authorization', 'Information_Disclosure'],
+                preferred_vulns: ['Authentication_Bypass', 'Privilege_Escalation', 'Information_Disclosure'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
@@ -148,7 +200,7 @@ async function loadInitialData() {
                 name: 'ZeroDay Zen',
                 description: '☁️ ZeroDay Zen delivers instant cash rewards for cloud warriors! Lightning-fast payouts and escalating bonuses for persistent researchers!',
                 product_type: 'infrastructure',
-                preferred_vulns: ['RCE', 'SQLi', 'Cryptographic'],
+                preferred_vulns: ['Remote_Code_Execution', 'SQL_Injection', 'Command_Injection'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
@@ -167,7 +219,7 @@ async function loadInitialData() {
                 name: 'CryptoWarden',
                 description: '🔌 CryptoWarden showers IoT innovators with generous cash flows! Smart device security pays off big - get rewarded for keeping the connected world safe!',
                 product_type: 'iot',
-                preferred_vulns: ['RCE', 'Authentication', 'Other'],
+                preferred_vulns: ['Buffer_Overflow', 'Authentication_Bypass', 'XML_External_Entity'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
@@ -188,7 +240,7 @@ async function loadInitialData() {
                 name: 'BlockShield',
                 description: '⛓️ BlockShield makes blockchain bounty hunters rich! Massive payouts for crypto-critical finds - your wallet will thank you!',
                 product_type: 'blockchain',
-                preferred_vulns: ['Cryptographic', 'Business_Logic', 'RCE'],
+                preferred_vulns: ['SSRF', 'XML_External_Entity', 'Remote_Code_Execution'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
@@ -213,7 +265,7 @@ async function loadInitialData() {
                 description: '🧠 NeuralNightmare fuels AI researchers with explosive cash rewards! Unlock the secrets of machine learning and get paid handsomely for your discoveries!',
                 product_type: 'ai_ml',
                 reputation_threshold: 100,
-                preferred_vulns: ['Business_Logic', 'Information_Disclosure', 'Other'],
+                preferred_vulns: ['Race_Condition', 'Information_Disclosure', 'Insecure_Deserialization'],
                 reputation_tiers: [
                     {
                         min_reputation: 0,
@@ -256,24 +308,44 @@ async function loadInitialData() {
         // Seed 15 global vulnerabilities (unassigned) – discovered later via /search
         const inOneWeek = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-        // Use test data if available, otherwise fallback to generated
-        const vulnDataSource = testVulnData && testVulnData.length ? testVulnData : generateFallbackVulnData();
+        // Use voln-data.json if available, otherwise fallback to generated data.
+        const rawVulnDataSource = vulnSeedData && vulnSeedData.length ? vulnSeedData : generateFallbackVulnData();
+        const vulnDataSource = dedupeVulnData(rawVulnDataSource);
 
+        // Shuffle vulnerability data to ensure no duplicates when sampling
+        const shuffledVulnData = [...vulnDataSource].sort(() => 0.5 - Math.random());
+        
         const vulnsPayload = [];
-       const nounList = loadWordList('../../data/nouns.json', 'nouns');
+        const nounList = loadWordList('../../data/nouns.json', 'nouns');
         const adjList = loadWordList('../../data/adjs.json', 'adjs');
-        for (let i = 0; i < 15; i++) {
+        const usedIdentifiers = new Set(); // Track used vuln_identifiers to prevent duplicates
+
+        for (let i = 0; i < Math.min(15, shuffledVulnData.length); i++) {
             const company = companies[Math.floor(Math.random() * companies.length)];
-            const data = vulnDataSource[Math.floor(Math.random() * vulnDataSource.length)];
+            const data = shuffledVulnData[i]; // Use shuffle+slice instead of random selection
 
-            // Generate unique identifier
+            const sourceIdentifier = slugifyIdentifier(getSourceIdentifier(data, i));
+            let vulnIdentifier = sourceIdentifier;
 
-            const noun = nounList[Math.floor(Math.random()*nounList.length)];
-            const adj = adjList[Math.floor(Math.random()*adjList.length)];
-            const vulnType = data.volun_type || data.type || ['XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR'][Math.floor(Math.random() * 5)];
-            const companyCode = company.name?.toUpperCase()?.replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'COMP';
-            const uniqueId = `${Date.now().toString().slice(-4)}${i}`;
-            const vulnIdentifier = `${adj}-${noun}`;
+            if (!vulnIdentifier || usedIdentifiers.has(vulnIdentifier)) {
+                let attempts = 0;
+                const maxAttempts = 10;
+
+                do {
+                    const noun = nounList[Math.floor(Math.random() * nounList.length)];
+                    const adj = adjList[Math.floor(Math.random() * adjList.length)];
+                    vulnIdentifier = `${adj}-${noun}-${i}`;
+                    attempts++;
+                } while (usedIdentifiers.has(vulnIdentifier) && attempts < maxAttempts);
+            }
+            
+            if (usedIdentifiers.has(vulnIdentifier)) {
+                console.warn(`⚠️  Could not generate unique identifier for vulnerability ${i}, skipping`);
+                continue;
+            }
+            usedIdentifiers.add(vulnIdentifier);
+            
+            const vulnType = normalizeVulnType(data.volun_type || data.vuln_type || data.type);
 
 
             const isGlobal = false
@@ -292,7 +364,7 @@ async function loadInitialData() {
                 round_id: null,
                 vuln_identifier: vulnIdentifier,
                 volun_type: vulnType,
-                severity: data.severity || ['LOW', 'MEDIUM', 'HIGH'][Math.floor(Math.random() * 3)],
+                severity: normalizeSeverity(data.severity),
                 name: `${vulnType} vulnerability in ${company.name}`,
                 description: data.description || `A security issue was discovered in ${company.name}.`,
                 networkAccess: {
@@ -328,7 +400,7 @@ async function loadInitialData() {
                     visibleTo: []
                 },
                 recoveryPotential: {
-                    answer: getAnswer(data.recoveryPotential) || 'Unknown',
+                    answer: normalizeRecoveryPotential(getAnswer(data.recoveryPotential)),
                     visibleTo: []
                 },
 
@@ -391,7 +463,7 @@ async function loadInitialData() {
     }
 }
 
-// Fallback vulnerability data generator if test-data.json is missing
+// Fallback vulnerability data generator if voln-data.json is missing
 function generateFallbackVulnData() {
     return [
         {

@@ -54,6 +54,14 @@ async function handleUltimatumGame(interaction, action, offerId) {
     const offer = await CompanyOffer.findById(offerId);
     if (!offer) return interaction.reply({content: 'Offer not found.', ephemeral: true});
 
+    // Spam prevention: check if user already responded
+    if (offer.user_responded) {
+        return interaction.reply({
+            content: '⚠️ You already responded to this offer. Only one response per offer is allowed.',
+            ephemeral: true
+        });
+    }
+
     const report = await Report.findById(offer.report_id);
     const user = await User.findById(report.user_id);
     if (!user) return interaction.reply({content: 'User not found.', ephemeral: true});
@@ -67,7 +75,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
         const constBonus = Number(process.env.CONSTANT_REPORT_BONUS || 0);
         const finalAmount = Math.floor(baseAmount * totalMultiplier) + constBonus;
 
-        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'accepted'}});
+        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'accepted', user_responded: true, responded_at: new Date()}});
         await User.updateOne(
             {_id: user._id},
             {
@@ -376,6 +384,14 @@ async function handleStandardOffer(interaction, action, offerId) {
         ephemeral: true
     });
 
+    // Spam prevention: check if user already responded
+    if (offer.user_responded) {
+        return interaction.reply({
+            content: '⚠️ You already responded to this offer. Only one response per offer is allowed.',
+            ephemeral: true
+        });
+    }
+
     const report = await Report.findById(offer.report_id);
     if (!report) return interaction.reply({content: 'Related report not found.', ephemeral: true});
     if (String(interaction.user.id) !== String((await User.findById(report.user_id).lean())?.discord_id)) {
@@ -419,7 +435,7 @@ async function handleStandardOffer(interaction, action, offerId) {
             }
         }
 
-        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'accepted', resloved_at: new Date()}});
+        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'accepted', resloved_at: new Date(), user_responded: true, responded_at: new Date()}});
 
         // compose breakdown message using stored base and bonus details if available
         let breakdownMsg = '';
@@ -499,7 +515,7 @@ async function handleStandardOffer(interaction, action, offerId) {
     }
 
     if (action === 'reject') {
-        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'rejected', resloved_at: new Date()}});
+        await CompanyOffer.updateOne({_id: offer._id}, {$set: {status: 'rejected', resloved_at: new Date(), user_responded: true, responded_at: new Date()}});
         if (interaction.deferred || interaction.replied) {
             await interaction.followUp({
                 content: `You rejected the offer of $${offer.offered_amount}.`,
@@ -519,6 +535,15 @@ async function handleDictatorOffer(interaction, action, offerId) {
         content: 'This offer is no longer available.',
         ephemeral: true
     });
+
+    // Spam prevention: check if user already responded
+    if (offer.user_responded) {
+        return interaction.reply({
+            content: '⚠️ You already responded to this offer. Only one response per offer is allowed.',
+            ephemeral: true
+        });
+    }
+
     const report = await Report.findById(offer.report_id);
     if (!report) return interaction.reply({content: 'Related report not found.', ephemeral: true});
     const user = await User.findById(report.user_id).lean();
@@ -616,7 +641,9 @@ async function handleDictatorOffer(interaction, action, offerId) {
         $set: {
             status: 'accepted',
             dictator_choice: choice,
-            resloved_at: new Date()
+            resloved_at: new Date(),
+            user_responded: true,
+            responded_at: new Date()
         }
     });
 
@@ -823,19 +850,12 @@ async function handleTrade(interaction, action, tradeId) {
             components: []
         });
 
-        // Notify other user of trade rejection in server channel
+        // Notify other user of trade rejection in private channel only
         const other = isGiver ? receivingUser : givingUser;
         try {
-            const discordOther = await interaction.client.users.fetch(other.discord_id);
-            const {getAnnouncementChannel} = require('../utils/announcementUtils');
-            const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
+            const msg = {content: `❌ **Trade Rejected** - ${interaction.user.username} rejected your trade.`};
             
-            const msg = {content: `${discordOther} ❌ **Trade Rejected** - ${interaction.user.username} rejected your trade.`};
-            if (channel) {
-                await channel.send(msg);
-            }
-
-            // also notify in dashboard
+            // Notify in dashboard/private channel only
             try {
                 const { notifyUser } = require('../utils/logUtils');
                 await notifyUser(interaction.client, other._id, msg);
@@ -853,6 +873,15 @@ async function handleTrade(interaction, action, tradeId) {
 
     // Receiver accepts first
     if (isReceiver && action === 'accept' && trade.status === 'pending') {
+        // Prevent double-clicking by checking current status in database
+        const freshTrade = await Trade.findById(tradeId).lean();
+        if (freshTrade.status !== 'pending') {
+            return interaction.reply({
+                content: '⚠️ This trade has already been updated. Please check the current status.',
+                ephemeral: true
+            });
+        }
+
         await Trade.updateOne({_id: tradeId}, {status: 'receiver_accepted'});
 
         await interaction.update({
@@ -860,14 +889,11 @@ async function handleTrade(interaction, action, tradeId) {
             components: []
         });
 
-        // Notify giver for final confirmation in server channel
-        const giverDiscord = await interaction.client.users.fetch(givingUser.discord_id);
+        // Notify giver for final confirmation in private channel only
         const {ActionRowBuilder, ButtonBuilder, ButtonStyle} = require('discord.js');
-        const {getAnnouncementChannel} = require('../utils/announcementUtils');
-        const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
         
         const notice = {
-            content: `${giverDiscord} ✅ **Trade Accepted** - ${interaction.user.username} accepted your trade! Please confirm:`,
+            content: `✅ **Trade Accepted** - ${interaction.user.username} accepted your trade! Please confirm:`,
             components: [
                 new ActionRowBuilder().addComponents(
                     new ButtonBuilder()
@@ -881,10 +907,7 @@ async function handleTrade(interaction, action, tradeId) {
                 )
             ]
         };
-        if (channel) {
-            await channel.send(notice);
-        }
-        // also send to giver's dashboard
+        // send to giver's dashboard only
         try {
             const { notifyUser } = require('../utils/logUtils');
             await notifyUser(interaction.client, givingUser._id, notice);
@@ -897,6 +920,15 @@ async function handleTrade(interaction, action, tradeId) {
 
     // Giver accepts second → finalize trade
     if (isGiver && action === 'acceptfinal' && trade.status === 'receiver_accepted') {
+        // Prevent double-clicking by checking current status in database
+        const freshTrade = await Trade.findById(tradeId).lean();
+        if (freshTrade.status !== 'receiver_accepted') {
+            return interaction.reply({
+                content: '⚠️ This trade has already been completed or updated. Please check the current status.',
+                ephemeral: true
+            });
+        }
+
         try {
             // Run exchange
             await executeTrade(trade);
@@ -911,16 +943,10 @@ async function handleTrade(interaction, action, tradeId) {
                 components: []
             });
 
-            // Notify receiver in server channel
-            const recvDiscord = await interaction.client.users.fetch(receivingUser.discord_id);
-            const {getAnnouncementChannel} = require('../utils/announcementUtils');
-            const channel = await getAnnouncementChannel(interaction.client, interaction.guild, 'trades');
-            const msg = {content: `${recvDiscord} 🎉 **Trade Completed** - Your trade with ${interaction.user.username} is complete!`};
+            // Notify receiver in private channel only
+            const msg = {content: `🎉 **Trade Completed** - Your trade with ${interaction.user.username} is complete!`};
             
-            if (channel) {
-                await channel.send(msg);
-            }
-            // notify dashboard
+            // notify dashboard only
             try {
                 const { notifyUser } = require('../utils/logUtils');
                 await notifyUser(interaction.client, receivingUser._id, msg);

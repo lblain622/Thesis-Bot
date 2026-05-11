@@ -22,7 +22,6 @@ module.exports = {
                 .addChoices(
                     {name: 'Merch', value: 'merch'},
                     {name: 'Tool', value: 'tool'},
-                    {name: 'Consumable', value: 'consumable'}
                 )
                 .setRequired(false)
             )
