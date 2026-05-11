@@ -217,7 +217,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
 
         if (amount <= currentOffered) {
             accepted = true;
-            reason = "The company is happy to pay less than they offered!";
+            reason = "The company is happy with this offer!";
         } else {
             const ratio = amount / originalBase;
             // 1.0 ratio -> 90% chance
@@ -235,7 +235,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
                 // Counter-counter offer
                 finalOfferAmount = Math.floor((amount + currentOffered) / 2);
                 accepted = true;
-                reason = `The company rejected $${amount} but countered with a final offer of $${finalOfferAmount}. (Automatically accepted as negotiation)`;
+                reason = `The company responded with a final offer of $${finalOfferAmount}.`;
             }
         }
 
