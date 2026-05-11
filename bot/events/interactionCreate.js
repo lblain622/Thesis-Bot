@@ -141,7 +141,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
                 if (bonusResult.awarded) {
                     try {
                         const { notifyUser } = require('../utils/logUtils');
-                        const bonusMsg = `🎁 **Bonus Reward!** You caught ${bonusResult.exploiterCount} exploiter${bonusResult.exploiterCount > 1 ? 's' : ''} on **${vulnerability.vuln_identifier}** [${bonusResult.severity}]. ` +
+                        const bonusMsg = `🎁 **Bonus Reward!** You caught ${bonusResult.exploiterCount} exploiter${bonusResult.exploiterCount > 1 ? 's' : ''} on **${vulnerability.vuln_identifier}**. ` +
                             `You received a bonus of $${bonusResult.bonusAmount}!`;
                         await notifyUser(interaction.client, report.user_id, bonusMsg);
                     } catch (e) {
@@ -476,7 +476,7 @@ async function handleStandardOffer(interaction, action, offerId) {
                 if (bonusResult.awarded) {
                     try {
                         const { notifyUser } = require('../utils/logUtils');
-                        const bonusMsg = `🎁 **Bonus Reward!** You caught ${bonusResult.exploiterCount} exploiter${bonusResult.exploiterCount > 1 ? 's' : ''} on **${vulnerability.vuln_identifier}** [${bonusResult.severity}]. ` +
+                        const bonusMsg = `🎁 **Bonus Reward!** You caught ${bonusResult.exploiterCount} exploiter${bonusResult.exploiterCount > 1 ? 's' : ''} on **${vulnerability.vuln_identifier}**. ` +
                             `You received a bonus of $${bonusResult.bonusAmount}!`;
                         await notifyUser(interaction.client, report.user_id, bonusMsg);
                     } catch (e) {
@@ -672,7 +672,7 @@ async function handleDictatorOffer(interaction, action, offerId) {
             if (bonusResult.awarded) {
                 try {
                     const { notifyUser } = require('../utils/logUtils');
-                    const bonusMsg = `🎁 **Bonus Reward!** You caught ${bonusResult.exploiterCount} exploiter${bonusResult.exploiterCount > 1 ? 's' : ''} on **${vulnerability.vuln_identifier}** [${bonusResult.severity}]. ` +
+                    const bonusMsg = `🎁 **Bonus Reward!** You caught ${bonusResult.exploiterCount} exploiter${bonusResult.exploiterCount > 1 ? 's' : ''} on **${vulnerability.vuln_identifier}**. ` +
                         `You received a bonus of $${bonusResult.bonusAmount}!`;
                     await notifyUser(interaction.client, report.user_id, bonusMsg);
                 } catch (e) {
@@ -812,159 +812,320 @@ async function handleDictatorGame(interaction, action, offerId) {
 }
 
 async function handleTrade(interaction, action, tradeId) {
-    // Fetch trade without populate for better performance
     const trade = await Trade.findById(tradeId).lean();
-
     if (!trade) {
         return interaction.reply({content: 'Trade not found.', ephemeral: true});
     }
 
-  
     const [givingUser, receivingUser, currentUser] = await Promise.all([
         User.findById(trade.giving_user_id).lean(),
         User.findById(trade.receiving_user_id).lean(),
         User.findOne({discord_id: interaction.user.id}).lean()
     ]);
 
-    const user = currentUser;
-    if (!user) {
+    if (!currentUser) {
         return interaction.reply({content: 'User not found.', ephemeral: true});
     }
 
-    const isGiver = trade.giving_user_id.toString() === user._id.toString();
-    const isReceiver = trade.receiving_user_id.toString() === user._id.toString();
+    const isGiver = trade.giving_user_id.toString() === currentUser._id.toString();
+    const isReceiver = trade.receiving_user_id.toString() === currentUser._id.toString();
 
     if (!isGiver && !isReceiver) {
         return interaction.reply({content: 'You are not part of this trade.', ephemeral: true});
     }
 
-    // --- HANDLE REJECTIONS --- //
     if (action === 'reject') {
+        await rejectTrade(interaction, tradeId, isGiver ? receivingUser : givingUser);
+        return;
+    }
+
+    if (isReceiver && action === 'accept' && trade.status === 'pending') {
+        const selection = await selectReceiverTradeValue(interaction, receivingUser, trade);
+        if (!selection) return;
+
         await Trade.updateOne(
-            {_id: tradeId},
-            {status: 'rejected', resolved_at: new Date()}
+            {_id: tradeId, status: 'pending'},
+            {$set: {ru_value: selection.value, status: 'receiver_selected'}}
         );
 
-        await interaction.update({
-            content: '❌ Trade rejected.',
+        const updatedTrade = await Trade.findById(tradeId).lean();
+        const summary = await formatTradeSummary(updatedTrade);
+        const updatePayload = {
+            content: `You selected your side of the trade.\n\n${summary}\n\nWaiting for both final confirmations.`,
             components: []
-        });
-
-        // Notify other user of trade rejection in private channel only
-        const other = isGiver ? receivingUser : givingUser;
-        try {
-            const msg = {content: `❌ **Trade Rejected** - ${interaction.user.username} rejected your trade.`};
-            
-            // Notify in dashboard/private channel only
-            try {
-                const { notifyUser } = require('../utils/logUtils');
-                await notifyUser(interaction.client, other._id, msg);
-            } catch (e) {
-                console.error('Dashboard trade rejection notify failed:', e);
-            }
-        } catch (err) {
-            console.error('Error notifying other user of trade rejection:', err);
-        }
-
-        return;
-    }
-
-    // --- HANDLE ACCEPTANCE --- //
-
-    // Receiver accepts first
-    if (isReceiver && action === 'accept' && trade.status === 'pending') {
-        // Prevent double-clicking by checking current status in database
-        const freshTrade = await Trade.findById(tradeId).lean();
-        if (freshTrade.status !== 'pending') {
-            return interaction.reply({
-                content: '⚠️ This trade has already been updated. Please check the current status.',
-                ephemeral: true
-            });
-        }
-
-        await Trade.updateOne({_id: tradeId}, {status: 'receiver_accepted'});
-
-        await interaction.update({
-            content: 'You accepted the trade. Waiting for the other user…',
-            components: []
-        });
-
-        // Notify giver for final confirmation in private channel only
-        const {ActionRowBuilder, ButtonBuilder, ButtonStyle} = require('discord.js');
-        
-        const notice = {
-            content: `✅ **Trade Accepted** - ${interaction.user.username} accepted your trade! Please confirm:`,
-            components: [
-                new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`trade_acceptfinal_${trade._id}`)
-                        .setLabel('Accept Trade')
-                        .setStyle(ButtonStyle.Success),
-                    new ButtonBuilder()
-                        .setCustomId(`trade_reject_${trade._id}`)
-                        .setLabel('Reject Trade')
-                        .setStyle(ButtonStyle.Danger)
-                )
-            ]
         };
-        // send to giver's dashboard only
-        try {
-            const { notifyUser } = require('../utils/logUtils');
-            await notifyUser(interaction.client, givingUser._id, notice);
-        } catch (e) {
-            console.error('Dashboard trade accept notify failed:', e);
+        if (selection.acknowledged) {
+            await interaction.message.edit(updatePayload);
+        } else {
+            await interaction.update(updatePayload);
         }
 
+        const {ActionRowBuilder, ButtonBuilder, ButtonStyle} = require('discord.js');
+        const finalButtons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`trade_confirm_${tradeId}`)
+                .setLabel('Confirm Final Trade')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId(`trade_reject_${tradeId}`)
+                .setLabel('Decline')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+        const {notifyUser} = require('../utils/logUtils');
+        const finalMessage = {content: `**Final Trade Verification**\n\n${summary}\n\nConfirm to complete this trade.`, components: [finalButtons]};
+        await notifyUser(interaction.client, givingUser._id, finalMessage);
+        await notifyUser(interaction.client, receivingUser._id, finalMessage);
         return;
     }
 
-    // Giver accepts second → finalize trade
-    if (isGiver && action === 'acceptfinal' && trade.status === 'receiver_accepted') {
-        // Prevent double-clicking by checking current status in database
+    if (action === 'confirm' && trade.status === 'receiver_selected') {
+        await Trade.updateOne(
+            {_id: tradeId, status: 'receiver_selected'},
+            isGiver ? {$set: {giver_confirmed: true}} : {$set: {receiver_confirmed: true}}
+        );
+
         const freshTrade = await Trade.findById(tradeId).lean();
-        if (freshTrade.status !== 'receiver_accepted') {
-            return interaction.reply({
-                content: '⚠️ This trade has already been completed or updated. Please check the current status.',
-                ephemeral: true
-            });
+        if (!(freshTrade.giver_confirmed && freshTrade.receiver_confirmed)) {
+            await interaction.update({content: 'You confirmed the trade. Waiting for the other player.', components: []});
+            return;
         }
 
         try {
-            // Run exchange
-            await executeTrade(trade);
+            await executeTrade(freshTrade);
+            await Trade.updateOne({_id: tradeId}, {status: 'completed', resolved_at: new Date()});
 
-            await Trade.updateOne(
-                {_id: tradeId},
-                {status: 'completed', resolved_at: new Date()}
-            );
+            await interaction.update({content: 'Trade completed successfully!', components: []});
 
-            await interaction.update({
-                content: ' Trade completed successfully!',
-                components: []
-            });
-
-            // Notify receiver in private channel only
-            const msg = {content: `🎉 **Trade Completed** - Your trade with ${interaction.user.username} is complete!`};
-            
-            // notify dashboard only
-            try {
-                const { notifyUser } = require('../utils/logUtils');
-                await notifyUser(interaction.client, receivingUser._id, msg);
-            } catch (e) {
-                console.error('Dashboard trade complete notify failed:', e);
-            }
-
+            const {notifyUser} = require('../utils/logUtils');
+            const msg = {content: 'Trade completed successfully.'};
+            await notifyUser(interaction.client, givingUser._id, msg);
+            await notifyUser(interaction.client, receivingUser._id, msg);
         } catch (err) {
             console.error('Final trade error:', err);
-
+            await Trade.updateOne({_id: tradeId}, {status: 'rejected', resolved_at: new Date()});
             await interaction.update({
-                content: ' Trade failed (insufficient funds or missing items).',
+                content: 'Trade failed because one player no longer has the required money, item, or vulnerability.',
                 components: []
             });
         }
+        return;
+    }
+
+    return interaction.reply({content: 'This trade is no longer waiting for that action.', ephemeral: true});
+}
+
+async function rejectTrade(interaction, tradeId, otherUser) {
+    await Trade.updateOne({_id: tradeId}, {status: 'rejected', resolved_at: new Date()});
+    await interaction.update({content: 'Trade declined.', components: []});
+
+    try {
+        const {notifyUser} = require('../utils/logUtils');
+        await notifyUser(interaction.client, otherUser._id, {
+            content: `Trade declined. ${interaction.user.username} declined the trade.`
+        });
+    } catch (err) {
+        console.error('Dashboard trade rejection notify failed:', err);
     }
 }
 
+async function selectReceiverTradeValue(interaction, receivingUser, trade) {
+    if (trade.ru_item_type === 'money') {
+        const balance = Number(receivingUser.balance ?? receivingUser.money_earned ?? 0);
+        if (balance < Number(trade.ru_value || 0)) {
+            await interaction.reply({content: 'You do not have enough money for this trade.', ephemeral: true});
+            return null;
+        }
+        return {value: trade.ru_value, acknowledged: false};
+    }
+
+    const {ActionRowBuilder, StringSelectMenuBuilder, ComponentType} = require('discord.js');
+
+    if (trade.ru_item_type === 'vulnerability') {
+        const vulnerabilities = await Vulnerability.find({
+            isResolved: false,
+            'visibility.allowedUsers': receivingUser._id
+        }).lean();
+
+        if (!vulnerabilities.length) {
+            await interaction.reply({content: 'You have no vulnerabilities available for this trade.', ephemeral: true});
+            return null;
+        }
+
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId(`trade_select_receiver_${trade._id}`)
+            .setPlaceholder('Select the vulnerability you will trade')
+            .addOptions(vulnerabilities.slice(0, 25).map(v => ({
+                label: v.vuln_identifier,
+                description: v.volun_type?.slice(0, 100) || 'Vulnerability intel',
+                value: v._id.toString()
+            })));
+
+        await interaction.update({
+            content: 'Select the vulnerability you want to trade:',
+            components: [new ActionRowBuilder().addComponents(menu)]
+        });
+
+        const response = await interaction.message.awaitMessageComponent({
+            componentType: ComponentType.StringSelect,
+            filter: i => i.user.id === interaction.user.id && i.customId === `trade_select_receiver_${trade._id}`,
+            time: 120000
+        }).catch(() => null);
+
+        if (!response) return null;
+        await response.deferUpdate();
+        return {value: response.values[0], acknowledged: true};
+    }
+
+    const userWithInventory = await User.findById(receivingUser._id)
+        .populate('inventory.item_id')
+        .populate('inventory.company_id');
+    const entries = (userWithInventory?.inventory || []).filter(e => e.item_id && (e.qty || 0) > 0);
+
+    if (!entries.length) {
+        await interaction.reply({content: 'You have no items available for this trade.', ephemeral: true});
+        return null;
+    }
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId(`trade_select_receiver_${trade._id}`)
+        .setPlaceholder('Select the item you will trade')
+        .addOptions(entries.slice(0, 25).map((entry, index) => ({
+            label: entry.item_id.name?.slice(0, 100) || 'Item',
+            description: `${entry.company_id?.name ? `${entry.company_id.name} - ` : ''}Qty: ${entry.qty}`.slice(0, 100),
+            value: String(index)
+        })));
+
+    await interaction.update({
+        content: 'Select the item you want to trade:',
+        components: [new ActionRowBuilder().addComponents(menu)]
+    });
+
+    const response = await interaction.message.awaitMessageComponent({
+        componentType: ComponentType.StringSelect,
+        filter: i => i.user.id === interaction.user.id && i.customId === `trade_select_receiver_${trade._id}`,
+        time: 120000
+    }).catch(() => null);
+
+    if (!response) return null;
+    await response.deferUpdate();
+    const entry = entries[Number(response.values[0])];
+    return {value: {
+        item_id: entry.item_id._id.toString(),
+        company_id: entry.company_id?._id?.toString() || null,
+        qty: 1
+    }, acknowledged: true};
+}
+
+async function executeTrade(trade) {
+    await verifyTradeAsset(trade.giving_user_id, trade.gu_item_type, trade.gu_value);
+    await verifyTradeAsset(trade.receiving_user_id, trade.ru_item_type, trade.ru_value);
+    await transferTradeAsset(trade.giving_user_id, trade.receiving_user_id, trade.gu_item_type, trade.gu_value);
+    await transferTradeAsset(trade.receiving_user_id, trade.giving_user_id, trade.ru_item_type, trade.ru_value);
+}
+
+async function verifyTradeAsset(userId, type, value) {
+    const user = await User.findById(userId).lean();
+    if (!user) throw new Error('User not found');
+
+    if (type === 'money') {
+        const balance = Number(user.balance ?? user.money_earned ?? 0);
+        if (balance < Number(value || 0)) throw new Error('Insufficient funds');
+        return;
+    }
+
+    if (type === 'vulnerability') {
+        const vuln = await Vulnerability.findOne({_id: value, 'visibility.allowedUsers': userId, isResolved: false}).lean();
+        if (!vuln) throw new Error('Missing vulnerability');
+        return;
+    }
+
+    const item = findInventoryEntry(user, value);
+    if (!item || (item.qty || 0) < (value.qty || 1)) throw new Error('Missing item');
+}
+
+async function transferTradeAsset(fromUserId, toUserId, type, value) {
+    if (type === 'money') {
+        const amount = Number(value);
+        await User.updateOne({_id: fromUserId}, {$inc: {balance: -amount, money_from_trades: -amount}});
+        await User.updateOne({_id: toUserId}, {$inc: {balance: amount, money_from_trades: amount}});
+        return;
+    }
+
+    if (type === 'vulnerability') {
+        await Vulnerability.updateOne(
+            {_id: value},
+            {
+                $pull: {'visibility.allowedUsers': fromUserId},
+                $addToSet: {
+                    'visibility.allowedUsers': toUserId,
+                    discovered_by: {user_id: toUserId, discovered_at: new Date()}
+                }
+            }
+        );
+        return;
+    }
+
+    await removeInventoryItem(fromUserId, value);
+    await addInventoryItem(toUserId, value);
+}
+
+async function removeInventoryItem(userId, value) {
+    const user = await User.findById(userId);
+    const index = (user.inventory || []).findIndex(e =>
+        String(e.item_id) === String(value.item_id) &&
+        String(e.company_id || '') === String(value.company_id || '')
+    );
+    if (index === -1 || (user.inventory[index].qty || 0) < (value.qty || 1)) throw new Error('Missing item');
+    user.inventory[index].qty -= value.qty || 1;
+    if (user.inventory[index].qty <= 0) user.inventory.splice(index, 1);
+    await user.save();
+}
+
+async function addInventoryItem(userId, value) {
+    const user = await User.findById(userId);
+    const index = (user.inventory || []).findIndex(e =>
+        String(e.item_id) === String(value.item_id) &&
+        String(e.company_id || '') === String(value.company_id || '')
+    );
+    if (index === -1) {
+        user.inventory.push({item_id: value.item_id, company_id: value.company_id || null, qty: value.qty || 1});
+    } else {
+        user.inventory[index].qty += value.qty || 1;
+    }
+    await user.save();
+}
+
+function findInventoryEntry(user, value) {
+    return (user.inventory || []).find(e =>
+        String(e.item_id) === String(value.item_id) &&
+        String(e.company_id || '') === String(value.company_id || '')
+    );
+}
+
+async function formatTradeSummary(trade) {
+    const giving = await formatTradeAsset(trade.gu_item_type, trade.gu_value);
+    const receiving = await formatTradeAsset(trade.ru_item_type, trade.ru_value);
+    return `**Player 1 gives:** ${giving}\n**Player 2 gives:** ${receiving}`;
+}
+
+async function formatTradeAsset(type, value) {
+    if (type === 'money') return `$${value}`;
+    if (type === 'vulnerability') {
+        const vuln = await Vulnerability.findById(value).lean();
+        return vuln ? vuln.vuln_identifier : 'unknown vulnerability';
+    }
+    const user = await User.findOne({
+        'inventory.item_id': value.item_id,
+        ...(value.company_id ? {'inventory.company_id': value.company_id} : {})
+    }).populate('inventory.item_id').populate('inventory.company_id').lean();
+    const entry = (user?.inventory || []).find(e =>
+        String(e.item_id?._id || e.item_id) === String(value.item_id) &&
+        String(e.company_id?._id || e.company_id || '') === String(value.company_id || '')
+    );
+    const company = entry?.company_id?.name ? ` (${entry.company_id.name})` : '';
+    return `${entry?.item_id?.name || 'item'}${company}`;
+}
 
 async function updateCompanyReputation(userId, companyId, change) {
     const user = await User.findById(userId);
@@ -992,3 +1153,5 @@ async function updateCompanyReputation(userId, companyId, change) {
         );
     }
 }
+
+

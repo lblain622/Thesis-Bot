@@ -82,6 +82,29 @@ function slugifyIdentifier(value) {
         .slice(0, 80);
 }
 
+function randomWord(words, fallback) {
+    return words.length ? words[Math.floor(Math.random() * words.length)] : fallback;
+}
+
+function generateRandomVulnIdentifier(adjList, nounList, usedIdentifiers, index) {
+    let attempts = 0;
+    let vulnIdentifier;
+    const maxAttempts = 25;
+
+    do {
+        const adj = slugifyIdentifier(randomWord(adjList, 'Unknown'));
+        const noun = slugifyIdentifier(randomWord(nounList, 'Vulnerability'));
+        vulnIdentifier = `${adj}-${noun}`;
+        attempts++;
+    } while (usedIdentifiers.has(vulnIdentifier) && attempts < maxAttempts);
+
+    if (usedIdentifiers.has(vulnIdentifier)) {
+        vulnIdentifier = `${vulnIdentifier}-${index}`;
+    }
+
+    return vulnIdentifier;
+}
+
 // Seed companies and related data assuming an active DB connection exists
 async function loadInitialData() {
     try {
@@ -306,7 +329,7 @@ async function loadInitialData() {
         }
 
         // Seed 15 global vulnerabilities (unassigned) – discovered later via /search
-        const inOneWeek = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        const inSessionWindow = () => new Date(Date.now() + 45 * 60 * 1000);
 
         // Use voln-data.json if available, otherwise fallback to generated data.
         const rawVulnDataSource = vulnSeedData && vulnSeedData.length ? vulnSeedData : generateFallbackVulnData();
@@ -321,23 +344,9 @@ async function loadInitialData() {
         const usedIdentifiers = new Set(); // Track used vuln_identifiers to prevent duplicates
 
         for (let i = 0; i < Math.min(15, shuffledVulnData.length); i++) {
-            const company = companies[Math.floor(Math.random() * companies.length)];
             const data = shuffledVulnData[i]; // Use shuffle+slice instead of random selection
 
-            const sourceIdentifier = slugifyIdentifier(getSourceIdentifier(data, i));
-            let vulnIdentifier = sourceIdentifier;
-
-            if (!vulnIdentifier || usedIdentifiers.has(vulnIdentifier)) {
-                let attempts = 0;
-                const maxAttempts = 10;
-
-                do {
-                    const noun = nounList[Math.floor(Math.random() * nounList.length)];
-                    const adj = adjList[Math.floor(Math.random() * adjList.length)];
-                    vulnIdentifier = `${adj}-${noun}-${i}`;
-                    attempts++;
-                } while (usedIdentifiers.has(vulnIdentifier) && attempts < maxAttempts);
-            }
+            const vulnIdentifier = generateRandomVulnIdentifier(adjList, nounList, usedIdentifiers, i);
             
             if (usedIdentifiers.has(vulnIdentifier)) {
                 console.warn(`⚠️  Could not generate unique identifier for vulnerability ${i}, skipping`);
@@ -360,13 +369,13 @@ async function loadInitialData() {
 
             // Create vulnerability with proper schema structure
             vulnsPayload.push({
-                company_id: company._id,
+                company_id: null,
                 round_id: null,
                 vuln_identifier: vulnIdentifier,
                 volun_type: vulnType,
                 severity: normalizeSeverity(data.severity),
-                name: `${vulnType} vulnerability in ${company.name}`,
-                description: data.description || `A security issue was discovered in ${company.name}.`,
+                name: vulnIdentifier,
+                description: data.description || 'A security issue was discovered.',
                 networkAccess: {
                     answer: getAnswer(data.networkAccess),
                     visibleTo: []
@@ -409,7 +418,7 @@ async function loadInitialData() {
                 isResolved: false,
                 reported_date: null,
                 is_resolved_date: null,
-                expiration_date: inOneWeek(),
+                expiration_date: inSessionWindow(),
 
                 // Visibility settings
                 visibility: {

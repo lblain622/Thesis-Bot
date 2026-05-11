@@ -25,10 +25,10 @@ module.exports = {
                         '• `/trade user:<user>` — Propose a trade (vulnerabilities or money) with another user. (can be used outside your dashboard)\n' +
                         "• `/profile` — View your profile (reports made, money earned, reputation).\n" +
                         "• `/profile user:<user>` — View another User's profile\n"+
-                        "• `/shop list` - View the list of items available to buy. The shop resets every 30 minutes \n"+
+                        "• `/shop list` - View the list of items available to buy. The shop resets every 5 minutes \n"+
                         "• `/shop buy` - Buy an available to buy in the shop \n"+
                         "• `/inventory` - View your owned items\n"+
-                        "• `/search` - Search for Vulnerabilities in the system. You may search every 5 minutes. \n"+
+                        "• `/search` - Search for Vulnerabilities in the system. You may search every minute. \n"+
                         "• `/summary` - Display your five most recent actions. \n"+
                         "\n After verification a private dashboard channel will be created; run all commands there.\n"
 
@@ -51,3 +51,4 @@ module.exports = {
         await interaction.reply({embeds: [embed], flags: 64});
     }
 };
+

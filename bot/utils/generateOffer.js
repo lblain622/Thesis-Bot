@@ -154,7 +154,7 @@ async function generateOffer(client, report, discordUser) {
         reputation_offered: '10',
         status: 'pending',
         created_at: new Date(),
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expires_at: new Date(Date.now() + 10 * 60 * 1000),
         counter_offer: null,
         items: attachedItems,
         cash_reduction_reason: reductionReason,

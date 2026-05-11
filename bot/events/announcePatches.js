@@ -27,7 +27,7 @@ async function announceVulnerabilityPatched(client, vulnerability, acceptedOffer
             return;
         }
 
-        const company = await Company.findById(vulnerability.company_id);
+        const company = await Company.findById(acceptedOffer.company_id || vulnerability.company_id);
         const reporter = await User.findById(acceptedOffer.user_id || vulnerability.first_reporter);
 
         // Try to get Discord user for mention

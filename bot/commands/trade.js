@@ -9,13 +9,11 @@ const {
 const User = require('../../models/Users');
 const Vulnerability = require('../../models/Vulnerabilities');
 const Trade = require('../../models/Trades');
-const {postAnnouncement} = require('../utils/announcementUtils');
 
-//TODO: Ensure Trading works correctly
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('trade')
-        .setDescription('Trade vulnerabilities or money with another user')
+        .setDescription('Propose a trade of vulnerabilities, items, or money')
         .addUserOption(option =>
             option.setName('user')
                 .setDescription('The user to trade with')
@@ -26,251 +24,248 @@ module.exports = {
         await interaction.deferReply({flags: 64});
 
         try {
-            const targetUser = interaction.options.getUser('user');
+            const targetDiscordUser = interaction.options.getUser('user');
 
-            if (targetUser.bot) {
+            if (targetDiscordUser.bot) {
                 return interaction.editReply({content: 'You cannot trade with bots!', flags: 64});
             }
 
-            if (targetUser.id === interaction.user.id) {
+            if (targetDiscordUser.id === interaction.user.id) {
                 return interaction.editReply({content: 'You cannot trade with yourself!', flags: 64});
             }
 
             const givingUser = await User.findOne({discord_id: interaction.user.id});
-            const receivingUser = await User.findOne({discord_id: targetUser.id});
+            const receivingUser = await User.findOne({discord_id: targetDiscordUser.id});
 
             if (!givingUser || !receivingUser) {
-                return interaction.editReply({content: 'One or both users not found in database.', flags: 64});
+                return interaction.editReply({content: 'One or both users were not found in the database.', flags: 64});
             }
 
-            // Step 1: Select what you're offering
-            const offerType = await selectOfferType(interaction, 'What do you want to offer?');
-            if (!offerType) return;
+            const givingType = await selectAssetType(interaction, 'What do you want to offer?');
+            if (!givingType) return;
 
-            let givingValue;
-            if (offerType === 'vulnerability') {
-                givingValue = await selectVulnerability(interaction, givingUser._id);
-                if (!givingValue) return;
-            } else if (offerType === 'money') {
-                givingValue = await enterAmount(interaction, givingUser.money_earned, 'How much money do you want to offer?');
-                if (!givingValue) return;
+            const givingValue = await selectOwnedAsset(interaction, givingUser, givingType, 'Choose what you are offering:');
+            if (!givingValue) return;
+
+            const requestedType = await selectAssetType(interaction, 'What would you like in return?');
+            if (!requestedType) return;
+
+            let requestedValue = null;
+            if (requestedType === 'money') {
+                requestedValue = await enterAmount(interaction, null, 'How much money would you like in return?');
+                if (!requestedValue) return;
             }
 
-            // Step 2: Select what you want in return
-            const requestType = await selectOfferType(interaction, 'What do you want in return?');
-            if (!requestType) return;
-
-            let receivingValue;
-            if (requestType === 'vulnerability') {
-                receivingValue = await selectVulnerability(interaction, receivingUser._id);
-                if (!receivingValue) return;
-            } else if (requestType === 'money') {
-                receivingValue = await enterAmount(interaction, receivingUser.money_earned, 'How much money do you want?');
-                if (!receivingValue) return;
-            }
-
-            // Step 3: Confirm and create trade
-            const confirmed = await confirmTrade(interaction, {
-                givingType: offerType,
+            const preview = await formatTradeOffer({
+                givingType,
                 givingValue,
-                requestType,
-                receivingValue,
-                targetUser
+                requestedType,
+                requestedValue,
+                receivingType: requestedType,
+                receivingValue: requestedValue
             });
 
+            const confirmed = await confirmPrompt(
+                interaction,
+                `**Trade proposal for ${targetDiscordUser.username}**\n\n${preview}\n\nSend this trade proposal?`,
+                'Send Proposal'
+            );
             if (!confirmed) return;
 
-            // Create trade offer
             const trade = await Trade.create({
                 giving_user_id: givingUser._id,
                 receiving_user_id: receivingUser._id,
-                gu_item_type: offerType,
-                ru_item_type: requestType,
+                gu_item_type: givingType,
+                ru_item_type: requestedType,
                 gu_value: givingValue,
-                ru_value: receivingValue,
+                ru_value: requestedValue || null,
                 status: 'pending',
                 created_at: new Date(),
-                expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+                expires_at: new Date(Date.now() + 10 * 60 * 1000),
             });
 
-            await interaction.followUp({
-                content: `Trade offer sent to ${targetUser.username}!`,
-                flags: 64
+            const {notifyUser} = require('../utils/logUtils');
+            await notifyUser(interaction.client, receivingUser._id, {
+                content:
+                    `**Trade Proposal from ${interaction.user.username}**\n\n${preview}\n\n` +
+                    `Select what you will trade, then both players will confirm the final exchange.`,
+                components: [
+                    new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`trade_accept_${trade._id}`)
+                            .setLabel('Choose My Side')
+                            .setStyle(ButtonStyle.Success),
+                        new ButtonBuilder()
+                            .setCustomId(`trade_reject_${trade._id}`)
+                            .setLabel('Decline')
+                            .setStyle(ButtonStyle.Danger)
+                    )
+                ]
             });
 
-            // Send private notification to recipient only
-            try {
-                const givingVulnDoc = offerType === 'vulnerability'
-                    ? await Vulnerability.findById(givingValue)
-                    : null;
-
-                const receivingVulnDoc = requestType === 'vulnerability'
-                    ? await Vulnerability.findById(receivingValue)
-                    : null;
-
-                const tradeMessage = {
-                    content: `**Trade Offer from ${interaction.user.username}**\n\n${formatTradeOffer(
-                        offerType,
-                        givingValue,
-                        requestType,
-                        receivingValue,
-                        givingVulnDoc,
-                        receivingVulnDoc
-                    )}`,
-                    components: [
-                        new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId(`trade_accept_${trade._id}`)
-                                .setLabel('Accept Trade')
-                                .setStyle(ButtonStyle.Success),
-                            new ButtonBuilder()
-                                .setCustomId(`trade_reject_${trade._id}`)
-                                .setLabel('Reject Trade')
-                                .setStyle(ButtonStyle.Danger)
-                        )
-                    ]
-                };
-
-                // Notify recipient in their private channel (dashboard)
-                try {
-                    const { notifyUser } = require('../utils/logUtils');
-                    await notifyUser(interaction.client, receivingUser._id, tradeMessage);
-                } catch (e) {
-                    console.error('Dashboard trade notify failed:', e);
-                    await interaction.followUp({
-                        content: 'Trade created but could not notify the recipient. They will see it in their dashboard.',
-                        flags: 64
-                    });
-                }
-            } catch (err) {
-                console.error('Could not send trade notification to target user:', err);
-                await interaction.followUp({
-                    content: 'Trade created! The other user will be notified.',
-                    flags: 64
-                });
-            }
-
+            await interaction.editReply({
+                content: `Trade proposal sent to ${targetDiscordUser.username}.`,
+                components: []
+            });
         } catch (err) {
             console.error(err);
-            await interaction.followUp({
+            await interaction.editReply({
                 content: 'An error occurred while creating the trade.',
+                components: [],
                 flags: 64
             });
         }
     },
 };
 
-async function selectOfferType(interaction, promptText) {
+async function selectAssetType(interaction, promptText) {
     const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('select_offer_type')
-        .setPlaceholder('Select what to trade')
+        .setCustomId('select_trade_type')
+        .setPlaceholder('Select an asset type')
         .addOptions([
-            {label: 'Vulnerability', value: 'vulnerability', description: 'Trade a vulnerability'},
+            {label: 'Vulnerability', value: 'vulnerability', description: 'Trade vulnerability intel'},
+            {label: 'Item', value: 'item', description: 'Trade an inventory item'},
             {label: 'Money', value: 'money', description: 'Trade money'}
         ]);
 
     const row = new ActionRowBuilder().addComponents(selectMenu);
-    const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('trade_cancel')
-            .setLabel('Cancel')
-            .setStyle(ButtonStyle.Danger)
-    );
-
     const message = await interaction.editReply({
         content: promptText,
-        components: [row, buttons],
+        components: [row],
         fetchReply: true
     });
 
-    const response = await waitForComponent(message, interaction.user.id, ComponentType.StringSelect, ['select_offer_type', 'trade_cancel'], 120000);
-    if (!response || response.customId === 'cancel') {
-        await interaction.editReply({content: 'Trade cancelled.', components: []});
-        return null;
-    }
+    const response = await waitForComponent(message, interaction.user.id, ComponentType.StringSelect, 'select_trade_type', 120000);
+    if (!response) return null;
 
     await response.update({content: `Selected: ${response.values[0]}`, components: []});
     return response.values[0];
 }
 
-async function selectVulnerability(interaction, userId) {
+async function selectOwnedAsset(interaction, user, type, promptText) {
+    if (type === 'money') {
+        return enterAmount(interaction, getBalance(user), promptText);
+    }
+
+    if (type === 'vulnerability') {
+        return selectVulnerability(interaction, user._id, promptText);
+    }
+
+    return selectItem(interaction, user._id, promptText);
+}
+
+async function selectVulnerability(interaction, userId, promptText) {
     const vulnerabilities = await Vulnerability.find({
-        'visibility.allowedUsers': userId,
-        isResolved: false
-    });
+        isResolved: false,
+        'visibility.allowedUsers': userId
+    }).lean();
 
     if (!vulnerabilities.length) {
-        await interaction.followUp({
-            content: 'You have no vulnerabilities available to trade.',
-            flags: 64
-        });
+        await interaction.editReply({content: 'You have no vulnerabilities available to trade.', components: []});
         return null;
     }
 
     const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('select_vulnerability')
+        .setCustomId('select_trade_vulnerability')
         .setPlaceholder('Select a vulnerability')
         .addOptions(
             vulnerabilities.slice(0, 25).map(v => ({
-                label: v.name || v.volun_type || 'Unknown',
-                description: `${v.description?.slice(0, 50) || 'No description'}`,
+                label: v.vuln_identifier,
+                description: v.volun_type?.slice(0, 100) || 'Vulnerability intel',
                 value: v._id.toString()
             }))
         );
 
-    const row = new ActionRowBuilder().addComponents(selectMenu);
     const message = await interaction.editReply({
-        content: 'Select a vulnerability to trade:',
-        components: [row],
+        content: promptText,
+        components: [new ActionRowBuilder().addComponents(selectMenu)],
         fetchReply: true
     });
 
-    const response = await waitForComponent(message, interaction.user.id, ComponentType.StringSelect, 'select_vulnerability', 120000);
+    const response = await waitForComponent(message, interaction.user.id, ComponentType.StringSelect, 'select_trade_vulnerability', 120000);
     if (!response) return null;
 
     await response.update({content: 'Vulnerability selected.', components: []});
     return response.values[0];
 }
 
+async function selectItem(interaction, userId, promptText) {
+    const user = await User.findById(userId).populate('inventory.item_id').populate('inventory.company_id');
+    const entries = (user?.inventory || []).filter(e => e.item_id && (e.qty || 0) > 0);
+
+    if (!entries.length) {
+        await interaction.editReply({content: 'You have no items available to trade.', components: []});
+        return null;
+    }
+
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('select_trade_item')
+        .setPlaceholder('Select an item')
+        .addOptions(
+            entries.slice(0, 25).map((entry, index) => ({
+                label: entry.item_id.name?.slice(0, 100) || 'Item',
+                description: `${entry.company_id?.name ? `${entry.company_id.name} - ` : ''}Qty: ${entry.qty}`.slice(0, 100),
+                value: String(index)
+            }))
+        );
+
+    const message = await interaction.editReply({
+        content: promptText,
+        components: [new ActionRowBuilder().addComponents(selectMenu)],
+        fetchReply: true
+    });
+
+    const response = await waitForComponent(message, interaction.user.id, ComponentType.StringSelect, 'select_trade_item', 120000);
+    if (!response) return null;
+
+    const entry = entries[Number(response.values[0])];
+    await response.update({content: 'Item selected.', components: []});
+    return {
+        item_id: entry.item_id._id.toString(),
+        company_id: entry.company_id?._id?.toString() || null,
+        qty: 1
+    };
+}
+
 async function enterAmount(interaction, maxAmount, promptText) {
+    const balanceLine = maxAmount == null ? '' : `\n**Available balance:** $${maxAmount}`;
     await interaction.editReply({
-        content: `${promptText}\n**Your available balance:** $${maxAmount}\n\nPlease type the amount in chat:`,
+        content: `${promptText}${balanceLine}\n\nPlease type the amount in chat:`,
         components: []
     });
 
-    const filter = (msg) => msg.author.id === interaction.user.id;
-    const collected = await interaction.channel.awaitMessages({filter, max: 1, time: 120000});
+    const collected = await interaction.channel.awaitMessages({
+        filter: msg => msg.author.id === interaction.user.id,
+        max: 1,
+        time: 120000
+    });
 
     if (!collected.size) {
         await interaction.followUp({content: 'Trade timed out.', flags: 64});
         return null;
     }
 
-    const amount = parseFloat(collected.first().content);
-    if (isNaN(amount) || amount <= 0) {
+    const amount = Math.floor(Number(collected.first().content));
+    await collected.first().delete().catch(() => {});
+
+    if (!Number.isFinite(amount) || amount <= 0) {
         await interaction.followUp({content: 'Invalid amount.', flags: 64});
         return null;
     }
 
-    if (amount > maxAmount) {
-        await interaction.followUp({content: 'You do not have enough money!', flags: 64});
+    if (maxAmount != null && amount > maxAmount) {
+        await interaction.followUp({content: 'You do not have enough money.', flags: 64});
         return null;
     }
 
-    await collected.first().delete().catch(() => {
-    });
     return amount;
 }
 
-async function confirmTrade(interaction, tradeData) {
-    const {givingType, givingValue, requestType, receivingValue, targetUser} = tradeData;
-
-    const offerText = formatTradeOffer(givingType, givingValue, requestType, receivingValue);
-
+async function confirmPrompt(interaction, content, confirmLabel) {
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('trade_confirm')
-            .setLabel('Confirm Trade')
+            .setLabel(confirmLabel)
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
             .setCustomId('trade_cancel')
@@ -279,7 +274,7 @@ async function confirmTrade(interaction, tradeData) {
     );
 
     const message = await interaction.editReply({
-        content: `**Trade Summary with ${targetUser.username}**\n\n${offerText}\n\nConfirm this trade?`,
+        content,
         components: [buttons],
         fetchReply: true
     });
@@ -290,47 +285,62 @@ async function confirmTrade(interaction, tradeData) {
         return false;
     }
 
-    await response.update({content: 'Creating trade offer...', components: []});
+    await response.update({content: 'Creating trade proposal...', components: []});
     return true;
 }
 
-function formatTradeOffer(givingType, givingValue, requestType, receivingValue, givingVuln, receivingVuln) {
-    let offerStr = '**You offer:** ';
+async function formatTradeOffer(trade) {
+    const giving = await formatAsset(trade.givingType, trade.givingValue);
+    const requested = trade.requestedType === 'money'
+        ? await formatAsset('money', trade.requestedValue)
+        : `a ${trade.requestedType}`;
+    const receiving = trade.receivingValue
+        ? await formatAsset(trade.receivingType, trade.receivingValue)
+        : requested;
 
-    if (givingType === 'money') {
-        offerStr += `$${givingValue}`;
-    } else {
-        offerStr += `${givingVuln.name} (\`${givingVuln.vuln_identifier}\`)`;
-    }
-
-    offerStr += '\n**For:** ';
-
-    if (requestType === 'money') {
-        offerStr += `$${receivingValue}`;
-    } else {
-        offerStr += `${receivingVuln.name} (\`${receivingVuln.vuln_identifier}\`)`;
-    }
-
-    return offerStr;
+    return `**Player 1 offers:** ${giving}\n**Player 1 wants:** ${requested}\n**Player 2 gives:** ${receiving}`;
 }
 
+async function formatAsset(type, value) {
+    if (type === 'money') return `$${value}`;
+
+    if (type === 'vulnerability') {
+        const vuln = await Vulnerability.findById(value).lean();
+        return vuln ? `${vuln.vuln_identifier}` : 'unknown vulnerability';
+    }
+
+    const userWithItem = await User.findOne({
+        'inventory.item_id': value.item_id,
+        ...(value.company_id ? {'inventory.company_id': value.company_id} : {})
+    }).populate('inventory.item_id').populate('inventory.company_id').lean();
+    const entry = (userWithItem?.inventory || []).find(e =>
+        String(e.item_id?._id || e.item_id) === String(value.item_id) &&
+        String(e.company_id?._id || e.company_id || '') === String(value.company_id || '')
+    );
+    const company = entry?.company_id?.name ? ` (${entry.company_id.name})` : '';
+    return `${entry?.item_id?.name || 'item'}${company}`;
+}
+
+function getBalance(user) {
+    return Number(user.balance ?? user.money_earned ?? 0);
+}
 
 async function waitForComponent(message, userId, componentType, customIds, time) {
     try {
         return await message.awaitMessageComponent({
             componentType,
             filter: i => {
-                const isCorrectUser = i.user.id === userId;
-                const isCorrectComponent = Array.isArray(customIds)
+                const correctUser = i.user.id === userId;
+                const correctComponent = Array.isArray(customIds)
                     ? customIds.includes(i.customId)
                     : i.customId === customIds;
-                return isCorrectUser && isCorrectComponent;
+                return correctUser && correctComponent;
             },
             time
         });
     } catch (error) {
         console.error('Component wait error:', error);
-        await message.edit({content: 'Selection timed out.', components: []}).catch(console.error);
+        await message.edit({content: 'Selection timed out.', components: []}).catch(() => {});
         return null;
     }
 }

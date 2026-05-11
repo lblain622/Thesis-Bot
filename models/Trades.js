@@ -13,12 +13,12 @@ const tradeSchema = new Schema({
     },
     gu_item_type: {
         type: String,
-        enum: ['vulnerability', 'money'],
+        enum: ['vulnerability', 'item', 'money'],
         required: true
     },
     ru_item_type: {
         type: String,
-        enum: ['vulnerability', 'money'],
+        enum: ['vulnerability', 'item', 'money'],
         required: true
     },
     gu_value: {
@@ -27,14 +27,23 @@ const tradeSchema = new Schema({
     },
     ru_value: {
         type: Schema.Types.Mixed,
-        required: true
+        required: false,
+        default: null
     },
     status: {
         type: String,
 
-        enum: ['pending', 'accepted', 'rejected', 'expired'],
+        enum: ['pending', 'receiver_selected', 'accepted', 'completed', 'rejected', 'expired'],
 
         default: 'pending'
+    },
+    giver_confirmed: {
+        type: Boolean,
+        default: false
+    },
+    receiver_confirmed: {
+        type: Boolean,
+        default: false
     },
     created_at: {
         type: Date,

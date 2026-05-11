@@ -10,8 +10,10 @@ const {fetchInventoryItems, aggSearchBoosts} = require('../utils/shopEffects');
 function formatRemaining(expiration) {
     const ms = new Date(expiration).getTime() - Date.now();
     if (ms <= 0) return 'expired';
+    const h = Math.floor(ms / 3600000);
     const m = Math.floor(ms / 60000);
     const s = Math.floor((ms % 60000) / 1000);
+    if (h > 0) return `${h}h ${m % 60}m`;
     return `${m}m ${s}s`;
 }
 
@@ -68,7 +70,7 @@ module.exports = {
             const now = new Date();
             
             // Check search cooldown
-            const baseCooldownMs = 5 * 60 * 1000; // 5 minutes
+            const baseCooldownMs = 60 * 1000; // 1 minute
             const invEntries = await fetchInventoryItems(user);
             const boosts = aggSearchBoosts(invEntries);
             const cooldownReductionPct = boosts.cooldownReductionPct || 0;
@@ -93,7 +95,7 @@ module.exports = {
             const candidates = await Vulnerability.find({
                 expiration_date: {$gt: now},
                 isResolved: false
-            }).populate('company_id', 'name');
+            });
 
             if (!candidates.length) {
                 return interaction.editReply({
@@ -191,7 +193,6 @@ module.exports = {
 
             for (const detail of resultDetails) {
                 const v = detail.vulnerability;
-                const companyName = v.company_id?.name || 'Unknown Company';
                 const remaining = v.expiration_date ? formatRemaining(v.expiration_date) : 'unknown';
                 const status = detail.isNewDiscovery
                     ? 'New discovery'
@@ -201,7 +202,7 @@ module.exports = {
                     : '';
                 embed.addFields({
                     name: `${v.vuln_identifier}`,
-                    value: `Status: ${status}\nCompany: ${companyName}\nType: ${v.volun_type}\nTime left: ${remaining}${revealed}`,
+                    value: `Status: ${status}\nType: ${v.volun_type}\nTime left: ${remaining}${revealed}`,
                     inline: false,
                 });
             }

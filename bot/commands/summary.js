@@ -102,11 +102,10 @@ module.exports = {
 
             sortedVulns.slice(0, 10).forEach(item => {
                 const { vuln, status, moneyPerMin } = item;
-                const companyName = vuln.company_id?.name || 'Unknown Company';
                 const moneyDisplay = moneyPerMin ? `$${moneyPerMin}/min` : '$???/min';
 
                 embed.addFields({
-                    name: `${vuln.vuln_identifier} - ${companyName}`,
+                    name: `${vuln.vuln_identifier}`,
                     value: `${status} - ${moneyDisplay}`,
                     inline: false
                 });

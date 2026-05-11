@@ -25,6 +25,11 @@ module.exports = {
                 .setDescription('Vulnerability identifier (e.g., CVE-2024-1234)')
                 .setRequired(false)
         )
+        .addStringOption(option =>
+            option.setName('company')
+                .setDescription('Company name to report to directly')
+                .setRequired(false)
+        )
         .addUserOption(option =>
                             option.setName('voucher')
                                 .setDescription('User who is vouching for your report')
@@ -42,6 +47,7 @@ module.exports = {
             }
 
             const vulnIdentifier = interaction.options.getString('vulnerability');
+            const companyName = interaction.options.getString('company');
             const targetUser = interaction.options.getUser('voucher');
             let vulnerabilityId, companyId, platformId;
 
@@ -68,6 +74,16 @@ module.exports = {
                     return;
                 }
 
+                const canReportVulnerability = vulnerability.visibility?.isGlobal ||
+                    (vulnerability.visibility?.allowedUsers || []).some(id => id.toString() === user._id.toString()) ||
+                    (vulnerability.discovered_by || []).some(d => d.user_id?.toString() === user._id.toString());
+                if (!canReportVulnerability) {
+                    return interaction.editReply({
+                        content: `You have not discovered **${vulnIdentifier}** yet. Use \`/search\` to find vulnerabilities first.`,
+                        flags: 64
+                    });
+                }
+
 
                 // Check for existing submissions
                 const existingReport = await Reports.findOne({
@@ -81,7 +97,9 @@ module.exports = {
                 }
 
                 vulnerabilityId = vulnerability._id;
-                companyId = await selectCompanyAdvanced(interaction);
+                companyId = companyName
+                    ? await findCompanyIdByName(interaction, companyName)
+                    : await selectCompanyAdvanced(interaction);
                 if (!companyId) return;
 
                 const company = await Company.findById(companyId);
@@ -95,8 +113,8 @@ module.exports = {
                     if (targetUser) {
                         voucherDoc = await User.findOne({discord_id: targetUser.id});
                     }
-                    const userMeets = userDoc && userDoc.reputation >= repThresh;
-                    const voucherMeets = voucherDoc && voucherDoc.reputation >= repThresh;
+                    const userMeets = userDoc && (userDoc.reputation_earned || 0) >= repThresh;
+                    const voucherMeets = voucherDoc && (voucherDoc.reputation_earned || 0) >= repThresh;
                     if (!userMeets && !voucherMeets) {
                         return interaction.editReply({
                             content: `Neither you nor your voucher meet the reputation threshold (${repThresh}) required to submit reports to **${company.name}**.`,
@@ -119,7 +137,9 @@ module.exports = {
                 vulnerabilityId = await selectVulnerability(interaction);
                 if (!vulnerabilityId) return;
 
-                companyId = await selectCompanyAdvanced(interaction);
+                companyId = companyName
+                    ? await findCompanyIdByName(interaction, companyName)
+                    : await selectCompanyAdvanced(interaction);
                 if (!companyId) return;
 
                 // Check for existing submissions
@@ -154,8 +174,8 @@ module.exports = {
                     if (targetUser) {
                         voucherDoc = await User.findOne({discord_id: targetUser.id});
                     }
-                    const userMeets = userDoc && userDoc.reputation >= repThresh;
-                    const voucherMeets = voucherDoc && voucherDoc.reputation >= repThresh;
+                    const userMeets = userDoc && (userDoc.reputation_earned || 0) >= repThresh;
+                    const voucherMeets = voucherDoc && (voucherDoc.reputation_earned || 0) >= repThresh;
                     if (!userMeets && !voucherMeets) {
                         return interaction.editReply({
                             content: `Neither you nor your voucher meet the reputation threshold (${repThresh}) required to submit reports to **${company.name}**.`,
@@ -180,7 +200,7 @@ module.exports = {
 
             let followMsg = `**Report Submitted Successfully!**\n\n` +
                     `You submitted **${vulnDoc?.vuln_identifier || 'a vulnerability'}** to **${companyDoc?.name || 'the company'}**.\n\n` +
-                    `💰 You might receive a reward for your report within the next 5 minutes.`;
+                    `💰 You might receive a reward for your report within the next minute.`;
             if (targetUser) {
                 followMsg += `\n
 Your voucher ${targetUser.username} has been notified.`;
@@ -202,7 +222,7 @@ Your voucher ${targetUser.username} has been notified.`;
             }
 
             // Generate offer after delay
-            const offerDelayMs = 30 * 1000; // 30 seconds
+            const offerDelayMs = 15 * 1000; // 15 seconds
 
             setTimeout(async () => {
                 try {
@@ -388,8 +408,10 @@ async function searchCompanyByName(interaction, companies) {
 
         const userInput = collected.first().content.trim().toLowerCase();
         
-        // Find matching company (case-insensitive)
-        const matchedCompany = companies.find(c => c.name.toLowerCase() === userInput);
+        // Find matching company (case-insensitive exact, or a unique partial match)
+        const exactMatch = companies.find(c => c.name.toLowerCase() === userInput);
+        const partialMatches = companies.filter(c => c.name.toLowerCase().includes(userInput));
+        const matchedCompany = exactMatch || (partialMatches.length === 1 ? partialMatches[0] : null);
         
         if (!matchedCompany) {
             await interaction.followUp({
@@ -411,6 +433,25 @@ async function searchCompanyByName(interaction, companies) {
     }
 }
 
+async function findCompanyIdByName(interaction, companyName) {
+    const companies = await Company.find({}).lean();
+    const normalized = companyName.trim().toLowerCase();
+    const exactMatch = companies.find(c => c.name.toLowerCase() === normalized);
+    const partialMatches = companies.filter(c => c.name.toLowerCase().includes(normalized));
+    const matchedCompany = exactMatch || (partialMatches.length === 1 ? partialMatches[0] : null);
+
+    if (!matchedCompany) {
+        const available = companies.map(c => `â€¢ **${c.name}**`).join('\n');
+        await interaction.editReply({
+            content: `No single company matched **${companyName}**.\n\nAvailable companies:\n${available}`,
+            flags: 64
+        });
+        return null;
+    }
+
+    return matchedCompany._id.toString();
+}
+
 async function selectVulnerability(interaction) {
     // also check which ones user is currently exploiting so we can warn in the menu
     const user = await User.findOne({discord_id: interaction.user.id});
@@ -421,7 +462,12 @@ async function selectVulnerability(interaction) {
     }
 
     const vulnerabilities = await Vulnerability.find({
-        isResolved: false
+        isResolved: false,
+        $or: [
+            {'visibility.isGlobal': true},
+            {'visibility.allowedUsers': user._id},
+            {'discovered_by.user_id': user._id}
+        ]
     }).lean();
 
     if (!vulnerabilities.length) {
@@ -543,6 +589,15 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
     );
 
     const vulnerability = await Vulnerability.findById(vulnerabilityId);
+    const company = await Company.findById(companyId).lean();
+    const reputation = user.reputation_earned || 0;
+    const matchingTier = (company?.reputation_tiers || []).find(t =>
+        reputation >= (t.min_reputation || 0) && reputation <= (t.max_reputation || Number.MAX_SAFE_INTEGER)
+    );
+    const reputationBonus = matchingTier
+        ? Math.max(0, Math.round(((matchingTier.bonus_multiplier || 1) - 1) * 100))
+        : 0;
+    const preferredVulnBonus = company?.preferred_vulns?.includes(vulnerability.volun_type) ? 20 : 0;
 
     // handle voucher user lookup and notification
     let voucherId = null;
@@ -575,7 +630,9 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
         company_id: companyId,
         vulnerability_id: vulnerabilityId,
         status: 'open',
-        volunerablity_sev: vulnerability.severity || 'Medium',
+        volunerablity_sev: vulnerability.severity || 'MEDIUM',
+        reputation_bonus: reputationBonus,
+        preferred_vuln_bonus: preferredVulnBonus,
         VouchingUser: voucherId
     };
 
@@ -606,3 +663,4 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
 
     return report;
 }
+

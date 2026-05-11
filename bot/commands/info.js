@@ -219,8 +219,7 @@ module.exports = {
 
             embed.addFields({
                 name: '📋 Basic Information',
-                value: `**Company:** ${vulnerability.company_id?.name || 'Unknown'}\n` +
-                    `**Type:** ${vulnerability.volun_type}\n` +
+                value: `**Type:** ${vulnerability.volun_type}\n` +
                     `**Status:** ${vulnerability.isResolved ? '✅ Resolved' : vulnerability.isReported ? ' Reported' : 'Unreported'}`
             });
 

@@ -111,7 +111,7 @@ async function generateDictatorOffer(client, report, discordUser) {
         dictator_options: options,
         status: 'pending',
         created_at: new Date(),
-        expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+        expires_at: new Date(Date.now() + 10 * 60 * 1000),
         items: attachedItems,
         cash_reduction_reason: reductionReason,
     });

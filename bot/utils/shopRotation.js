@@ -1,7 +1,7 @@
 const Items = require('../../models/Items');
 const ShopRotation = require('../../models/ShopRotation');
 
-const ROTATE_MS = Number(process.env.SHOP_ROTATE_MS || 10 * 60 * 1000); // 10 minutes
+const ROTATE_MS = Number(process.env.SHOP_ROTATE_MS || 5 * 60 * 1000); // 5 minutes
 const ROTATE_SIZE = Number(process.env.SHOP_ROTATE_SIZE || 6);
 
 let rotationInterval = null;
