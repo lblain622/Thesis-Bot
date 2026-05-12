@@ -160,7 +160,9 @@ async function buyItem(interaction) {
         }
 
         const cost = item.price * qty;
-
+        if ((user.balance || 0) < cost) {
+            return interaction.editReply({content: `You do not have enough balance to buy ${qty}x ${item.name}. You need $${cost}, but you have $${user.balance || 0}.`, components: []});
+        }
         await Users.updateOne({_id: user._id}, {$inc: {balance: -cost}});
  
         const existingIdx = (user.inventory || []).findIndex(e => String(e.item_id) === String(item._id) && String(e.company_id || '') === String(companyId || ''));
