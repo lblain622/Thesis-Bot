@@ -59,6 +59,10 @@ const reportSchema = new Schema({
         type: Number,
         default: 0
     },
+    appreciation_notified_at: {
+        type: Date,
+        default: null
+    },
     VouchingUser:{
         type: Schema.Types.ObjectId,
         ref: 'Users',

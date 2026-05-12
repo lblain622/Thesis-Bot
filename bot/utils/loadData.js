@@ -105,6 +105,33 @@ function generateRandomVulnIdentifier(adjList, nounList, usedIdentifiers, index)
     return vulnIdentifier;
 }
 
+function formatVulnType(type) {
+    return String(type || 'Any').replace(/_/g, ' ');
+}
+
+function formatCompanyReputationHint(config) {
+    const threshold = Number(config.reputation_threshold || 0);
+    if (threshold > 0) return `Players may need ${threshold}+ reputation to report here.`;
+
+    const tierStarts = (config.reputation_tiers || [])
+        .map(t => Number(t.min_reputation || 0))
+        .filter(n => Number.isFinite(n) && n > 0)
+        .sort((a, b) => a - b);
+
+    return tierStarts.length
+        ? `Reputation can improve offers starting around ${tierStarts[0]}+ reputation.`
+        : 'No reputation minimum is required.';
+}
+
+function buildCompanyDescription(config) {
+    const baseDescription = String(config.description || '').split('\n\nPreferences:')[0];
+    const preferred = (config.preferred_vulns || [])
+        .map(formatVulnType)
+        .join(', ') || 'any vulnerability type';
+
+    return `${baseDescription}\n\nPreferences: ${preferred}. ${formatCompanyReputationHint(config)}`;
+}
+
 // Seed companies and related data assuming an active DB connection exists
 async function loadInitialData() {
     try {
@@ -307,12 +334,13 @@ async function loadInitialData() {
         // Create companies
         const companies = [];
         for (const config of companyConfigs) {
+            const description = buildCompanyDescription(config);
             // Check if company already exists
             let company = await Company.findOne({name: config.name});
             if (!company) {
                 company = await Company.create({
                     name: config.name,
-                    description: config.description,
+                    description,
                     platform_id: config.platform,
                     product_type: config.product_type,
                     preferred_vulns: config.preferred_vulns,
@@ -324,6 +352,22 @@ async function loadInitialData() {
                 console.log(`✓ Created ${config.name}`);
             } else {
                 console.log(`✓ Found existing ${config.name}`);
+            }
+            if (company) {
+                await Company.updateOne(
+                    {_id: company._id},
+                    {
+                        $set: {
+                            description,
+                            platform_id: config.platform,
+                            product_type: config.product_type,
+                            preferred_vulns: config.preferred_vulns,
+                            reputation_tiers: config.reputation_tiers,
+                            reputation_threshold: config.reputation_threshold || 0
+                        }
+                    }
+                );
+                company = await Company.findById(company._id);
             }
             companies.push(company);
         }
@@ -357,7 +401,7 @@ async function loadInitialData() {
             const vulnType = normalizeVulnType(data.volun_type || data.vuln_type || data.type);
 
 
-            const isGlobal = false
+            const isGlobal = false; // Start unassigned; players discover access through /search.
 
             // Helper function to get answer
             function getAnswer(val) {

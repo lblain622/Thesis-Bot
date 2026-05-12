@@ -1,7 +1,7 @@
 [
   {
     "cve_id": "CVE-SYNTH-0001",
-    "description": "Remote_Code_Execution vulnerability in the database module, allowing arbitrary code execution via SQL injection.",
+    "description": "The database connection module fails to sanitize user-supplied table names in SELECT queries, enabling attackers to inject arbitrary SQL commands and execute code with database server privileges, potentially exfiltrating sensitive records or modifying critical data structures.",
     "vuln_type": "SQL_Injection",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -16,7 +16,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0002",
-    "description": "A vulnerability allowing an attacker to manipulate the file path to access arbitrary files on the system.",
+    "description": "The file serving component uses direct user input to construct file paths without proper normalization, allowing directory traversal sequences (../) to bypass access controls and expose configuration files, source code, and private keys stored on the server.",
     "vuln_type": "Path_Traversal",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -31,7 +31,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0003",
-    "description": "A vulnerability in the application's deserialization mechanism that allows an attacker to execute arbitrary code, potentially leading to remote code execution, elevation of privileges, or complete system compromise.",
+    "description": "The custom object deserialization handler executes method gadgets during object reconstruction without validating object integrity, allowing remote attackers to craft malicious serialized payloads that trigger arbitrary code execution with application-level privileges during session restoration.",
     "vuln_type": "Insecure_Deserialization",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -46,7 +46,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0004",
-    "description": "Vulnerability discovered in a web application that allows an attacker to gain access to sensitive data.",
+    "description": "The error handling system exposes stack traces and database query details in HTTP responses when user-triggered exceptions occur, inadvertently revealing internal architecture, database column names, and algorithm implementations that aid in further exploitation.",
     "vuln_type": "Information_Disclosure",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -61,7 +61,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0005",
-    "description": "vulnerability where an attacker can remotely execute arbitrary code by providing malicious input to a vulnerable function.",
+    "description": "The image processing library functions accept untrusted file paths and execute shell commands to invoke external converters, permitting attackers to inject shell metacharacters through filenames to achieve arbitrary code execution with the web server's system privileges.",
     "vuln_type": "Remote_Code_Execution",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -76,7 +76,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0006",
-    "description": "A server is vulnerable to a Denial of Service (DoS) attack through a buffer overflow vulnerability, which can cause a denial of service to clients.",
+    "description": "The request parser allocates fixed-size buffers for HTTP headers without bounds checking, causing stack overflow when processing unusually large header values, leading to server crashes and service unavailability for legitimate users.",
     "vuln_type": "Denial_of_Service",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -91,7 +91,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0007",
-    "description": "An attacker can inject malicious JavaScript code into a vulnerable web application, potentially leading to unauthorized access or data tampering.",
+    "description": "The comment feature reflects user-supplied text directly into the DOM without HTML entity encoding, allowing stored XSS attacks where malicious JavaScript persists in the database and executes in every user's browser session who views the compromised page.",
     "vuln_type": "Cross_Site_Scripting",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -106,7 +106,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0008",
-    "description": "A buffer overflow vulnerability in the server's httpd module, allowing remote code execution via a crafted URL.",
+    "description": "The HTTP request handler's URL parsing routine fails to validate encoded buffer lengths, allowing specially crafted URLs with compressed escape sequences to overflow internal buffers and overwrite the return address, achieving remote code execution without authentication.",
     "vuln_type": "Remote_Code_Execution",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -121,7 +121,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0009",
-    "description": "A server-side vulnerability that allows arbitrary code execution, possibly leading to unauthorized access and data alteration.",
+    "description": "The rate-limiting mechanism uses client IP addresses from untrusted X-Forwarded-For headers for throttling logic, enabling attackers to bypass DoS protections by spoofing multiple IP addresses and overwhelming the backend services.",
     "vuln_type": "Denial_of_Service",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -136,7 +136,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0010",
-    "description": "Leaked sensitive data via JSON.stringify() when an attacker provided malformed input.",
+    "description": "The session serialization routine recursively includes prototypes and closures when converting objects to JSON, inadvertently capturing sensitive context like API keys, password reset tokens, and database credentials that get logged or transmitted insecurely.",
     "vuln_type": "Insecure_Deserialization",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -151,7 +151,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0011",
-    "description": "A web application allows users to upload files and redirects them to a vulnerable endpoint without proper validation, leading to potential information disclosure.",
+    "description": "The file download endpoint accepts a redirect parameter that is passed directly to the Location header without validation, allowing attackers to craft malicious links that appear legitimate but redirect users to attacker-controlled phishing sites after file submission.",
     "vuln_type": "Open_Redirect",
     "severity": "LOW",
     "networkAccess": "Yes",
@@ -166,7 +166,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0012",
-    "description": "Vulnerability in login form on web application, allowing user to access raw credentials",
+    "description": "The browser's autocomplete feature preserves plaintext credentials in form values, and the password manager stores them without proper encryption, allowing attackers with filesystem access to extract stored credentials from local browser caches.",
     "vuln_type": "Information_Disclosure",
     "severity": "LOW",
     "networkAccess": "Yes",
@@ -181,7 +181,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0013",
-    "description": "Insecurely exposing a user's session cookie on a website through a local file path that is not properly sanitized.",
+    "description": "The debug endpoint writes session cookies to predictable file paths in the web root when users request invalid resources, and the file indexing disables robots.txt, allowing attackers to discover and harvest active session tokens by enumerating common paths.",
     "vuln_type": "SSRF",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -196,7 +196,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0014",
-    "description": "A buffer overflow vulnerability in a web application allowing remote code execution.",
+    "description": "The image thumbnail generator processes user-supplied dimensions in an unprotected string format before integer conversion, causing integer overflow that results in a tiny allocation size followed by heap overflow when copying image data, leading to arbitrary code execution.",
     "vuln_type": "Buffer_Overflow",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -211,7 +211,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0015",
-    "description": "Cross-site scripting vulnerability due to improper input validation allowing injection of malicious JavaScript code.",
+    "description": "The search results page constructs highlighted snippets by directly inserting user query strings into HTML attributes without escaping, allowing attackers to break out of attributes with quotes and inject event handlers that execute JavaScript in search result visitors' browsers.",
     "vuln_type": "Cross_Site_Scripting",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -226,7 +226,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0016",
-    "description": "Insecurely transmits user input as part of a web request.",
+    "description": "The template engine allows server-side JavaScript template expressions in user-provided strings, enabling attackers to access the Node.js global scope and execute arbitrary commands on the server through SSTI (Server-Side Template Injection) vulnerabilities.",
     "vuln_type": "Remote_Code_Execution",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -241,8 +241,8 @@
   },
   {
     "cve_id": "CVE-SYNTH-0017",
-    "description": "Remote code execution through a web interface that allows arbitrary code execution.",
-    "vuln_type": "Remote_Code_Execution",
+    "description": "The graphical code editor component accepts JavaScript code from users and evaluates it using eval() without any sandboxing, allowing attackers to submit code that modifies the application state, steals authentication tokens, or launches attacks against other users."
+    ,"vuln_type": "Remote_Code_Execution",
     "severity": "HIGH",
     "networkAccess": "Yes",
     "arbitraryCodeExecution": "Yes",
@@ -256,8 +256,8 @@
   },
   {
     "cve_id": "CVE-SYNTH-0018",
-    "description": "An attacker can access sensitive data by traversing through file paths.",
-    "vuln_type": "Path_Traversal",
+    "description": "The API endpoint for retrieving files uses symbolic link resolution without proper validation, allowing authenticated users with elevated privileges to construct requests targeting sensitive system files like /etc/passwd or private keys outside the intended application directories."
+    ,"vuln_type": "Path_Traversal",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
     "arbitraryCodeExecution": "Yes",
@@ -271,8 +271,8 @@
   },
   {
     "cve_id": "CVE-SYNTH-0019",
-    "description": "Vulnerability in XML External Entity injection can lead to Remote Code Execution and Local Privilege escalation.",
-    "vuln_type": "XML_External_Entity",
+    "description": "The XML document parser enables external entity resolution by default, allowing attackers to define custom entities referencing system files or internal network services, leading to XXE attacks that exfiltrate sensitive files or probe internal infrastructure."
+    ,"vuln_type": "XML_External_Entity",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
     "arbitraryCodeExecution": "No",
@@ -286,8 +286,8 @@
   },
   {
     "cve_id": "CVE-SYNTH-0020",
-    "description": "A newly discovered vulnerability that allows an attacker to elevate their privileges and gain unauthorized access to the system.",
-    "vuln_type": "Privilege_Escalation",
+    "description": "The system daemon runs with root privileges and processes local user commands without proper capability dropping, allowing local attackers to request operations (like opening privileged files) that execute with full system permissions."
+    ,"vuln_type": "Privilege_Escalation",
     "severity": "HIGH",
     "networkAccess": "No",
     "arbitraryCodeExecution": "Yes",
@@ -301,7 +301,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0021",
-    "description": "Cross-site Scripting (XSS) vulnerability allowing malicious JavaScript code to be injected into the vulnerable web application.",
+    "description": "The user profile settings page stores arbitrary HTML in biography fields and renders them without sanitization, creating a persistent XSS vector where attackers embed malicious scripts that execute when visitors view their profile, stealing cookies and session tokens.",
     "vuln_type": "Cross_Site_Scripting",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -316,7 +316,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0022",
-    "description": "A vulnerability in the database query allows an attacker to inject SQL code.",
+    "description": "The advanced search feature concatenates filter parameters directly into SQL WHERE clauses without parameterized queries, permitting attackers to inject boolean logic that extracts entire datasets or modifies records across the database with high privileges.",
     "vuln_type": "SQL_Injection",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -331,7 +331,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0023",
-    "description": "A cross-site scripting vulnerability allows an attacker to inject malicious JavaScript code into an application.",
+    "description": "The forum post rendering engine fails to encode special characters in quoted posts, allowing attackers to craft replies that escape the quote context and inject JavaScript into discussions viewed by all forum participants.",
     "vuln_type": "Cross_Site_Scripting",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -346,7 +346,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0024",
-    "description": "A bug allowing an attacker to inject arbitrary code via a web application's input field.",
+    "description": "The batch file upload feature processes YAML configuration headers in filenames without validation, allowing elevated-privilege users to inject YAML directives that execute arbitrary Python code during file metadata extraction and storage.",
     "vuln_type": "Remote_Code_Execution",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -361,7 +361,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0025",
-    "description": "A vulnerability that allows an attacker to gain elevated privileges",
+    "description": "The scheduled task execution service bypasses privilege checks for background jobs initiated by high-permission accounts, allowing a compromised admin account to schedule tasks that execute with system privileges even after the account is downgraded.",
     "vuln_type": "Privilege_Escalation",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -376,7 +376,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0026",
-    "description": "A system-wide Denial of Service vulnerability that causes the server to be under constant attack and unavailable to users",
+    "description": "The connection pooling mechanism lacks per-session limits, allowing attackers to flood the server with keepalive requests containing computation-intensive operations, exhausting available worker threads and making the service unresponsive to legitimate requests.",
     "vuln_type": "Denial_of_Service",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -391,7 +391,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0027",
-    "description": "An application allows users to upload files and store them in a shared directory. The upload function uses a shared lock to ensure exclusive access to the upload directory. However, the lock is not properly cleaned up after use, leading to a race condition where two processes may attempt to upload a file simultaneously, resulting in an unexpected behavior.",
+    "description": "The file upload handler acquires a lock but fails to release it if an exception occurs during upload, causing subsequent file operations to hang indefinitely or trigger race conditions where concurrent uploads corrupt each other's temporary data structures.",
     "vuln_type": "Race_Condition",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -406,7 +406,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0028",
-    "description": "A vulnerability that allows users to bypass authentication.",
+    "description": "The login form accepts both username and email fields, but the password validation logic accidentally checks the password against either field's existence rather than the actual credentials, allowing attackers to login with arbitrary passwords if they know any account's email.",
     "vuln_type": "Authentication_Bypass",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -421,7 +421,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0029",
-    "description": "A server configuration issue where a user can access a sensitive directory without authentication, leading to privilege escalation.",
+    "description": "The web server's access control lists contain a misconfigured wildcard entry that inadvertently permits unauthenticated access to the administrative dashboard and sensitive configuration management endpoints intended only for administrators.",
     "vuln_type": "Privilege_Escalation",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -436,7 +436,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0030",
-    "description": "A Buffer Overflow vulnerability was identified in the target system.",
+    "description": "The packet processing routine reads a length field from untrusted network data and uses it directly as a buffer size without maximum bounds checking, enabling remote attackers to craft packets that overflow kernel buffers and gain system-level code execution.",
     "vuln_type": "Buffer_Overflow",
     "severity": "CRITICAL",
     "networkAccess": "No",
@@ -451,7 +451,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0031",
-    "description": "An insecure deserialization vulnerability exists in the system's deserialization function. An attacker can send a crafted JSON payload to bypass security checks and execute arbitrary code.",
+    "description": "The API accepts JSON payloads that are automatically deserialized without type checking, allowing remote attackers to submit specially crafted objects that trigger constructor chains leading to arbitrary code execution during object instantiation.",
     "vuln_type": "Insecure_Deserialization",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -466,7 +466,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0032",
-    "description": "User input is utilized to craft the command string which can cause arbitrary code execution.",
+    "description": "The scheduled report generation feature constructs shell commands from user-provided report parameters without proper escaping, allowing high-privilege users to inject shell metacharacters that execute arbitrary commands with the application service account.",
     "vuln_type": "Command_Injection",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -481,7 +481,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0033",
-    "description": "Insufficient input validation in API gateway leaves users vulnerable to command injection attacks.",
+    "description": "The API gateway's request routing logic processes header values through shell command templating without sanitization, enabling attackers to inject command substitutions through custom headers that get executed when the gateway routes requests to backend microservices.",
     "vuln_type": "Command_Injection",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -496,7 +496,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0034",
-    "description": "A fictional vulnerability where a user's password is not hashed properly and can be easily retrieved via a SQL query.",
+    "description": "The legacy user table stores passwords using MD5 without salt, and the database query interface lacks access controls, permitting attackers with low-level database read permissions to retrieve and crack password hashes for all accounts.",
     "vuln_type": "Information_Disclosure",
     "severity": "LOW",
     "networkAccess": "Yes",
@@ -511,7 +511,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0035",
-    "description": "XPath injection vulnerability in XML parsing library allowing arbitrary external entity injection and remote code execution.",
+    "description": "The XML document search feature constructs XPath expressions from user input without validation, allowing attackers to manipulate XPath predicates and extract arbitrary nodes from XML documents or inject external entity references.",
     "vuln_type": "XML_External_Entity",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -526,7 +526,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0036",
-    "description": "Insecurely allows user input in SQL queries, potentially leading to malicious code execution.",
+    "description": "The dynamic report builder allows users to construct custom SQL queries through a visual interface, but fails to validate the resulting SQL syntax, allowing attackers to construct UNION queries that exfiltrate data from other tables or use stacked queries to modify data.",
     "vuln_type": "SQL_Injection",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -541,7 +541,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0037",
-    "description": "Incorrectly sanitized user input can lead to an unexpected redirect, potentially exposing sensitive information.",
+    "description": "The mobile app deeplink handler processes destination URLs without hostname validation, permitting attackers to craft emails with app links that redirect users to external phishing sites after being processed by the app.",
     "vuln_type": "Open_Redirect",
     "severity": "LOW",
     "networkAccess": "Yes",
@@ -556,7 +556,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0038",
-    "description": "A vulnerable component provides a way to access an external service without proper authentication, allowing an attacker to bypass authorization controls and access sensitive data.",
+    "description": "The API integration layer hardcodes service credentials in client-side configuration files, and the privilege boundary is not enforced, allowing elevated-permission users to access external services with full credentials and request sensitive information beyond their authorization level.",
     "vuln_type": "Information_Disclosure",
     "severity": "LOW",
     "networkAccess": "Yes",
@@ -571,7 +571,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0039",
-    "description": "A SQL injection vulnerability in the login form of a web application.",
+    "description": "The authentication query handler accepts username parameters and constructs SQL statements by concatenating them directly, allowing attackers to inject boolean logic like 'admin'--' to authenticate as any account without knowing the password.",
     "vuln_type": "SQL_Injection",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -586,7 +586,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0040",
-    "description": "An SQL injection vulnerability in the `SELECT` statement of the underlying database.",
+    "description": "The file access control system uses unvalidated user input in database queries to determine file permissions, and the directory traversal logic fails to normalize paths, allowing attackers to access files outside their assigned directory scope.",
     "vuln_type": "Path_Traversal",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -601,7 +601,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0041",
-    "description": "Vulnerability 40: A cross-site scripting (XSS) vulnerability in a web application allows an attacker to inject malicious JavaScript code, potentially leading to unauthorized access, data tampering, or other security issues.",
+    "description": "The document sharing feature allows users to add notes and comments that get rendered in rich HTML format, but fails to sanitize HTML tags, permitting stored XSS attacks where malicious scripts execute in document viewers' browsers.",
     "vuln_type": "Cross_Site_Scripting",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -616,7 +616,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0042",
-    "description": "A vulnerability in the XML parsing module of the software allows an attacker to execute arbitrary code using an External Entity. This vulnerability can be exploited by an attacker to take control of the system.",
+    "description": "The SOAP web service parser enables entity expansion without rate limiting, allowing attackers to submit XML documents with nested entity definitions (billion laughs attack) that consume all server memory and CPU, causing denial of service.",
     "vuln_type": "XML_External_Entity",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -631,7 +631,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0043",
-    "description": "A Authentication Bypass vulnerability was identified in the target system.",
+    "description": "The multi-factor authentication system contains a logic flaw where if the user provides a valid TOTP code, the system skips password verification, allowing high-privilege attackers to bypass password checks using only the time-based code.",
     "vuln_type": "Authentication_Bypass",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -646,7 +646,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0044",
-    "description": "A vulnerability allowing remote code execution with arbitrary code execution.",
+    "description": "The video streaming endpoint accepts filter parameters that are passed to ImageMagick without proper escaping, allowing high-privilege users to inject ImageMagick delegate commands that execute arbitrary shell commands through the convert utility.",
     "vuln_type": "Remote_Code_Execution",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -661,7 +661,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0045",
-    "description": "A race condition occurs when a program makes decisions based on the time it takes for certain actions to complete, rather than based on the actual elapsed time.",
+    "description": "The token invalidation system sets a flag but doesn't immediately revoke permissions, allowing TOCTOU (time-of-check-time-of-use) race conditions where tokens invalidated milliseconds ago still authorize operations during concurrent request processing.",
     "vuln_type": "Race_Condition",
     "severity": "MEDIUM",
     "networkAccess": "No",
@@ -676,7 +676,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0046",
-    "description": "A 1-2 sentence realistic vulnerability description that is different from other records.",
+    "description": "The notification system includes user-supplied redirect URLs in email links, and high-privilege users can craft notifications that direct victims to external sites via improperly validated redirect parameters.",
     "vuln_type": "Open_Redirect",
     "severity": "LOW",
     "networkAccess": "Yes",
@@ -691,7 +691,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0047",
-    "description": "A vulnerability that causes a website to repeatedly send requests to a server, causing it to crash or become unresponsive.",
+    "description": "The webhook retry mechanism lacks exponential backoff and retries failed requests indefinitely with user-controlled intervals, allowing attackers to craft requests that trigger retry loops consuming server bandwidth and resources.",
     "vuln_type": "Denial_of_Service",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -706,7 +706,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0048",
-    "description": "A Open Redirect vulnerability was identified in the target system.",
+    "description": "The form submission handler accepts a return URL parameter but only validates local redirects by checking if the URL starts with a slash, permitting attackers to craft URLs like '//' that bypass the check and redirect to external sites.",
     "vuln_type": "Open_Redirect",
     "severity": "MEDIUM",
     "networkAccess": "No",
@@ -721,7 +721,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0049",
-    "description": "Fully trusts the local file system path to be valid, allowing arbitrary code execution.",
+    "description": "The backup utility processes file paths from configuration without validating them, allowing attackers to craft requests targeting internal network services through SSRF attacks by specifying URLs like 'file://' and 'http://localhost:8080/admin'.",
     "vuln_type": "SSRF",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -736,7 +736,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0050",
-    "description": "A vulnerability in the XML parser that allows an attacker to execute arbitrary code.",
+    "description": "The XML validator processes user-supplied DTD definitions without restricting external entity declarations, allowing remote attackers to define malicious entities that read arbitrary server files during XML validation.",
     "vuln_type": "XML_External_Entity",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -751,7 +751,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0051",
-    "description": "User input is deserialized without validation, leading to arbitrary code execution via an attacker-controlled payload.",
+    "description": "The plugin system deserializes user-uploaded plugin objects without integrity verification, allowing attackers with package upload privileges to submit malicious plugins that execute code during plugin instantiation with full application permissions.",
     "vuln_type": "Insecure_Deserialization",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -766,7 +766,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0052",
-    "description": "A cross-site request forgery vulnerability exists in the application's login functionality. The login form is not properly sanitized, allowing an attacker to inject malicious requests.",
+    "description": "The authentication endpoint processes requests from arbitrary origins without CSRF tokens, allowing attackers to construct malicious forms that, when visited by authenticated users, perform actions like modifying account settings with high-privilege operations.",
     "vuln_type": "SSRF",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -781,7 +781,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0053",
-    "description": "A buffer overflow vulnerability in a web application's API, allowing remote code execution via a crafted request.",
+    "description": "The REST API's parameter parsing allocates buffers based on content-length without checking maximum field sizes, allowing high-privilege users to submit requests with excessively large payloads that overflow API processing buffers.",
     "vuln_type": "Buffer_Overflow",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -796,7 +796,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0054",
-    "description": "A buffer overflow vulnerability where the buffer is not properly checked for overflow, allowing an attacker to execute arbitrary code.",
+    "description": "The memory copy function in the string processing library fails to validate that destination buffers are large enough for source data, allowing remote attackers to craft specially formatted packets that overflow the stack and achieve code execution.",
     "vuln_type": "Buffer_Overflow",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -811,7 +811,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0055",
-    "description": "A Command Injection vulnerability was identified in the target system.",
+    "description": "The data export feature constructs system commands from user-supplied export parameters without any escaping, enabling attackers without authentication to inject shell metacharacters that execute arbitrary commands with the web application's system privileges.",
     "vuln_type": "Command_Injection",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -826,7 +826,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0056",
-    "description": "The vulnerability allows an attacker to execute arbitrary code on the server.",
+    "description": "The webhook processing service accepts URLs and headers from users and forwards requests to those endpoints with high-privilege credentials, allowing attackers to exploit the application as a proxy to access internal services with elevated permissions.",
     "vuln_type": "Remote_Code_Execution",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -841,7 +841,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0057",
-    "description": "A vulnerability where a redirect URL is determined by an insecure user input field, potentially allowing an attacker to execute arbitrary code or bypass authentication.",
+    "description": "The password reset callback link includes an unvalidated redirect parameter that high-privilege users can craft, allowing them to trick account owners into visiting phishing sites by embedding malicious redirect URLs in reset emails.",
     "vuln_type": "Open_Redirect",
     "severity": "LOW",
     "networkAccess": "Yes",
@@ -856,7 +856,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0058",
-    "description": "Vulnerability discovered in the application's REST API, allowing remote code execution via malicious input.",
+    "description": "The API endpoint for retrieving user profile information accepts a profile ID parameter and constructs SSRF requests to internal metadata services without validating the destination, allowing attackers to probe the internal network topology.",
     "vuln_type": "SSRF",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -871,7 +871,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0059",
-    "description": "A SQL injection vulnerability in a web application's database, allowing an attacker to inject malicious SQL queries.",
+    "description": "The order management system constructs UPDATE queries from user-supplied quantity fields without parameterization, allowing attackers to inject SQL that modifies other columns like prices or modifies data across the application with high-privilege credentials.",
     "vuln_type": "SQL_Injection",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -886,7 +886,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0060",
-    "description": "Description of the vulnerability.",
+    "description": "The compression algorithm implementation fails to enforce maximum decompression sizes, allowing attackers to upload highly compressed files that expand to gigabytes during processing, consuming all available disk space and causing service failure.",
     "vuln_type": "Buffer_Overflow",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -901,7 +901,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0061",
-    "description": "Insecure access to a buffer through an unvalidated input, leading to arbitrary code execution.",
+    "description": "The network protocol handler processes variable-length fields without proper bounds checking, allowing attackers to craft packets with unexpectedly large field sizes that overflow stack buffers and execute code on the receiver.",
     "vuln_type": "Buffer_Overflow",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -916,7 +916,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0062",
-    "description": "User-supplied input is injected into the HTTP request to cause an excessive number of requests, effectively creating a denial of service.",
+    "description": "The pagination system accepts a page size parameter and allocates memory accordingly, but fails to enforce reasonable limits, allowing attackers to request pages with millions of items that consume all server RAM and crash worker processes.",
     "vuln_type": "Denial_of_Service",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -931,7 +931,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0063",
-    "description": "A vulnerability in a remote code execution attack where an attacker can execute arbitrary code on a system by exploiting a specific vulnerability in the code.",
+    "description": "The privilege escalation chain involves compromising a high-privilege background service and using it to access system resources, allowing attackers to gain root access through race conditions in privilege dropping code.",
     "vuln_type": "Privilege_Escalation",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -946,7 +946,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0064",
-    "description": "Insecure deserialization allows an attacker to bypass security measures that rely on the integrity of deserialized data.",
+    "description": "The session data is deserialized without type validation, allowing attackers with session write access to inject object instances that modify application behavior, bypass permission checks, or access unauthorized functionality.",
     "vuln_type": "Insecure_Deserialization",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -961,7 +961,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0065",
-    "description": "Exploited by an attacker to inject malicious JavaScript code into the vulnerable site, which can potentially execute arbitrary code on the user's machine.",
+    "description": "The live chat widget accepts and renders user messages directly into the DOM without sanitization, allowing attackers to craft messages containing JavaScript event handlers that execute when support staff view the chat history.",
     "vuln_type": "Cross_Site_Scripting",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -976,7 +976,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0066",
-    "description": "A vulnerability that allows an attacker to exploit a path traversal issue in the application to access unauthorized files or directories.",
+    "description": "The backup file serving endpoint uses filename parameters directly in file path construction, allowing high-privilege users to navigate to adjacent directories and access other users' backup files through directory traversal.",
     "vuln_type": "Path_Traversal",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -991,7 +991,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0067",
-    "description": "An attacker can inject malicious JavaScript code into a vulnerable web page, potentially leading to unauthorized access to user data and other malicious activities.",
+    "description": "The alert notification system renders user-provided alert messages in a JavaScript context, allowing attackers to craft alerts that break out of the alert string and inject additional JavaScript code that executes in visitor browsers.",
     "vuln_type": "Cross_Site_Scripting",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1006,7 +1006,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0068",
-    "description": "User input is not properly sanitized in a SQL query, allowing for arbitrary SQL commands to be executed.",
+    "description": "The filtering interface for data tables concatenates user-supplied WHERE clauses without parameterized queries, enabling attackers to inject DROP TABLE commands or use UNION queries to extract sensitive data from the database.",
     "vuln_type": "SQL_Injection",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -1021,7 +1021,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0069",
-    "description": "System vulnerability that allows a user to gain elevated privileges when interacting with a certain function.",
+    "description": "The kernel module for resource management fails to check user permissions before allowing operations, enabling unprivileged users to access system resources and modify settings reserved for administrators.",
     "vuln_type": "Privilege_Escalation",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -1036,7 +1036,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0070",
-    "description": "An attacker can cause a program to crash by sending an unexpected data packet",
+    "description": "The concurrent file access handler contains a race condition where multiple threads check file existence before writing, causing all threads to proceed simultaneously and corrupt shared data structures.",
     "vuln_type": "Race_Condition",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1051,7 +1051,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0071",
-    "description": "Unvalidated input in the request path of a web application allows an attacker to access restricted resources.",
+    "description": "The static file serving middleware fails to normalize paths before security checks, allowing attackers to bypass restrictions by using Unicode encoding or alternative path representations like '..\\..\\' on Windows systems.",
     "vuln_type": "Path_Traversal",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1066,7 +1066,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0072",
-    "description": "An open redirect vulnerability allows an attacker to redirect a user to a malicious URL through a 302 redirect. This can be exploited to execute arbitrary code or obtain sensitive information.",
+    "description": "The invite acceptance endpoint accepts an arbitrary return URL parameter and performs a 302 redirect without checking the hostname, enabling attackers to craft phishing links disguised as legitimate invitation acceptance flows.",
     "vuln_type": "Open_Redirect",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1081,7 +1081,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0073",
-    "description": "A vulnerable web application that allows remote code execution.",
+    "description": "The data deduplication process exhausts CPU resources by performing expensive regex operations on unsanitized user input, allowing attackers to cause denial of service by submitting specially crafted strings that trigger exponential backtracking.",
     "vuln_type": "Denial_of_Service",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1096,7 +1096,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0074",
-    "description": "A race condition exists in the system's multi-threaded processing of user input.",
+    "description": "The concurrent request handler for financial transactions checks account balance and deducts funds in separate operations without atomic guarantees, allowing attackers to craft simultaneous requests that exceed account limits through race condition exploitation.",
     "vuln_type": "Race_Condition",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1111,7 +1111,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0075",
-    "description": "A race condition vulnerability in the application's database access, allowing attackers to inject malicious SQL queries.",
+    "description": "The cache invalidation system uses asynchronous message queues without proper locking, creating race conditions where old data remains in cache during concurrent updates, allowing unauthorized data access.",
     "vuln_type": "Race_Condition",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1126,7 +1126,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0076",
-    "description": "An attacker can bypass authentication by sending a specially crafted request to an unsuspecting server, thereby gaining unauthorized access to the system.",
+    "description": "The JWT token validation skips signature verification if the token lacks a specific header field, allowing attackers to craft tokens with arbitrary claims that bypass authentication without providing valid credentials.",
     "vuln_type": "Authentication_Bypass",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -1141,7 +1141,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0077",
-    "description": "Insecurely handles unexpected input, potentially leading to a race condition.",
+    "description": "The request queueing system processes new requests while previous cleanup operations are pending, creating timing windows where concurrent thread access corrupts shared data structures and causes unpredictable behavior.",
     "vuln_type": "Race_Condition",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1156,7 +1156,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0078",
-    "description": "A web server is vulnerable to a Denial of Service attack because it does not properly handle requests from clients with known bad IPs.",
+    "description": "The IP-based rate limiting system lacks protection against spoofed IP addresses in non-local network scenarios, allowing attackers to bypass throttling by forging source IPs from their local network.",
     "vuln_type": "Denial_of_Service",
     "severity": "MEDIUM",
     "networkAccess": "No",
@@ -1171,7 +1171,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0079",
-    "description": "User can execute arbitrary commands by using an input field in a web application.",
+    "description": "The configuration file upload feature processes filenames through a shell command expansion function, allowing attackers to inject backtick commands or $() expressions that execute arbitrary code during file processing.",
     "vuln_type": "Command_Injection",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -1186,7 +1186,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0080",
-    "description": "A remote code execution vulnerability in the XML external entity parser.",
+    "description": "The XML signature validation handler processes external entity definitions before verifying signatures, allowing attackers to inject XXE payloads that read local files or access internal network services when high-privilege users validate documents.",
     "vuln_type": "XML_External_Entity",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -1201,7 +1201,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0081",
-    "description": "User can access unauthorized areas of the system by entering a custom username and password.",
+    "description": "The LDAP authentication module fails to properly escape special characters in username fields, allowing attackers to inject LDAP filter operators like '*' that bypass authentication and login as any user.",
     "vuln_type": "Authentication_Bypass",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -1216,7 +1216,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0082",
-    "description": "The vulnerable code can be executed with elevated privileges, causing arbitrary code to be executed on the system.",
+    "description": "The admin action logging system deserializes and executes user-provided event handlers without validation, allowing high-privilege users to inject code that executes with full application permissions when action logs are processed.",
     "vuln_type": "Insecure_Deserialization",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -1231,7 +1231,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0083",
-    "description": "An authentication bypass vulnerability exists in the system's login functionality.",
+    "description": "The password reset email validation fails to check if the reset token matches the requested email address, allowing attackers to reset any account's password by requesting a reset and using another user's token.",
     "vuln_type": "Authentication_Bypass",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -1246,7 +1246,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0084",
-    "description": "A vulnerability allowing remote code execution.",
+    "description": "The privilege elevation mechanism checks if a user belongs to a group by iterating through a list without proper permission boundaries, allowing high-privilege users to craft requests that access other users' elevated permissions.",
     "vuln_type": "Privilege_Escalation",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -1261,7 +1261,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0085",
-    "description": "Vulnerability in a web application where an attacker can access system resources via reverse shells.",
+    "description": "The DNS resolution cache accepts arbitrary hostnames from user-supplied requests and stores them without validation, allowing attackers to probe internal network services by requesting reverse DNS lookups of internal IP addresses.",
     "vuln_type": "SSRF",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1276,7 +1276,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0086",
-    "description": "A vulnerability in a web application where an attacker can inject malicious commands through user input fields.",
+    "description": "The report scheduling feature accepts cron expressions from users and passes them directly to the system scheduler without validation, allowing attackers to inject shell metacharacters that execute arbitrary commands.",
     "vuln_type": "Command_Injection",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -1291,7 +1291,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0087",
-    "description": "A Path Traversal vulnerability was identified in the target system.",
+    "description": "The configuration backup restoration routine extracts ZIP archives without checking member paths, allowing high-privilege users to upload archives containing entries like '../../etc/sensitive' that overwrite system files.",
     "vuln_type": "Path_Traversal",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1306,7 +1306,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0088",
-    "description": "Insecurely exposed file paths can be used to access sensitive data.",
+    "description": "The system backup storage uses predictable directory names based on timestamps and lacks access controls, allowing attackers with filesystem access to browse and extract backups containing database dumps and private encryption keys.",
     "vuln_type": "Path_Traversal",
     "severity": "MEDIUM",
     "networkAccess": "No",
@@ -1321,7 +1321,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0089",
-    "description": "vulnerability in API endpoint allowing unauthorized remote code execution",
+    "description": "The internal webhook routing system accepts arbitrary endpoint URLs from users and constructs requests to probe services, allowing attackers to map the internal network topology by observing response times and error patterns.",
     "vuln_type": "SSRF",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1336,7 +1336,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0090",
-    "description": "A hypothetical vulnerability in a software application where sensitive information can be disclosed without authorization or control.",
+    "description": "The analytics dashboard caches query results using user input as cache keys without validation, allowing attackers to craft requests that retrieve other users' cached data and infer sensitive business metrics.",
     "vuln_type": "Information_Disclosure",
     "severity": "LOW",
     "networkAccess": "Yes",
@@ -1351,7 +1351,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0091",
-    "description": "A buffer overflow vulnerability in a web application's login form, allowing an attacker to execute arbitrary code.",
+    "description": "The credential validation function allocates fixed-size buffers for username storage without overflow checking, allowing attackers to overflow the buffer with extended usernames that overwrite adjacent memory structures.",
     "vuln_type": "Buffer_Overflow",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -1366,7 +1366,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0092",
-    "description": "Unexpectedly elevated privileges without explicit authorization when interacting with the system via a local network.",
+    "description": "The privilege dropping routine in the daemon fails to clear supplemental group memberships, allowing local attackers to access group-readable files that high-privilege users have permission to read.",
     "vuln_type": "Privilege_Escalation",
     "severity": "HIGH",
     "networkAccess": "No",
@@ -1381,7 +1381,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0093",
-    "description": "user input used in command execution which bypasses security measures",
+    "description": "The template rendering engine accepts variable names from users and resolves them against the global namespace without restriction, allowing attackers to access and execute arbitrary Python functions through variable interpolation.",
     "vuln_type": "Command_Injection",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -1396,7 +1396,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0094",
-    "description": "Insecure password reset functionality bypasses authentication and allows unauthorized access.",
+    "description": "The password reset mechanism sends reset tokens via email without rate limiting, allowing attackers to brute force valid reset tokens or hijack accounts by resetting passwords through account enumeration.",
     "vuln_type": "Authentication_Bypass",
     "severity": "CRITICAL",
     "networkAccess": "Yes",
@@ -1411,7 +1411,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0095",
-    "description": "A XML External Entity vulnerability was identified in the target system.",
+    "description": "The document import feature enables XML entity processing for user-uploaded files, allowing high-privilege users to inject XXE entities that read local files from the server and exfiltrate them through error messages.",
     "vuln_type": "XML_External_Entity",
     "severity": "MEDIUM",
     "networkAccess": "No",
@@ -1426,7 +1426,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0096",
-    "description": "A web server's SSRF vulnerability allows an attacker to access its filesystem through a path traversal vulnerability.",
+    "description": "The image proxy service accepts arbitrary image URLs and fetches them from internal and external sources, allowing attackers to probe the internal network and discover backend services like development servers and admin panels.",
     "vuln_type": "SSRF",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1441,7 +1441,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0097",
-    "description": "A vulnerability in the database that allows an attacker to extract sensitive data.",
+    "description": "The data export feature includes all columns without filtering, and high-privilege users can export data to formats where unencrypted PII is visible, allowing sensitive information to leak through access logs and audit trails.",
     "vuln_type": "Information_Disclosure",
     "severity": "LOW",
     "networkAccess": "Yes",
@@ -1456,7 +1456,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0098",
-    "description": "A vulnerability allowing an attacker to inject malicious code to run on the system",
+    "description": "The markdown preview feature processes user input through an unsafe HTML rendering library that allows high-privilege users to inject data attributes containing code that executes during DOM manipulation.",
     "vuln_type": "Information_Disclosure",
     "severity": "MEDIUM",
     "networkAccess": "Yes",
@@ -1471,7 +1471,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0099",
-    "description": "user-provided input is used as part of the SQL query, allowing an attacker to inject malicious code.",
+    "description": "The transaction logging system accepts user-supplied transaction descriptions and includes them in SQL INSERT statements without parameterization, allowing high-privilege users to inject queries that exfiltrate financial records.",
     "vuln_type": "SQL_Injection",
     "severity": "HIGH",
     "networkAccess": "Yes",
@@ -1486,7 +1486,7 @@
   },
   {
     "cve_id": "CVE-SYNTH-0100",
-    "description": "Insecurely uses an external entity to fetch data from an untrusted source, potentially leading to data leakage.",
+    "description": "The SOAP endpoint accepts WSDL definitions from user input and dynamically loads external service schemas without validation, allowing attackers to inject XXE payloads that exfiltrate server files through schema processing errors.",
     "vuln_type": "XML_External_Entity",
     "severity": "MEDIUM",
     "networkAccess": "Yes",

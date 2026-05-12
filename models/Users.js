@@ -91,6 +91,26 @@ const userSchema = new Schema({
     }
 }, { timestamps: true });
 
+function mirrorMoneyEarnedToBalance(next) {
+    const update = this.getUpdate?.();
+    const earnedDelta = update?.$inc?.money_earned;
+
+    if (
+        typeof earnedDelta === 'number' &&
+        earnedDelta > 0 &&
+        update.$inc.balance == null
+    ) {
+        update.$inc.balance = earnedDelta;
+        this.setUpdate(update);
+    }
+
+    next();
+}
+
+userSchema.pre('updateOne', mirrorMoneyEarnedToBalance);
+userSchema.pre('updateMany', mirrorMoneyEarnedToBalance);
+userSchema.pre('findOneAndUpdate', mirrorMoneyEarnedToBalance);
+
 // Performance indexes
 userSchema.index({ discord_id: 1 }, { unique: true });
 userSchema.index({ last_active: -1 });

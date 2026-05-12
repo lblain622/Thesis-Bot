@@ -201,7 +201,7 @@ async function generateOffer(client, report, discordUser) {
             `Do you accept this offer?`;
 
         try {
-            // Send private notification to the user only (not public channel)
+            // Send notification to the user's server dashboard channel only.
             const { notifyUser } = require('./logUtils');
             await notifyUser(client, report.user_id, messageContent, {
                 components: [

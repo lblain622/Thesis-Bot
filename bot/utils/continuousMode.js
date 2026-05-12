@@ -35,7 +35,7 @@ function normalizeVulnType(value) {
 // Intervals (ms)
 const GEN_MIN_MS = Number(process.env.CONT_GEN_MIN_MS || 2 * 60 * 1000); // 2 minutes
 const GEN_MAX_MS = Number(process.env.CONT_GEN_MAX_MS || 4 * 60 * 1000); // 4 minutes
-const EXPIRE_AFTER_MS = Number(process.env.CONT_EXPIRE_AFTER_MS || 20 * 60 * 1000); // 20 minutes
+const EXPIRE_AFTER_MS = Number(process.env.CONT_EXPIRE_AFTER_MS || 10 * 60 * 1000); // 10 minutes
 const SWEEP_MS = Number(process.env.CONT_SWEEP_MS || 30 * 1000); // sweep every 30 seconds
 const CONT_TICK_MS = Number(process.env.CONT_TICK_MS || 60 * 1000); // 1-minute checker
 
@@ -381,7 +381,7 @@ async function evaluateAutoOffers(client) {
                     // Credit $100 and reputation bonus if not already granted
                     const bonusRep = 10;
                     const updates = {
-                        $inc: {money_earned: 100, reputation_earned: bonusRep}
+                        $inc: {money_earned: 100, balance: 100, money_from_reports: 100, reputation_earned: bonusRep}
                     };
                     await Users.updateOne({_id: loser.user_id}, updates);
                     await Report.updateOne({_id: loser._id}, {

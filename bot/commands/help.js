@@ -29,8 +29,8 @@ module.exports = {
                         "• `/shop buy` - Buy an available to buy in the shop \n"+
                         "• `/inventory` - View your owned items\n"+
                         "• `/search` - Search for Vulnerabilities in the system. You may search every minute. \n"+
-                        "• `/summary` - Display your five most recent actions. \n"+
-                        "\n After verification a private dashboard channel will be created; run all commands there.\n"
+                        "• `/summary` - Display your five most recent actions. \n"
+             
 
                 },
                 {

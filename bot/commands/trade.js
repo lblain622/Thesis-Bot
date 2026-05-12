@@ -264,11 +264,11 @@ async function enterAmount(interaction, maxAmount, promptText) {
 async function confirmPrompt(interaction, content, confirmLabel) {
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId('trade_confirm')
+            .setCustomId('trade_proposal_confirm')
             .setLabel(confirmLabel)
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
-            .setCustomId('trade_cancel')
+            .setCustomId('trade_proposal_cancel')
             .setLabel('Cancel')
             .setStyle(ButtonStyle.Danger)
     );
@@ -279,8 +279,8 @@ async function confirmPrompt(interaction, content, confirmLabel) {
         fetchReply: true
     });
 
-    const response = await waitForComponent(message, interaction.user.id, ComponentType.Button, ['trade_confirm', 'trade_cancel'], 120000);
-    if (!response || response.customId === 'trade_cancel') {
+    const response = await waitForComponent(message, interaction.user.id, ComponentType.Button, ['trade_proposal_confirm', 'trade_proposal_cancel'], 120000);
+    if (!response || response.customId === 'trade_proposal_cancel') {
         await interaction.editReply({content: 'Trade cancelled.', components: []});
         return false;
     }

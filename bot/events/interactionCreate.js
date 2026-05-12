@@ -4,7 +4,7 @@ const Report = require('../../models/Reports');
 const Trade = require('../../models/Trades');
 const Vulnerability = require('../../models/Vulnerabilities');
 const {announceVulnerabilityPatched, announceExploitSummary} = require('../events/announcePatches');
-const {handleExploitCleanup, awardReporterBonus} = require('../utils/exploitUtils');
+const {handleExploitCleanup, awardReporterBonus, awardReportersAppreciation} = require('../utils/exploitUtils');
 const cache = require('../utils/cache');
 
 module.exports = {
@@ -17,6 +17,10 @@ module.exports = {
         try {
             // ============= TRADE SYSTEM =============
             if (prefix === 'trade') {
+                if (!id || !['accept', 'reject', 'confirm'].includes(action)) return;
+                if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+                    return interaction.reply({content: 'Trade not found.', ephemeral: true});
+                }
                 await handleTrade(interaction, action, id);
             }
 
@@ -27,11 +31,7 @@ module.exports = {
                 const company = await (require('../../models/Company').findById(report?.company_id));
                 const platform = await (require('../../models/Platform').findById(company?.platform_id));
 
-                if (platform?.name?.includes('Ultimatum')) {
-                    await handleUltimatumGame(interaction, action, id);
-                } else {
-                    await handleStandardOffer(interaction, action, id);
-                }
+                await handleStandardOffer(interaction, action, id);
             }
 
             // ============= DICTATOR OFFERS =============
@@ -121,6 +121,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
             vulnerability.is_resolved_date = new Date();
 
             await vulnerability.save();
+            await awardReportersAppreciation(interaction.client, vulnerability._id, report.company_id);
 
             // Award bonus to reporter if they're not exploiting
             const bonusResult = await awardReporterBonus(report.user_id, vulnerability._id);
@@ -322,6 +323,7 @@ async function handleUltimatumGame(interaction, action, offerId) {
                 vulnerability.isResolved = true;
                 vulnerability.is_resolved_date = new Date();
                 await vulnerability.save();
+                await awardReportersAppreciation(interaction.client, vulnerability._id, report.company_id);
 
                 if (interaction.guild) {
                     // Pass the server ID (guild ID) to the announcement function
@@ -408,7 +410,7 @@ async function handleStandardOffer(interaction, action, offerId) {
         const money = Number(offer.offered_amount || 0);
         const repBonus = Number(offer.reputation_offered || offer.repuatation_offered || 0);
         if (money > 0) {
-            await User.updateOne({_id: u._id}, {$inc: {money_earned: money, reputation_earned: repBonus, money_from_reports: money}});
+            await User.updateOne({_id: u._id}, {$inc: {money_earned: money, balance: money, reputation_earned: repBonus, money_from_reports: money}});
         } else if (repBonus) {
             await User.updateOne({_id: u._id}, {$inc: {reputation_earned: repBonus}});
         }
@@ -457,6 +459,7 @@ async function handleStandardOffer(interaction, action, offerId) {
             vulnerability.isResolved = true;
             vulnerability.is_resolved_date = new Date();
             await vulnerability.save();
+            await awardReportersAppreciation(interaction.client, vulnerability._id, report.company_id);
 
             // Award bonus to reporter if they're not exploiting
             const bonusResult = await awardReporterBonus(report.user_id, vulnerability._id);
@@ -641,6 +644,8 @@ async function handleDictatorOffer(interaction, action, offerId) {
         $set: {
             status: 'accepted',
             dictator_choice: choice,
+            offered_amount: money,
+            reputation_offered: rep,
             resolved_at: new Date(),
             user_responded: true,
             responded_at: new Date()
@@ -652,6 +657,7 @@ async function handleDictatorOffer(interaction, action, offerId) {
         vulnerability.isResolved = true;
         vulnerability.is_resolved_date = new Date();
         await vulnerability.save();
+        await awardReportersAppreciation(interaction.client, vulnerability._id, report.company_id);
 
         // Award bonus to reporter if they're not exploiting
         const bonusResult = await awardReporterBonus(report.user_id, vulnerability._id);
@@ -827,11 +833,25 @@ async function handleTrade(interaction, action, tradeId) {
         return interaction.reply({content: 'User not found.', ephemeral: true});
     }
 
+    if (!givingUser || !receivingUser) {
+        await Trade.updateOne({_id: tradeId}, {status: 'rejected', resolved_at: new Date()});
+        return interaction.reply({content: 'Trade failed because one of the users no longer exists.', ephemeral: true});
+    }
+
     const isGiver = trade.giving_user_id.toString() === currentUser._id.toString();
     const isReceiver = trade.receiving_user_id.toString() === currentUser._id.toString();
 
     if (!isGiver && !isReceiver) {
         return interaction.reply({content: 'You are not part of this trade.', ephemeral: true});
+    }
+
+    if (trade.status === 'completed' || trade.status === 'rejected' || trade.status === 'expired') {
+        return interaction.reply({content: `This trade is already ${trade.status}.`, ephemeral: true});
+    }
+
+    if (trade.expires_at && new Date(trade.expires_at).getTime() < Date.now()) {
+        await Trade.updateOne({_id: tradeId}, {status: 'expired', resolved_at: new Date()});
+        return interaction.reply({content: 'This trade has expired.', ephemeral: true});
     }
 
     if (action === 'reject') {

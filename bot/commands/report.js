@@ -233,10 +233,13 @@ Your voucher ${targetUser.username} has been notified.`;
                         if (platform) cache.setPlatform(platformId, platform);
                     }
 
-                    if (platform.name.includes('Ultimatum')) {
+                    if (!platform) {
+                        console.warn(`No platform found for report ${report._id}; defaulting to standard offer.`);
                         await generateOffer(interaction.client, report, interaction.user);
                     } else if (platform.name.includes('Dictator')) {
                         await generateDictatorOffer(interaction.client, report, interaction.user);
+                    } else {
+                        await generateOffer(interaction.client, report, interaction.user);
                     }
                 } catch (err) {
                     console.error('Error generating delayed offer:', err);
@@ -314,10 +317,7 @@ async function selectCompanyAdvanced(interaction) {
         .setPlaceholder('Select a Company')
         .addOptions(
             companies.map(c => {
-                let desc = c.description?.slice(0, 80) || 'No description';
-                if (c.reputation_threshold && c.reputation_threshold > 0) {
-                    desc += ` · rep≥${c.reputation_threshold}`;
-                }
+                const desc = formatCompanySelectDescription(c);
                 return {
                     label: c.name,
                     description: desc,
@@ -389,7 +389,7 @@ async function searchCompanyByName(interaction, companies) {
     
     // Prompt for company name
     const prompt = await interaction.followUp({
-        content: `\n📝 **Type the name of the company you want to report to:**\n\nAvailable companies:\n${companies.map(c => `• **${c.name}**`).join('\n')}`,
+        content: `\n📝 **Type the name of the company you want to report to:**\n\nAvailable companies:\n${companies.map(formatCompanySearchLine).join('\n')}`,
         flags: 64,
         fetchReply: true
     });
@@ -450,6 +450,39 @@ async function findCompanyIdByName(interaction, companyName) {
     }
 
     return matchedCompany._id.toString();
+}
+
+function formatVulnType(type) {
+    return String(type || 'Any').replace(/_/g, ' ');
+}
+
+function formatReputationHint(company) {
+    const threshold = Number(company?.reputation_threshold || 0);
+    if (threshold > 0) return `rep ${threshold}+`;
+
+    const tierStarts = (company?.reputation_tiers || [])
+        .map(t => Number(t.min_reputation || 0))
+        .filter(n => Number.isFinite(n) && n > 0)
+        .sort((a, b) => a - b);
+
+    return tierStarts.length ? `better offers near rep ${tierStarts[0]}+` : 'no rep minimum';
+}
+
+function formatCompanySelectDescription(company) {
+    const prefs = (company?.preferred_vulns || [])
+        .slice(0, 2)
+        .map(formatVulnType)
+        .join(', ');
+    const prefHint = prefs ? `Likes: ${prefs}` : 'Likes: any vuln';
+    return `${prefHint} | ${formatReputationHint(company)}`.slice(0, 100);
+}
+
+function formatCompanySearchLine(company) {
+    const prefs = (company?.preferred_vulns || [])
+        .slice(0, 3)
+        .map(formatVulnType)
+        .join(', ') || 'any vulnerability type';
+    return `• **${company.name}** — prefers ${prefs}; ${formatReputationHint(company)}`;
 }
 
 async function selectVulnerability(interaction) {
@@ -606,21 +639,21 @@ async function saveReport(interaction, platformId, companyId, vulnerabilityId, u
         if (!voucherDoc) {
             voucherDoc = await User.create({
                 discord_id: targetUser.id,
-                username: targetUser.username,
+                discord_name: targetUser.username,
                 reports_made: 0
             });
         }
         voucherId = voucherDoc._id;
 
-        // send confirmation DM to voucher
+        // send confirmation to the voucher's dashboard channel only
         try {
-            const discordVoucher = await interaction.client.users.fetch(targetUser.id);
-            await discordVoucher.send(
+            const { notifyUser } = require('../utils/logUtils');
+            await notifyUser(interaction.client, voucherDoc._id,
                 `You have vouched for ${interaction.user.username} on a report to a company. ` +
                 `If either of you meets the company's reputation threshold and an offer is generated, you will receive a share of the reward.`
             );
         } catch (e) {
-            console.error('Failed to send DM to voucher user', e);
+            console.error('Failed to send voucher dashboard notification', e);
         }
     }
 

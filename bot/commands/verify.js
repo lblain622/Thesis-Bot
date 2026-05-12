@@ -32,6 +32,7 @@ const slides = [
     {
         title: 'Reporting Vulnerabilities (/report)',
         content:
+            "Optional Commands: `/report vulnerability:<id>`, `/report company:<name>`, and `/report voucher:<user>`.\n" +
             "Once you've found a vulnerability via `/search`, it's time to report it.\n" +
             "• Use `/report` to submit your findings to the affected company.\n" +
             "• You can select a company and a vulnerability you've discovered from the menus.\n" +
@@ -40,6 +41,7 @@ const slides = [
     {
         title: 'Checking Vulnerability Info (/info)',
         content:
+            "Optional filters: `identifier:<id>`, `reported`, `resolved`, `exploited`, and `exclude_self_reported`.\n" +
             "Need to see the details of what you've found?\n" +
             "• Use `/info` to view technical details, reported status, and expiration times for vulnerabilities you have access to.\n" +
             "• You can filter by reported or resolved status to keep track of your work.",
@@ -47,33 +49,28 @@ const slides = [
     {
         title: 'Exploiting for Profit (/exploit)',
         content:
+            "Subcommands: `/exploit start`, `/exploit collect`, `/exploit stop`, and `/exploit list`.\n" +
+            "Optional: add `identifier:<id>` to start, collect, or stop a specific vulnerability.\n" +
             "If you're feeling risky, you can exploit vulnerabilities for passive income.\n" +
             "• Use `/exploit start` to begin earning money every minute from an unpatched bug.\n" +
             "• Use `/exploit collect` to gather your earnings—but beware, there's a risk of being caught!\n" +
             "• If caught, you'll face heavy fines. Use `/exploit stop` to cease operations .",
     },
-//    {
-//        title: 'Your Profile and Stats (/profile)',
-//        content:
-//            "Keep track of your progress as a security researcher.\n" +
-//            "• Use `/profile` to view your total reports, balance, reputation points, and a preview of your inventory.\n" +
-//            "• Your balance and reputation are key to your standing in HexaHive.",
-//    },
-//    {
-//        title: 'The Shop (/shop)',
-//        content:
-//            "Spend your hard-earned money to boost your capabilities.\n" +
-//            "• Use `/shop list` to see available items like tools, merch, and consumables.\n" +
-//            "• Use `/shop buy` to purchase items that can double rewards, help discovery, or provide company-specific bonuses.\n" +
-//            "• Use `/inventory` to see everything you own.",
-//    },
-//    {
-//        title: 'Trading with Others (/trade)',
-//        content:
-//            "Collaborate or barter with other researchers.\n" +
-//            "• Use `/trade @user` to propose a swap of vulnerabilities or money.\n" +
-//            "• Both parties must confirm the trade for it to be completed.",
-//    },
+   {
+       title: 'Trading with Others (/trade)',
+       content:
+           "Collaborate or barter with other researchers.\n" +
+           "• Use `/trade @user` to propose a swap of vulnerabilities or money.\n" +
+           "• Both parties must confirm the trade for it to be completed.",
+   },
+    {
+        title: 'Shop, Profile, and Trading',
+        content:
+            "Shop subcommands: `/shop list` and `/shop buy`.\n" +
+            "Optional: `/shop list type:<merch|tool>` filters items.\n" +
+            "Optional: `/shop buy item_key:<key> company:<name> qty:<number>` supports company items and stackable items.\n" +
+            "Use `/profile` for stats and leaderboard placements, `/summary` for your vulnerability history, and `/trade user:<player>` to trade.",
+    },
     {
         title: 'Getting Help (/help)',
         content:

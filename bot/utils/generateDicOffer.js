@@ -23,6 +23,11 @@ async function generateDictatorOffer(client, report, discordUser) {
     // keep track of the starting base value for breakdown
     const baseRand = Math.floor(Math.random() * (max - min + 1)) + min;
     let base = baseRand;
+    let voucherShare = 0;
+    let voucherDoc = null;
+    if (report.VouchingUser) {
+        voucherDoc = await Users.findById(report.VouchingUser).lean();
+    }
 
     // bonus breakdown structure (applies to base)
     const bonusDetails = {
@@ -33,6 +38,21 @@ async function generateDictatorOffer(client, report, discordUser) {
 
     // Apply shop effects: company bonus and lucky token (affect monetary parts)
     let notes = [];
+    const repThresh = company.reputation_threshold || 0;
+    if (voucherDoc && repThresh > 0) {
+        const user = await Users.findById(report.user_id).lean();
+        const userMeets = user && (user.reputation || 0) >= repThresh;
+        const voucherMeets = (voucherDoc.reputation || 0) >= repThresh;
+        if (userMeets || voucherMeets) {
+            const pct = Number(process.env.VOUCHER_SHARE_PCT || 20);
+            voucherShare = Math.floor(base * (pct / 100));
+            if (voucherShare > 0) {
+                base -= voucherShare;
+                notes.push(`$${voucherShare} reserved for voucher (${voucherDoc.username || voucherDoc.discord_id})`);
+            }
+        }
+    }
+
     try {
         const user = await Users.findById(report.user_id).lean();
         if (user) {
@@ -108,12 +128,18 @@ async function generateDictatorOffer(client, report, discordUser) {
         user_id: report.user_id,
         base_amount: baseRand,
         bonus_details: bonusDetails,
+        original_amount: options.option1.money + voucherShare,
+        offered_amount: options.option1.money,
+        offer_percent: 100,
+        reputation_offered: options.option1.rep,
         dictator_options: options,
         status: 'pending',
         created_at: new Date(),
         expires_at: new Date(Date.now() + 10 * 60 * 1000),
         items: attachedItems,
         cash_reduction_reason: reductionReason,
+        voucher_user_id: voucherDoc?._id || null,
+        voucher_amount: voucherShare,
     });
 
     // 20% chance to grant a Merchant Hat for this company if not owned
@@ -149,7 +175,7 @@ async function generateDictatorOffer(client, report, discordUser) {
         `Please choose one:`;
 
     try {
-        // Send private notification to the user only (not public channel)
+        // Send notification to the user's server dashboard channel only.
         const { notifyUser } = require('./logUtils');
         await notifyUser(client, report.user_id, messageContent, {
             components: [

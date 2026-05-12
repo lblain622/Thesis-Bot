@@ -2,6 +2,7 @@
  * Utility for sending announcements to configured server channels instead of DMs
  */
 const AnnouncementChannels = require('../../models/AnnouncementChannels');
+const User = require('../../models/Users');
 
 /**
  * Get the configured channel for a specific announcement type
@@ -92,31 +93,40 @@ async function postAnnouncementToChannel(client, discordUser, guild, message, an
     }
 }
 
-/**
- * Post a private trade notification to user (DM or ephemeral)
- */
-async function postTradeNotification(client, targetUser, guild, messageContent, messageOptions = {}) {
+async function postDashboardNotification(client, targetUser, messageContent, messageOptions = {}) {
     try {
-        return await targetUser.send({
-            content: messageContent,
-            ...messageOptions
-        });
+        const user = await User.findOne({discord_id: targetUser.id}).lean();
+        if (!user?.dashboard_channel_id) return null;
+
+        const channel = await client.channels.fetch(user.dashboard_channel_id).catch(() => null);
+        if (!channel?.isTextBased()) return null;
+
+        if (typeof messageContent === 'string') {
+            return await channel.send({
+                content: messageContent,
+                ...messageOptions
+            });
+        }
+
+        return await channel.send(messageContent);
     } catch (err) {
-        console.error('Error sending private trade notification:', err);
+        console.error('Error sending dashboard notification:', err);
         return null;
     }
 }
 
 /**
- * Post a private offer notification to user (DM)
+ * Post a trade notification to the user's server dashboard channel.
+ */
+async function postTradeNotification(client, targetUser, guild, messageContent, messageOptions = {}) {
+    return postDashboardNotification(client, targetUser, messageContent, messageOptions);
+}
+
+/**
+ * Post an offer notification to the user's server dashboard channel.
  */
 async function postOfferNotification(client, targetUser, guild, embedOrContent, announcementType = 'offers') {
-    try {
-        return await targetUser.send(embedOrContent);
-    } catch (err) {
-        console.error('Error sending private offer notification:', err);
-        return null;
-    }
+    return postDashboardNotification(client, targetUser, embedOrContent);
 }
 
 /**
@@ -163,6 +173,7 @@ module.exports = {
     getAnnouncementChannel,
     findDefaultChannel,
     postAnnouncementToChannel,
+    postDashboardNotification,
     postTradeNotification,
     postOfferNotification,
     postAnnouncement,
