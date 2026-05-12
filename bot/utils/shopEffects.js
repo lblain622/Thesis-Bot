@@ -92,6 +92,7 @@ async function grantMerchantHatIfMissing(userId, companyId) {
         });
         return true;
     } catch (e) {
+        console.error('Failed to grant merchant hat:', e);
         return false;
     }
 }
