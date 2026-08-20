@@ -20,7 +20,7 @@ const reportSchema = new Schema({
     },
     vulnerability_id: {
         type: Schema.Types.ObjectId,
-        ref: 'Volunerabilies'
+        ref: 'Vulnerabilities'
     },
    
     vuln_identifier: String,
@@ -36,15 +36,9 @@ const reportSchema = new Schema({
     report_title: String,
     report_description: String,
     impact_description: String,
-    poc_steps: [String],
-
-    is_poc_only: {
-        type: Boolean,
-        default: false
-    },
     status: {
         type: String,
-        enum: ['open', 'in_progress', 'resolved', 'closed', 'poc_submitted'],
+        enum: ['open', 'in_progress', 'resolved', 'closed'],
         default: 'open'
     },
     submitted_at: {
@@ -64,6 +58,15 @@ const reportSchema = new Schema({
     offered_amount: {
         type: Number,
         default: 0
+    },
+    appreciation_notified_at: {
+        type: Date,
+        default: null
+    },
+    VouchingUser:{
+        type: Schema.Types.ObjectId,
+        ref: 'Users',
+        default: null
     }
 }, { timestamps: true });
 

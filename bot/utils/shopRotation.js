@@ -1,8 +1,14 @@
 const Items = require('../../models/Items');
 const ShopRotation = require('../../models/ShopRotation');
 
-const ROTATE_MS = Number(process.env.SHOP_ROTATE_MS || 10 * 60 * 1000); // 10 minutes
-const ROTATE_SIZE = Number(process.env.SHOP_ROTATE_SIZE || 6);
+const ROTATE_MS = Number(process.env.SHOP_ROTATE_MS || 5 * 60 * 1000); // 5 minutes
+const ROTATE_SIZE = Number(process.env.SHOP_ROTATE_SIZE || 4);
+const PRICE_BUCKETS = [
+    {min: 0, max: 500},
+    {min: 501, max: 1000},
+    {min: 1001, max: 2000},
+    {min: 2001, max: Infinity}
+];
 
 let rotationInterval = null;
 
@@ -13,9 +19,30 @@ function getNow() {
 async function pickRotationItems() {
     const enabled = await Items.find({enabled: true}).lean();
     if (!enabled.length) return [];
-    // Simple random shuffle and slice to ROTATE_SIZE
-    const shuffled = [...enabled].sort(() => 0.5 - Math.random());
-    const chosen = shuffled.slice(0, Math.min(ROTATE_SIZE, shuffled.length));
+
+    const chosen = [];
+    const chosenIds = new Set();
+    for (const bucket of PRICE_BUCKETS) {
+        if (chosen.length >= ROTATE_SIZE) break;
+        const candidates = enabled.filter(i =>
+            !chosenIds.has(String(i._id)) &&
+            i.price >= bucket.min &&
+            i.price <= bucket.max
+        );
+        if (!candidates.length) continue;
+        const pick = candidates[Math.floor(Math.random() * candidates.length)];
+        chosen.push(pick);
+        chosenIds.add(String(pick._id));
+    }
+
+    const remaining = enabled
+        .filter(i => !chosenIds.has(String(i._id)))
+        .sort(() => 0.5 - Math.random());
+    for (const item of remaining) {
+        if (chosen.length >= ROTATE_SIZE) break;
+        chosen.push(item);
+    }
+
     return chosen.map(i => i._id);
 }
 

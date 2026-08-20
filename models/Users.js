@@ -31,11 +31,32 @@ const userSchema = new Schema({
         type: Number,
         default: 0
     },
+    // money earned by vouching for other users
+    money_from_vouches: {
+        type: Number,
+        default: 0
+    },
     money_from_trades: {
         type: Number,
         default: 0
     },
-    repuation_earned: {
+    money_fined:{
+    type:Number,
+    default:0
+    },
+    penalties: [{
+        company_id: { type: Schema.Types.ObjectId, ref: 'Company', required: true },
+        amount: { type: Number, required: true },
+        reason: { type: String, enum: ['exploit_caught', 'report_penalty'], required: true },
+        vuln_type: String,
+        severity: String,
+        applied_at: { type: Date, default: Date.now }
+    }],
+    last_search: {
+        type: Date,
+        default: null
+    },
+    reputation_earned: {
         type: Number,
         default: 0
     },
@@ -47,7 +68,7 @@ const userSchema = new Schema({
         {
             company_id: {
                 type: Schema.Types.ObjectId,
-                ref: 'Companies',
+                ref: 'Company',
                 required: true
             },
             trust_score: {
@@ -63,8 +84,32 @@ const userSchema = new Schema({
             company_id: { type: Schema.Types.ObjectId, ref: 'Company', default: null },
             qty: { type: Number, default: 1, min: 0 }
         }
-    ]
+    ],
+    dashboard_channel_id: {
+        type: String,
+        default: null,
+    }
 }, { timestamps: true });
+
+function mirrorMoneyEarnedToBalance(next) {
+    const update = this.getUpdate?.();
+    const earnedDelta = update?.$inc?.money_earned;
+
+    if (
+        typeof earnedDelta === 'number' &&
+        earnedDelta > 0 &&
+        update.$inc.balance == null
+    ) {
+        update.$inc.balance = earnedDelta;
+        this.setUpdate(update);
+    }
+
+    next();
+}
+
+userSchema.pre('updateOne', mirrorMoneyEarnedToBalance);
+userSchema.pre('updateMany', mirrorMoneyEarnedToBalance);
+userSchema.pre('findOneAndUpdate', mirrorMoneyEarnedToBalance);
 
 // Performance indexes
 userSchema.index({ discord_id: 1 }, { unique: true });

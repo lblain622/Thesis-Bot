@@ -11,16 +11,10 @@ const itemSchema = new Schema({
   stackable: { type: Boolean, default: false },
   companyScoped: { type: Boolean, default: false }, // if true, inventory entry may include company_id
   enabled: { type: Boolean, default: true },
-  // effects example:
-  // {
-  //   search: { extraDiscover: 1, extraFields: 1 },
-  //   offer: { companyBonusPct: 15 },
-  //   consumable: { luckyDoubleNextOfferChancePct: 10 }
-  // }
+ 
   effects: { type: Schema.Types.Mixed, default: {} },
 }, { timestamps: true });
 
-itemSchema.index({ key: 1 }, { unique: true });
 itemSchema.index({ enabled: 1 });
 
 module.exports = model('Items', itemSchema);

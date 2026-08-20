@@ -8,14 +8,12 @@ module.exports = {
 
 
     async execute(interaction) {
-        // Try cache first
-        let user = cache.getUser(interaction.user.id);
+
+
         if (!user) {
             user = await User.findOne({discord_id: interaction.user.id}).lean();
             if (!user) {
                 user = await User.create({ discord_id: interaction.user.id, username: interaction.user.username });
-            } else {
-                cache.setUser(interaction.user.id, user);
             }
         }
 
@@ -25,7 +23,7 @@ module.exports = {
             .addFields(
                 {name:"Reports Submitted", value: `${user.reports_made} reports`},
                 {name:"Money Earned", value:`$${user.money_earned}`},
-                {name:"Reputation Given",value:`${user.repuation_earned} points`}
+                {name:"Reputation Given",value:`${user.reputation_earned} points`}
             );
         await interaction.reply({embeds: [embdVar],flags: 64,});
 

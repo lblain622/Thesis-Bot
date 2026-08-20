@@ -5,7 +5,7 @@ const {connectDB} = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 const User = require('../models/Users');
-const roundSystem = require('./utils/roundSystem');
+
 const continuousMode = require('./utils/continuousMode');
 const cache = require('./utils/cache');
 const {loadShopItems} = require('./utils/loadShopItems');
@@ -13,13 +13,69 @@ const {initializeShopRotation, cleanupShopRotation} = require('./utils/shopRotat
 const Company = require('../models/Company');
 const Platform = require('../models/Platform');
 
-//Some db interactions wont work based upon user privacy settings
-//look iinto have the private dms function inside through different channels  (see how much of a delay it might cause in the sever when many ppl interact)
+const DB_RETRY_MS = Math.max(1000, Number(process.env.DB_RETRY_MS) || 30_000);
+let dbRetryTimer = null;
+let shutdownStarted = false;
+
+function logError(context, error) {
+    console.error(`[${context}]`, error?.stack || error);
+}
+
+async function safeInteractionReply(interaction, message) {
+    const payload = typeof message === 'string'
+        ? {content: message, ephemeral: true}
+        : {ephemeral: true, ...message};
+
+    try {
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp(payload);
+        } else {
+            await interaction.reply(payload);
+        }
+    } catch (error) {
+        logError('interaction error response failed', error);
+    }
+}
+
+function executeEventSafely(event, args) {
+    // Starting from an already-resolved promise also catches synchronous throws.
+    Promise.resolve().then(() => event.execute(...args, client)).catch(error => {
+        logError(`event:${event.name}`, error);
+        const interaction = args[0];
+        if (interaction?.isRepliable?.()) {
+            return safeInteractionReply(interaction, 'An error occurred while processing that interaction.');
+        }
+    });
+}
+
+function runSafely(context, task) {
+    return Promise.resolve().then(task).catch(error => {
+        logError(context, error);
+    });
+}
+
+async function runStartupTask(name, task) {
+    try {
+        await task();
+        return true;
+    } catch (error) {
+        logError(`startup:${name}`, error);
+        return false;
+    }
+}
+
+process.on('unhandledRejection', error => {
+    logError('unhandledRejection', error);
+});
+
+process.on('uncaughtException', error => {
+    logError('uncaughtException', error);
+});
+
 
 const client = new Client({
     intents:
         [
-            GatewayIntentBits.Guilds,
             GatewayIntentBits.Guilds,
             GatewayIntentBits.GuildMessages,
             GatewayIntentBits.MessageContent,
@@ -35,9 +91,13 @@ const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
-    const command = require(`./commands/${file}`);
-    client.commands.set(command.data.name, command);
-    commands.push(command.data.toJSON());
+    try {
+        const command = require(`./commands/${file}`);
+        client.commands.set(command.data.name, command);
+        commands.push(command.data.toJSON());
+    } catch (error) {
+        logError(`command load:${file}`, error);
+    }
 }
 
 const eventsPath = path.join(__dirname, 'events');
@@ -45,35 +105,52 @@ const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'
 
 for (const file of eventFiles) {
     const filePath = path.join(eventsPath, file);
-    const event = require(filePath);
+    try {
+        const event = require(filePath);
 
-    if (event.once) {
-        client.once(event.name, (...args) => event.execute(...args, client));
-    } else {
-        client.on(event.name, (...args) => event.execute(...args, client));
+        if (event.once) {
+            client.once(event.name, (...args) => executeEventSafely(event, args));
+        } else {
+            client.on(event.name, (...args) => executeEventSafely(event, args));
+        }
+        client.events.set(event.name, event);
+    } catch (error) {
+        logError(`event load:${file}`, error);
     }
-    client.events.set(event.name, event);
 }
 
 
 const rest = new REST({version: '10'}).setToken(process.env.DISCORD_TOKEN);
-connectDB();
+
+async function connectDatabaseWithRetry() {
+    const connected = await connectDB().catch(error => {
+        logError('connectDB', error);
+        return false;
+    });
+
+    if (connected) {
+        if (dbRetryTimer) clearTimeout(dbRetryTimer);
+        dbRetryTimer = null;
+        return;
+    }
+
+    console.warn(`Database unavailable; retrying in ${Math.round(DB_RETRY_MS / 1000)} seconds.`);
+    if (!dbRetryTimer && !shutdownStarted) {
+        dbRetryTimer = setTimeout(() => {
+            dbRetryTimer = null;
+            runSafely('database reconnect', connectDatabaseWithRetry);
+        }, DB_RETRY_MS);
+    }
+}
+
+runSafely('initial database connection', connectDatabaseWithRetry);
 
 // Ensure a Discord user exists in the database; create if not, update last_active/name if yes
-// Now with caching to reduce DB load
 async function ensureUserExists(discordUser) {
     try {
         if (!discordUser) return null;
 
-        // Check cache first
-        const cachedUser = cache.getUser(discordUser.id);
-        if (cachedUser) {
-            // Only update last_active if more than 1 minute has passed
-            const oneMinuteAgo = Date.now() - 60000;
-            if (cachedUser.last_active && new Date(cachedUser.last_active).getTime() > oneMinuteAgo) {
-                return cachedUser;
-            }
-        }
+
 
         // Update in database
         const user = await User.findOneAndUpdate(
@@ -90,8 +167,6 @@ async function ensureUserExists(discordUser) {
             {upsert: true, new: true}
         ).lean();
 
-        // Cache the result
-        cache.setUser(discordUser.id, user);
         return user;
     } catch (e) {
         // Non-fatal: bot should continue even if we fail to upsert user
@@ -105,18 +180,21 @@ function setupGracefulShutdown() {
 
     shutdownSignals.forEach(signal => {
         process.on(signal, async () => {
+            if (shutdownStarted) return;
+            shutdownStarted = true;
             console.log(`\n${signal} received. Shutting down gracefully...`);
 
             try {
+                if (dbRetryTimer) {
+                    clearTimeout(dbRetryTimer);
+                    dbRetryTimer = null;
+                }
                 // Clean up timers (round or continuous)
                 if (process.env.CONTINUOUS_MODE === 'true') {
                     if (typeof continuousMode.cleanupTimers === 'function') {
                         continuousMode.cleanupTimers();
                         console.log('Cleaned up continuous mode timers');
                     }
-                } else if (typeof roundSystem.cleanupTimers === 'function') {
-                    roundSystem.cleanupTimers();
-                    console.log('Cleaned up round system timers');
                 }
                 // Cleanup shop rotation
                 if (typeof cleanupShopRotation === 'function') {
@@ -124,18 +202,7 @@ function setupGracefulShutdown() {
                     console.log('Cleaned up shop rotation timers');
                 }
 
-                // End any active round properly
-                if (process.env.CONTINUOUS_MODE !== 'true') {
-                    const activeRound = await roundSystem.getCurrentRound();
-                    if (activeRound) {
-                        console.log(`Ending active round ${activeRound.round_number} before shutdown...`);
-                        try {
-                            await roundSystem.endRound(client);
-                        } catch (e) {
-                            console.error('Error ending round on shutdown:', e);
-                        }
-                    }
-                }
+
 
                 // Destroy Discord client
                 if (client && !client.destroyed) {
@@ -153,50 +220,56 @@ function setupGracefulShutdown() {
     });
 }
 
-client.once('clientReady', async () => {
+client.once('clientReady', () => runSafely('clientReady', async () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
 
-    try {
-        // Warmup cache with shared data
+    // Keep each startup task isolated so one failure does not skip the rest.
+    await runStartupTask('cache warmup', async () => {
         console.log('Warming up cache...');
         await Promise.all([
             cache.warmupCompanies(Company),
             cache.warmupPlatforms(Platform)
         ]);
         console.log('Cache warmup complete');
+    });
 
-        // Load Shop catalog if enabled
+    await runStartupTask('shop catalog', async () => {
         if (process.env.SHOP_ENABLED === 'true') {
             await loadShopItems();
         }
+    });
 
-        // Initialize game mode
-
-        // Continuous mode (no rounds)
+    await runStartupTask('continuous mode', async () => {
         await continuousMode.initialize(client);
+    });
 
-        const data = await rest.put(
+    await runStartupTask('command registration', async () => {
+        await rest.put(
             Routes.applicationCommands(process.env.DISCORD_APP_ID),
             {body: commands}
         );
-        // Initialize Shop rotation
-
-        await initializeShopRotation();
-
-        setupGracefulShutdown();
         console.log("Registered Commands");
-    } catch (err) {
-        console.error('Error with commands:', err);
-    }
-});
+    });
 
-client.on('messageCreate', async (msg) => {
+    await runStartupTask('shop rotation', async () => {
+        await initializeShopRotation();
+    });
+
+    setupGracefulShutdown();
+}));
+
+// Node treats an EventEmitter `error` event without a listener as fatal.
+client.on('error', error => logError('discord client', error));
+client.on('shardError', error => logError('discord shard', error));
+client.on('warn', warning => console.warn('[discord warning]', warning));
+
+client.on('messageCreate', msg => runSafely('messageCreate', async () => {
     if (msg.author.bot) return;
 
     // Only update existing users' activity; do NOT auto-create here
     try {
-        const cached = cache.getUser(msg.author.id);
-        let existing = cached;
+
+        let existing = null;
         if (!existing) {
             existing = await User.findOne({discord_id: msg.author.id}).lean();
             if (existing) cache.setUser(msg.author.id, existing);
@@ -210,60 +283,111 @@ client.on('messageCreate', async (msg) => {
     } catch (_) {
     }
 
-    if (msg.content === '!ping') return msg.reply('pong');
-});
+    if (msg.content === '!ping') await msg.reply('pong');
+}));
 
-client.on('interactionCreate', async interaction => {
-    if (interaction.isChatInputCommand()) {
-        const commandName = interaction.commandName;
-        const command = client.commands.get(commandName);
-        if (!command) return;
+client.on('interactionCreate', interaction => runSafely('interactionCreate:commands', async () => {
+    try {
+        if (interaction.isChatInputCommand()) {
+            const commandName = interaction.commandName;
+            const command = client.commands.get(commandName);
+            if (!command) return;
 
-        // Gate commands: require verification except for /verify and /admin
-        if (commandName !== 'verify' && commandName !== 'admin') {
+            // make sure a database user doc exists (and update last_active/time)
+            let userDoc = null;
             try {
-                const cached = cache.getUser(interaction.user.id);
-                let userDoc = cached;
-                if (!userDoc) {
-                    userDoc = await User.findOne({discord_id: interaction.user.id}).lean();
-                    if (userDoc) cache.setUser(interaction.user.id, userDoc);
+                userDoc = await ensureUserExists(interaction.user);
+            } catch (e) {
+                console.error('ensureUserExists error:', e);
+            }
+
+            // Gate commands: require verification except for /verify and /admin
+            if (commandName !== 'verify' && commandName !== 'admin') {
+                try {
+                    if (!userDoc) {
+                        return safeInteractionReply(interaction, {
+                            content: 'You need to complete verification before using this command. Please run `/verify` first.',
+                            ephemeral: true,
+                        });
+                    } else {
+                        // Touch last_active for verified users (ensureUserExists already did this but double-check)
+                        await User.updateOne({_id: userDoc._id}, {
+                            $set: {
+                                last_active: new Date(),
+                                discord_name: interaction.user.tag,
+                            },
+                        });
+                    }
+                } catch (e) {
+                    console.error('Verification gate error:', e);
+                    return safeInteractionReply(interaction, 'Error verifying user status. Please try again.');
                 }
-                if (!userDoc) {
-                    return interaction.reply({
-                        content: 'You need to complete verification before using this command. Please run `/verify` first.',
+            }
+
+            if (
+                userDoc &&
+                userDoc.dashboard_channel_id &&
+                commandName !== 'verify' &&
+                commandName !== 'admin'
+            ) {
+                if (interaction.channelId !== userDoc.dashboard_channel_id) {
+                    return safeInteractionReply(interaction, {
+                        content: `Please use your personal dashboard channel <#${userDoc.dashboard_channel_id}> for commands.`,
                         ephemeral: true,
                     });
-                } else {
-                    // Touch last_active for verified users
-                    await User.updateOne({_id: userDoc._id}, {
-                        $set: {
-                            last_active: new Date(),
-                            discord_name: interaction.user.tag
+                }
+            }
+
+            // log the action before executing so we don't miss it if command errors
+            try {
+                const { logAction } = require('./utils/logUtils');
+                let actionDesc = `/${commandName}`;
+
+                function describeOpts(opts) {
+                    if (!opts || !opts.length) return '';
+                    const pieces = [];
+                    for (const o of opts) {
+                        // subcommand or group
+                        if (o.type === 1 || o.type === 2) {
+                            pieces.push(o.name);
+                            if (o.options) {
+                                const nested = describeOpts(o.options);
+                                if (nested) pieces.push(nested);
+                            }
+                        } else {
+                            pieces.push(`${o.name}:${o.value}`);
                         }
-                    });
+                    }
+                    return pieces.join(' ');
+                }
+                const opts = interaction.options?.data || [];
+                const optsDesc = describeOpts(opts);
+                if (optsDesc) actionDesc += ' ' + optsDesc;
+
+                if (userDoc && userDoc._id) {
+                    await logAction(userDoc._id, actionDesc);
                 }
             } catch (e) {
-                console.error('Verification gate error:', e);
-                return interaction.reply({content: 'Error verifying user status. Please try again.', ephemeral: true});
+                console.error('Error logging action:', e);
             }
-        }
 
-        try {
-            await command.execute(interaction);
-        } catch (err) {
-            console.error(err);
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({content: 'There was an error executing this command.', ephemeral: true});
-            } else {
-                await interaction.reply({
-                    content: 'There was an error executing this command.',
-                    ephemeral: true,
-                });
+            try {
+                await command.execute(interaction);
+            } catch (err) {
+                console.error(err);
+                await safeInteractionReply(interaction, 'There was an error executing this command.');
             }
+        } else if (interaction.isButton() || interaction.isStringSelectMenu()) {
+            console.log(`Component interaction: ${interaction.customId}`);
         }
-    } else if (interaction.isButton() || interaction.isStringSelectMenu()) {
-        console.log(`Component interaction: ${interaction.customId}`);
+    } catch (error) {
+        logError('interactionCreate', error);
+        if (interaction?.isRepliable?.()) {
+            await safeInteractionReply(interaction, 'An error occurred while processing that interaction.');
+        }
     }
-});
+}));
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_TOKEN).catch(error => {
+    logError('discord login', error);
+});

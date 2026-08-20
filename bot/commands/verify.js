@@ -5,10 +5,10 @@ const {
     EmbedBuilder,
     ButtonStyle,
     ComponentType,
+    ChannelType,
+    PermissionFlagsBits,
 } = require('discord.js');
 const User = require('../../models/Users');
-// The following models may be used in future slides/interactions
-// Keeping imports to match project style and potential use
 const Vulnerability = require('../../models/Vulnerabilities');
 const Trade = require('../../models/Trades');
 
@@ -32,21 +32,16 @@ const slides = [
     {
         title: 'Reporting Vulnerabilities (/report)',
         content:
+            "Optional Commands: `/report vulnerability:<id>`, `/report company:<name>`, and `/report voucher:<user>`.\n" +
             "Once you've found a vulnerability via `/search`, it's time to report it.\n" +
             "• Use `/report` to submit your findings to the affected company.\n" +
             "• You can select a company and a vulnerability you've discovered from the menus.\n" +
             "• Companies on different platforms  may offer different reward structures.",
     },
     {
-        title: 'Proof of Concepts (/submitpoc)',
-        content:
-            "Sometimes a simple report isn't enough. A Proof of Concept (PoC) proves the impact.\n" +
-            "• Use `/submitpoc` to provide detailed steps and evidence for a vulnerability.\n" +
-            "• Successful PoCs can increase your rewards and reputation.",
-    },
-    {
         title: 'Checking Vulnerability Info (/info)',
         content:
+            "Optional filters: `identifier:<id>`, `reported`, `resolved`, `exploited`, and `exclude_self_reported`.\n" +
             "Need to see the details of what you've found?\n" +
             "• Use `/info` to view technical details, reported status, and expiration times for vulnerabilities you have access to.\n" +
             "• You can filter by reported or resolved status to keep track of your work.",
@@ -54,44 +49,39 @@ const slides = [
     {
         title: 'Exploiting for Profit (/exploit)',
         content:
+            "Subcommands: `/exploit start`, `/exploit collect`, `/exploit stop`, and `/exploit list`.\n" +
+            "Optional: add `identifier:<id>` to start, collect, or stop a specific vulnerability.\n" +
             "If you're feeling risky, you can exploit vulnerabilities for passive income.\n" +
             "• Use `/exploit start` to begin earning money every minute from an unpatched bug.\n" +
             "• Use `/exploit collect` to gather your earnings—but beware, there's a risk of being caught!\n" +
             "• If caught, you'll face heavy fines. Use `/exploit stop` to cease operations .",
     },
+   {
+       title: 'Trading with Others (/trade)',
+       content:
+           "Collaborate or barter with other researchers.\n" +
+           "• Use `/trade @user` to propose a swap of vulnerabilities or money.\n" +
+           "• Both parties must confirm the trade for it to be completed.",
+   },
     {
-        title: 'Your Profile and Stats (/profile)',
+        title: 'Shop, Profile, and Trading',
         content:
-            "Keep track of your progress as a security researcher.\n" +
-            "• Use `/profile` to view your total reports, balance, reputation points, and a preview of your inventory.\n" +
-            "• Your balance and reputation are key to your standing in HexaHive.",
-    },
-    {
-        title: 'The Shop (/shop)',
-        content:
-            "Spend your hard-earned money to boost your capabilities.\n" +
-            "• Use `/shop list` to see available items like tools, merch, and consumables.\n" +
-            "• Use `/shop buy` to purchase items that can double rewards, help discovery, or provide company-specific bonuses.\n" +
-            "• Use `/shop inventory` to see everything you own.",
-    },
-    {
-        title: 'Trading with Others (/trade)',
-        content:
-            "Collaborate or barter with other researchers.\n" +
-            "• Use `/trade @user` to propose a swap of vulnerabilities or money.\n" +
-            "• Both parties must confirm the trade for it to be completed.",
+            "Shop subcommands: `/shop list` and `/shop buy`.\n" +
+            "Optional: `/shop list type:<merch|tool>` filters items.\n" +
+            "Optional: `/shop buy item_key:<key> company:<name> qty:<number>` supports company items and stackable items.\n" +
+            "Use `/profile` for stats and leaderboard placements, `/summary` for your vulnerability history, and `/trade user:<player>` to trade.",
     },
     {
         title: 'Getting Help (/help)',
         content:
-            "Forgotten a command? Need a quick refresher?\n" +
+            "Forgotten a command? Need a quick refresher? See other available command?\n" +
             "• Use `/help` for a general overview of all available commands.\n" +
             "• This tutorial can always be restarted with `/verify` if you need a deeper dive.",
     },
     {
         title: 'Final Rules',
         content:
-            "General rules for a healthy community:\n" +
+            "General rules for the community:\n" +
             "• No harassment, spam, or abuse.\n" +
             "• Follow moderators' instructions.\n" +
             "• When in doubt, ask for guidance in the support channels.\n\n" +
@@ -199,13 +189,54 @@ module.exports = {
                         }
                     }, 5000);
                 } else {
-                    // Complete and verify: add user to DB if not exists
+                    // Complete and verify: add user to DB if not exists, create dashboard channel if needed
                     try {
-                        const existing = await User.findOne({discord_id: userId});
+                        let existing = await User.findOne({discord_id: userId});
                         if (!existing) {
-                            await User.create({discord_id: userId, discord_name: userTag});
+                            existing = await User.create({discord_id: userId, discord_name: userTag});
+                            const role = await message.guild.roles.cache.find(r=> r.name==="playtest");
+                            const member = await message.guild.members.fetch(userId);
+                            await member.roles.add(role);
+                            console.log(`Added role ${role.name} to ${member.user.tag}`);
                         } else {
                             existing.last_active = new Date();
+                            await existing.save();
+                        }
+
+                        // if user doesn't already have a dashboard channel, create one
+                        if (!existing.dashboard_channel_id && interaction.guild) {
+                            // find or create category
+                            let category = interaction.guild.channels.cache.find(c =>
+                                c.name === 'dashboard' && c.type === ChannelType.GuildCategory);
+                            if (!category) {
+                                category = await interaction.guild.channels.create({
+                                    name: 'dashboard',
+                                    type: ChannelType.GuildCategory,
+                                    permissionOverwrites: [
+                                        { id: interaction.guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+                                    ],
+                                });
+                            }
+
+                            // make unique channel name
+                            let chanName = `dashboard-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9\-]/g, '').slice(0, 80);
+                            // ensure no duplicate
+                            if (interaction.guild.channels.cache.some(c => c.name === chanName)) {
+                                chanName += `-${userId.slice(-4)}`;
+                            }
+
+                            const privateChannel = await interaction.guild.channels.create({
+                                name: chanName,
+                                type: ChannelType.GuildText,
+                                parent: category.id,
+                                permissionOverwrites: [
+                                    { id: interaction.guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+                                    { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+                                    { id: interaction.client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+                                ],
+                            });
+
+                            existing.dashboard_channel_id = privateChannel.id;
                             await existing.save();
                         }
                     } catch (dbErr) {
@@ -214,11 +245,17 @@ module.exports = {
                     }
 
                     userProgress.delete(userId);
+                    let description = 'You have completed the tutorial. You are now verified and have been added to the system (if not already).';
+                    // if we stored channel id, mention it
+                    const fresh = await User.findOne({discord_id: userId});
+                    if (fresh && fresh.dashboard_channel_id) {
+                        description += `\n\nYour personal dashboard channel has been created: <#${fresh.dashboard_channel_id}>. ` +
+                            'Please use that channel to issue commands going forward.';
+                    }
+
                     const doneEmbed = new EmbedBuilder()
                         .setTitle('Verification Complete')
-                        .setDescription(
-                            'You have completed the tutorial. You are now verified and have been added to the system (if not already).'
-                        );
+                        .setDescription(description);
                     await i.update({
                         embeds: [doneEmbed],
                         components: [
@@ -235,6 +272,7 @@ module.exports = {
                     collector.stop('completed');
                 }
             });
+
 
             collector.on('end', async () => {
 

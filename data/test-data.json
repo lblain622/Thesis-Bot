@@ -300,7 +300,6 @@
     "recoveryPotential": "User"
   },
   {
-    "id": "CVE-2024-3007",
     "description": "A cryptographic key reuse flaw enables full compromise of encrypted communications.",
     "volun_type": "Cryptographic",
     "severity": "HIGH",

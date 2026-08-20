@@ -20,27 +20,66 @@ async function generateDictatorOffer(client, report, discordUser) {
 
     const min = matchingTier?.min_value || 100;
     const max = matchingTier?.max_value || 500;
-    let base = Math.floor(Math.random() * (max - min + 1)) + min;
+    // keep track of the starting base value for breakdown
+    const baseRand = Math.floor(Math.random() * (max - min + 1)) + min;
+    let base = baseRand;
+    let voucherShare = 0;
+    let voucherDoc = null;
+    if (report.VouchingUser) {
+        voucherDoc = await Users.findById(report.VouchingUser).lean();
+    }
+
+    // bonus breakdown structure (applies to base)
+    const bonusDetails = {
+        company: 0,
+        constant: 0,
+        luckyToken: 0
+    };
 
     // Apply shop effects: company bonus and lucky token (affect monetary parts)
     let notes = [];
+    const repThresh = company.reputation_threshold || 0;
+    if (voucherDoc && repThresh > 0) {
+        const user = await Users.findById(report.user_id).lean();
+        const userMeets = user && (user.reputation || 0) >= repThresh;
+        const voucherMeets = (voucherDoc.reputation || 0) >= repThresh;
+        if (userMeets || voucherMeets) {
+            const pct = Number(process.env.VOUCHER_SHARE_PCT || 20);
+            voucherShare = Math.floor(base * (pct / 100));
+            if (voucherShare > 0) {
+                base -= voucherShare;
+                notes.push(`$${voucherShare} reserved for voucher (${voucherDoc.username || voucherDoc.discord_id})`);
+            }
+        }
+    }
+
     try {
         const user = await Users.findById(report.user_id).lean();
         if (user) {
             const inv = await fetchInventoryItems(user);
             const bonusPct = computeCompanyBonusPct(inv, company._id);
             if (bonusPct > 0) {
-                const bonusAmt = Math.floor(base * (bonusPct / 100));
+                const bonusAmt = Math.floor(baseRand * (bonusPct / 100));
+                bonusDetails.company = bonusAmt;
                 base += bonusAmt; // scale base so both options scale
                 notes.push(`+${bonusPct}% company bonus`);
             }
             const luck = await maybeConsumeLuckyToken(user._id);
             if (luck.triggered) {
+                bonusDetails.luckyToken = base;
                 base *= 2;
                 notes.push('Lucky Token doubled payout');
             }
         }
     } catch (_) {
+    }
+
+    // constant reporting bonus (flat)
+    const CONSTANT_REPORT_BONUS = Number(process.env.CONSTANT_REPORT_BONUS || 0);
+    if (CONSTANT_REPORT_BONUS) {
+        bonusDetails.constant = CONSTANT_REPORT_BONUS;
+        base += CONSTANT_REPORT_BONUS;
+        notes.push(`+ $${CONSTANT_REPORT_BONUS} report bonus`);
     }
 
     // Optionally attach an item and reduce cash (applies to both options)
@@ -87,12 +126,20 @@ async function generateDictatorOffer(client, report, discordUser) {
         company_id: company._id,
         report_id: report._id,
         user_id: report.user_id,
+        base_amount: baseRand,
+        bonus_details: bonusDetails,
+        original_amount: options.option1.money + voucherShare,
+        offered_amount: options.option1.money,
+        offer_percent: 100,
+        reputation_offered: options.option1.rep,
         dictator_options: options,
         status: 'pending',
         created_at: new Date(),
-        expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+        expires_at: new Date(Date.now() + 10 * 60 * 1000),
         items: attachedItems,
         cash_reduction_reason: reductionReason,
+        voucher_user_id: voucherDoc?._id || null,
+        voucher_amount: voucherShare,
     });
 
     // 20% chance to grant a Merchant Hat for this company if not owned
@@ -108,29 +155,45 @@ async function generateDictatorOffer(client, report, discordUser) {
     const itemsLine = attachedItems.length
         ? `\nIncluded Item${attachedItems.length > 1 ? 's' : ''}: ` + attachedItems.map(ai => ai.name || '1x bonus item').join(', ')
         : '';
-    await discordUser.send({
-        content:
-            `Offer from ${company.name}\n Report\n` +
-            `Option 1: $${options.option1.money} + ${options.option1.rep} reputation\n` +
-            `Option 2: $${options.option2.money} + ${options.option2.rep} reputation` +
-            (reductionReason ? `\nNote: Cash reduced due to item bonus.` : '') +
-            (notes.length ? `\nApplied: ${notes.join(', ')}` : '') +
-            itemsLine +
-            `${grantMsg}\n\n` +
-            `Please choose one:`,
-        components: [
-            new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`dictator_option1_${offer._id}`)
-                    .setLabel('Choose Option 1')
-                    .setStyle(ButtonStyle.Success),
-                new ButtonBuilder()
-                    .setCustomId(`dictator_option2_${offer._id}`)
-                    .setLabel('Choose Option 2')
-                    .setStyle(ButtonStyle.Primary)
-            ),
-        ],
-    });
+    
+    // build breakdown for the base payout
+    let breakdown = `\n\n**Breakdown:**\n` +
+        `• Base payout: $${baseRand}`;
+    if (bonusDetails.company) breakdown += `\n• Company bonus: +$${bonusDetails.company}`;
+    if (bonusDetails.constant) breakdown += `\n• Reporting bonus: +$${bonusDetails.constant}`;
+    if (bonusDetails.luckyToken) breakdown += `\n• Lucky token added (payout doubled)`;
+
+    const messageContent = `${discordUser} 🎲 **Dictator Offer from ${company.name}**\n` +
+        `Report received. Choose one option:\n` +
+        `Option 1: $${options.option1.money} + ${options.option1.rep} reputation\n` +
+        `Option 2: $${options.option2.money} + ${options.option2.rep} reputation` +
+        breakdown +
+        (reductionReason ? `\nNote: Cash reduced due to item bonus.` : '') +
+        (notes.length ? `\nApplied: ${notes.join(', ')}` : '') +
+        itemsLine +
+        `${grantMsg}\n\n` +
+        `Please choose one:`;
+
+    try {
+        // Send notification to the user's server dashboard channel only.
+        const { notifyUser } = require('./logUtils');
+        await notifyUser(client, report.user_id, messageContent, {
+            components: [
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`dictator_option1_${offer._id}`)
+                        .setLabel('Choose Option 1')
+                        .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId(`dictator_option2_${offer._id}`)
+                        .setLabel('Choose Option 2')
+                        .setStyle(ButtonStyle.Primary)
+                ),
+            ],
+        });
+    } catch (e) {
+        console.error('Dictator offer notification failed:', e);
+    }
 }
 
 module.exports = generateDictatorOffer;

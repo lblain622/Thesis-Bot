@@ -21,7 +21,12 @@ const companySchema = new Schema({
     preferred_vulns: [{
         type: String,
         enum: ['XSS', 'SQLi', 'CSRF', 'RCE', 'IDOR', 'Authentication', 'Authorization',
-               'Information_Disclosure', 'Business_Logic', 'Cryptographic', 'Other']
+               'Information_Disclosure', 'Business_Logic', 'Cryptographic', 'Other',
+               'Authentication_Bypass', 'Buffer_Overflow', 'Command_Injection',
+               'Cross_Site_Scripting', 'Denial_of_Service', 'Insecure_Deserialization',
+               'Open_Redirect', 'Path_Traversal', 'Privilege_Escalation',
+               'Race_Condition', 'Remote_Code_Execution', 'SQL_Injection', 'SSRF',
+               'XML_External_Entity']
     }],
     // Reputation bonus multipliers
     reputation_tiers: [{
@@ -37,7 +42,12 @@ const companySchema = new Schema({
     bounty_tiers: [{
         type: Schema.Types.ObjectId,
         ref: 'Bounty_tiers'
-    }]
+    }],
+    // minimum reputation required to submit reports / receive offers
+    reputation_threshold: {
+        type: Number,
+        default: 0
+    }
 }, { timestamps: true });
 
 module.exports = model('Company', companySchema);

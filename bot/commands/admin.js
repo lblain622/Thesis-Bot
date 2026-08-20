@@ -4,12 +4,6 @@ const {
     PermissionFlagsBits,
     EmbedBuilder
 } = require('discord.js');
-const {
-    generateDailyVulnerabilities,
-    endRound,
-    announceNewRound,
-    startRound: startRoundScheduler
-} = require('../utils/roundSystem');
 const {announceVulnerabilityPatched} = require('../events/announcePatches');
 const Vulnerability = require('../../models/Vulnerabilities');
 const User = require('../../models/Users');
@@ -18,6 +12,8 @@ const Company = require('../../models/Company');
 const Round = require('../../models/Round');
 const Exploit = require('../../models/Exploit');
 const {clearCollections, loadInitialData} = require('../utils/loadData');
+const AnnouncementChannels = require('../../models/AnnouncementChannels');
+const {getAnnouncementChannelConfig} = require('../utils/announcementUtils');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -26,38 +22,43 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(subcommand =>
             subcommand
-                .setName('startround')
-                .setDescription('Start a new round and generate vulnerabilities')
-                .addChannelOption(option =>
-                    option.setName('channel')
-                        .setDescription('Channel to announce in')
-                        .setRequired(true)
-                )
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('endround')
-                .setDescription('End current round and show summary')
-                .addChannelOption(option =>
-                    option.setName('channel')
-                        .setDescription('Channel to announce in')
-                        .setRequired(true)
-                )
-        )
-        .addSubcommand(subcommand =>
-            subcommand
                 .setName('stats')
                 .setDescription('View bot statistics')
         )
         .addSubcommand(subcommand =>
             subcommand
                 .setName('setannounce')
-                .setDescription('Set announcement channel')
+                .setDescription('Set announcement channels for different types')
                 .addChannelOption(option =>
-                    option.setName('channel')
-                        .setDescription('Channel for announcements')
-                        .setRequired(true)
+                    option.setName('vulnerabilities')
+                        .setDescription('Channel for vulnerability announcements')
+                        .setRequired(false)
                 )
+                .addChannelOption(option =>
+                    option.setName('trades')
+                        .setDescription('Channel for trade notifications')
+                        .setRequired(false)
+                )
+                .addChannelOption(option =>
+                    option.setName('offers')
+                        .setDescription('Channel for offer notifications')
+                        .setRequired(false)
+                )
+                .addChannelOption(option =>
+                    option.setName('exploits')
+                        .setDescription('Channel for exploit announcements')
+                        .setRequired(false)
+                )
+                .addChannelOption(option =>
+                    option.setName('general')
+                        .setDescription('Default channel for general announcements')
+                        .setRequired(false)
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('viewannounce')
+                .setDescription('View current announcement channel configuration')
         )
         .addSubcommand(subcommand =>
             subcommand
@@ -83,6 +84,21 @@ module.exports = {
             subcommand
                 .setName('resetdata')
                 .setDescription('Reset all collections and reload seed data (DANGEROUS)')
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('resolveall')
+                .setDescription('Force-resolve all reported vulnerabilities (debug)')
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('runperiodic')
+                .setDescription('Manually trigger periodic leaderboard/grant tasks')
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('timers')
+                .setDescription('Show status of internal continuous timers')
         ),
 
 
@@ -98,17 +114,14 @@ module.exports = {
         }
 
         switch (subcommand) {
-            case 'startround':
-                await startRoundCmd(interaction);
-                break;
-            case 'endround':
-                await endRoundCommand(interaction);
-                break;
             case 'stats':
                 await showStats(interaction);
                 break;
             case 'setannounce':
-                await setAnnounceChannel(interaction);
+                await setAnnounceChannels(interaction);
+                break;
+            case 'viewannounce':
+                await viewAnnounceChannels(interaction);
                 break;
             case 'listusers':
                 await listUsers(interaction);
@@ -121,6 +134,15 @@ module.exports = {
                 break;
             case 'resetdata':
                 await resetData(interaction);
+                break;
+            case 'resolveall':
+                await resolveAllVulns(interaction);
+                break;
+            case 'runperiodic':
+                await runPeriodic(interaction);
+                break;
+            case 'timers':
+                await showTimers(interaction);
                 break;
         }
     },
@@ -182,7 +204,7 @@ async function addUsersBulk(interaction) {
                 }
 
                 // Create new user
-                const newUser = await User.create({
+                await User.create({
                     discord_id: userId,
                     username: discordUser.username,
                     discord_name: discordUser.tag,
@@ -231,43 +253,9 @@ async function addUsersBulk(interaction) {
     }
 }
 
-async function startRoundCmd(interaction) {
-    await interaction.deferReply();
-
-    try {
-        const channel = interaction.options.getChannel('channel');
-
-        // Start the scheduled round system (enables auto-run after first admin start)
-        await startRoundScheduler(interaction.client, channel.id);
-
-        await interaction.editReply({
-            content: `New round started and scheduler enabled. Announcements in ${channel}.`
-        });
-    } catch (err) {
-        console.error(err);
-        await interaction.editReply('Error starting round.');
-    }
-}
-
-async function endRoundCommand(interaction) {
-    await interaction.deferReply();
-
-    try {
-        const channel = interaction.options.getChannel('channel');
-
-        // End round and show summary
-        await endRound(interaction.client, channel.id);
-
-        await interaction.editReply({
-            content: `   Round ended!\n\nSummary sent to ${channel}.`
-        });
-    } catch (err) {
-        console.error(err);
-        await interaction.editReply('  Error ending round.');
-    }
-}
 
 async function resolveAllVulns(interaction) {
+    // already defined earlier
     await interaction.deferReply();
 
     try {
@@ -283,8 +271,8 @@ async function resolveAllVulns(interaction) {
 
         // Close all active exploits
         await Exploit.updateMany(
-            {is_caught: false},
-            {$set: {is_caught: true}}
+            {status: 'Active'},
+            {$set: {status: 'Ended'}}
         );
 
         await interaction.editReply({
@@ -306,7 +294,7 @@ async function showStats(interaction) {
         const resolvedVulns = await Vulnerability.countDocuments({isResolved: true});
         const totalReports = await Report.countDocuments();
         const totalExploits = await Exploit.countDocuments();
-        const activeExploits = await Exploit.countDocuments({is_caught: false});
+        const activeExploits = await Exploit.countDocuments({status: 'Active'});
         const totalCompanies = await Company.countDocuments();
         const totalRounds = await Round.countDocuments();
 
@@ -338,21 +326,111 @@ async function showStats(interaction) {
     }
 }
 
-async function setAnnounceChannel(interaction) {
+async function setAnnounceChannels(interaction) {
     await interaction.deferReply();
 
     try {
-        const channel = interaction.options.getChannel('channel');
+        const guildId = interaction.guildId;
+        const channelsConfig = {
+            vulnerabilities: interaction.options.getChannel('vulnerabilities')?.id || null,
+            trades: interaction.options.getChannel('trades')?.id || null,
+            offers: interaction.options.getChannel('offers')?.id || null,
+            exploits: interaction.options.getChannel('exploits')?.id || null,
+            general: interaction.options.getChannel('general')?.id || null
+        };
 
-        // Store in environment or database
-        process.env.ANNOUNCE_CHANNEL_ID = channel.id;
-
-        await interaction.editReply({
-            content: ` Announcement channel set to ${channel}.`
+        // Remove null values to keep config clean
+        Object.keys(channelsConfig).forEach(key => {
+            if (channelsConfig[key] === null) {
+                delete channelsConfig[key];
+            }
         });
+
+        if (Object.keys(channelsConfig).length === 0) {
+            return await interaction.editReply({
+                content: '❌ Please specify at least one channel to configure.'
+            });
+        }
+
+        // Update database
+        const config = await AnnouncementChannels.findOneAndUpdate(
+            { guild_id: guildId },
+            {
+                guild_id: guildId,
+                $set: { channels: channelsConfig, updated_at: new Date() }
+            },
+            { upsert: true, new: true }
+        );
+
+        // Build response
+        const configuredChannels = Object.entries(config.channels)
+            .filter(([_, channelId]) => channelId)
+            .map(([type, channelId]) => `• **${type}**: <#${channelId}>`)
+            .join('\n');
+
+        const embed = new EmbedBuilder()
+            .setTitle('✅ Announcement Channels Configured')
+            .setColor('#00ff00')
+            .setDescription('The following channels have been set for announcements:\n\n' + configuredChannels)
+            .setFooter({text: 'Users will now receive notifications in these server channels instead of DMs.'})
+            .setTimestamp();
+
+        await interaction.editReply({ embeds: [embed] });
     } catch (err) {
-        console.error(err);
-        await interaction.editReply(' Error setting channel.');
+        console.error('Error setting announcement channels:', err);
+        await interaction.editReply({
+            content: '❌ Error configuring announcement channels. Check logs for details.'
+        });
+    }
+}
+
+async function viewAnnounceChannels(interaction) {
+    await interaction.deferReply();
+
+    try {
+        const guildId = interaction.guildId;
+        const config = await AnnouncementChannels.findOne({ guild_id: guildId });
+
+        if (!config || Object.keys(config.channels || {}).length === 0) {
+            return await interaction.editReply({
+                content: '❌ No announcement channels configured. Use `/admin setannounce` to configure them.'
+            });
+        }
+
+        const configuredChannels = Object.entries(config.channels)
+            .filter(([_, channelId]) => channelId)
+            .map(([type, channelId]) => `• **${type}**: <#${channelId}>`)
+            .join('\n');
+
+        const unconfiguredTypes = [
+            'vulnerabilities', 'trades', 'offers', 'exploits', 'general'
+        ].filter(type => !config.channels[type])
+            .join(', ');
+
+        const embed = new EmbedBuilder()
+            .setTitle('📋 Current Announcement Channel Configuration')
+            .setColor('#0099ff')
+            .addFields(
+                {
+                    name: 'Configured Channels',
+                    value: configuredChannels || 'None',
+                    inline: false
+                },
+                {
+                    name: 'Not Configured',
+                    value: unconfiguredTypes || 'All types configured!',
+                    inline: false
+                }
+            )
+            .setFooter({text: 'Use `/admin setannounce` to change these settings.'})
+            .setTimestamp();
+
+        await interaction.editReply({ embeds: [embed] });
+    } catch (err) {
+        console.error('Error viewing announcement channels:', err);
+        await interaction.editReply({
+            content: '❌ Error retrieving announcement channel configuration.'
+        });
     }
 }
 
@@ -394,23 +472,26 @@ async function showLeaderboard(interaction) {
             .addFields(
                 {
                     name: '💰 Top Earners',
-                    value: topEarners.map((u, idx) =>
-                        `${['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`} ${u.discord_name} - $${u.money_earned}`
-                    ).join('\n'),
+                    value: topEarners.map((u, idx) => {
+                        const rank = ['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`;
+                        return `${rank} ${u.discord_name} - $${u.money_earned}`;
+                    }).join('\n'),
                     inline: true
                 },
                 {
                     name: '📊 Top Reporters',
-                    value: topReporters.map((u, idx) =>
-                        `${['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`} ${u.discord_name} - ${u.reports_made} reports`
-                    ).join('\n'),
+                    value: topReporters.map((u, idx) => {
+                        const rank = ['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`;
+                        return `${rank} ${u.discord_name} - ${u.reports_made} reports`;
+                    }).join('\n'),
                     inline: true
                 },
                 {
                     name: '⭐ Top Reputation',
-                    value: topReputation.map((u, idx) =>
-                        `${['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`} ${u.discord_name} - ${u.repuation_earned} pts`
-                    ).join('\n'),
+                    value: topReputation.map((u, idx) => {
+                        const rank = ['🥇', '🥈', '🥉'][idx] || `${idx + 1}.`;
+                        return `${rank} ${u.discord_name} - ${u.reputation_earned} pts`;
+                    }).join('\n'),
                     inline: true
                 }
             )
@@ -420,5 +501,45 @@ async function showLeaderboard(interaction) {
     } catch (err) {
         console.error(err);
         await interaction.editReply('  Error generating leaderboard.');
+    }
+}
+
+// manual trigger for periodic tasks
+async function runPeriodic(interaction) {
+    await interaction.deferReply();
+    try {
+        const cont = require('../utils/continuousMode');
+        const success = await cont.triggerPeriodic();
+        if (success) {
+            await interaction.editReply('✅ Periodic tasks executed. Check announcements channel.');
+        } else {
+            await interaction.editReply('⚠️ Continuous mode not initialized yet.');
+        }
+    } catch (err) {
+        console.error('Error running periodic tasks:', err);
+        await interaction.editReply('❌ Failed to run periodic tasks.');
+    }
+}
+
+// display timer status
+async function showTimers(interaction) {
+    await interaction.deferReply({ephemeral: true});
+    try {
+        const cont = require('../utils/continuousMode');
+        const status = await cont.getTimerStatus();
+        const embed = new EmbedBuilder()
+            .setTitle('⏱️ Continuous Mode Timer Status')
+            .setColor('#00ffff')
+            .addFields(
+                { name: 'Generation', value: status.generation ? '🟢 active' : '🔴 off', inline: true },
+                { name: 'Sweep', value: status.sweep ? '🟢 active' : '🔴 off', inline: true },
+                { name: 'Tick', value: status.tick ? '🟢 active' : '🔴 off', inline: true },
+                { name: 'Leaderboard/Grants', value: status.leaderboard ? '🟢 active' : '🔴 off', inline: true }
+            )
+            .setTimestamp();
+        await interaction.editReply({ embeds: [embed] });
+    } catch (err) {
+        console.error('Error fetching timer status:', err);
+        await interaction.editReply('❌ Failed to retrieve timer status.');
     }
 }

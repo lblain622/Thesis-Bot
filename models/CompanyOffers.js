@@ -14,6 +14,19 @@ const companyOfferSchema = new Schema({
         type: Number,
         default: 0
     },
+    // base amount before any bonuses or modifiers were applied
+    base_amount: {
+        type: Number,
+        default: 0
+    },
+    bonus_details: {
+        company: { type: Number, default: 0 },
+        reputation: { type: Number, default: 0 },
+        preferred: { type: Number, default: 0 },
+        constant: { type: Number, default: 0 },
+        luckyToken: { type: Number, default: 0 },
+        itemCashReduction: { type: Number, default: 0 }
+    },
     offered_amount: {
         type: Number,
         default: 0
@@ -22,6 +35,7 @@ const companyOfferSchema = new Schema({
         type: Number,
         default: 0
     },
+    reputation_offered: Number,
     repuatation_offered: Number,
     status: {
         type: String,
@@ -52,15 +66,20 @@ const companyOfferSchema = new Schema({
     ],
     // Audit field to mark why cash was reduced, e.g., 'item_bonus'
     cash_reduction_reason: { type: String, default: null },
-    // Keep legacy fields for backward compatibility
+   
     resloved_at: Date,
     counter_offered: Number,
+    // fields for vouching payouts
+    voucher_user_id: { type: Schema.Types.ObjectId, ref: 'Users', default: null },
+    voucher_amount: { type: Number, default: 0 },
+
     // Canonical fields used by interaction handlers
     resolved_at: { type: Date, default: null },
     counter_offer: { type: Number, default: null },
 
-    resloved_at: Date,
-    counter_offered: Number,
+    // Spam prevention: track if user already responded to this offer
+    user_responded: { type: Boolean, default: false },
+    responded_at: { type: Date, default: null },
 
 }, { timestamps: true });
 

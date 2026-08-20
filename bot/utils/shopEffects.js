@@ -16,6 +16,7 @@ function aggSearchBoosts(entries) {
     let extraDiscover = 0;
     let extraFields = 0;
     let maxFieldsCap = 6; // default cap
+    let cooldownReductionPct = 0;
     for (const e of entries) {
         const eff = e.item.effects || {};
         const s = eff.search || {};
@@ -28,11 +29,15 @@ function aggSearchBoosts(entries) {
             extraFields += Number(s.extraFields) * stacks;
         }
         if (s.maxFieldsCap) maxFieldsCap = Math.max(maxFieldsCap, Number(s.maxFieldsCap));
+        if (s.cooldownReductionPct) {
+            cooldownReductionPct = Math.max(cooldownReductionPct, Number(s.cooldownReductionPct));
+        }
     }
     // reasonable bounds
     extraDiscover = Math.max(0, Math.min(extraDiscover, 3));
     extraFields = Math.max(0, Math.min(extraFields, 3));
-    return {extraDiscover, extraFields, maxFieldsCap};
+    cooldownReductionPct = Math.max(0, Math.min(cooldownReductionPct, 100));
+    return {extraDiscover, extraFields, maxFieldsCap, cooldownReductionPct};
 }
 
 function computeCompanyBonusPct(entries, companyId) {
@@ -87,8 +92,21 @@ async function grantMerchantHatIfMissing(userId, companyId) {
         });
         return true;
     } catch (e) {
+        console.error('Failed to grant merchant hat:', e);
         return false;
     }
+}
+
+function computeExploitPenaltyReduction(entries) {
+    let reduction = 0;
+    for (const e of entries) {
+        const eff = e.item.effects || {};
+        const exp = eff.exploit || {};
+        if (exp.penaltyReductionPct) {
+            reduction = Math.max(reduction, Number(exp.penaltyReductionPct));
+        }
+    }
+    return Math.max(0, Math.min(reduction, 100));
 }
 
 module.exports = {
@@ -97,4 +115,5 @@ module.exports = {
     computeCompanyBonusPct,
     maybeConsumeLuckyToken,
     grantMerchantHatIfMissing,
+    computeExploitPenaltyReduction,
 };

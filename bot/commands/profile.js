@@ -2,6 +2,17 @@ const {SlashCommandBuilder, EmbedBuilder} = require("discord.js");
 const User = require("../../models/Users");
 const cache = require("../utils/cache");
 
+function formatPlacement(rank, totalPlayers) {
+    if (!totalPlayers) return "No leaderboard data yet";
+
+    const mod100 = rank % 100;
+    const suffix = mod100 >= 11 && mod100 <= 13
+        ? "th"
+        : ({1: "st", 2: "nd", 3: "rd"}[rank % 10] || "th");
+
+    return `${rank}${suffix} out of ${totalPlayers}`;
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("profile")
@@ -10,20 +21,12 @@ module.exports = {
     async execute(interaction) {
         try {
 
-            let user = cache.getUser(interaction.user.id);
+            let user = null;
 
             if (!user) {
                 user = await User.findOne({discord_id: interaction.user.id}).lean();
 
-                if (!user) {
-                    user = await User.create({
-                        discord_id: interaction.user.id,
-                        username: interaction.user.username,
-                    });
-                }
 
-
-                cache.setUser(interaction.user.id, user);
             }
 
             // Fetch full user with inventory populated
@@ -38,6 +41,17 @@ module.exports = {
                     ephemeral: true,
                 });
             }
+
+            const totalPlayers = await User.countDocuments({});
+            const moneyRank = await User.countDocuments({
+                money_earned: {$gt: fullUser.money_earned || 0}
+            }) + 1;
+            const reputationRank = await User.countDocuments({
+                reputation_earned: {$gt: fullUser.reputation_earned || 0}
+            }) + 1;
+            const reportsRank = await User.countDocuments({
+                reports_made: {$gt: fullUser.reports_made || 0}
+            }) + 1;
 
             const inv = Array.isArray(fullUser.inventory) ? fullUser.inventory : [];
             const previewMax = 10;
@@ -55,14 +69,33 @@ module.exports = {
                 .setThumbnail(interaction.user.displayAvatarURL())
                 .addFields(
                     {name: "Reports Submitted", value: `${user.reports_made || 0} reports`, inline: true},
-                    {name: "Balance", value: `$${user.money_earned || 0}`, inline: true},
-                    {name: "Reputation Given", value: `${user.reputation_earned || 0} points`, inline: true}
+                    {name: "Balance", value: `$${user.balance || 0}`, inline: true},
+                    {name: "Reputation Given", value: `${user.reputation_earned || 0} points`, inline: true},
+                    {
+                        name: "Leaderboard Placement",
+                        value: [
+                            `Money Earned: ${formatPlacement(moneyRank, totalPlayers)}`,
+                            `Reputation: ${formatPlacement(reputationRank, totalPlayers)}`,
+                            `Reports: ${formatPlacement(reportsRank, totalPlayers)}`
+                        ].join("\n"),
+                        inline: false
+                    }
                 );
+            
+            // Show penalties
+            const totalPenalties = (fullUser.penalties || []).reduce((sum, p) => sum + (p.amount || 0), 0);
+            if (totalPenalties > 0) {
+                embdVar.addFields({name: "Total Penalties", value: `$${totalPenalties} in fines`});
+                const recentPenalties = (fullUser.penalties || []).slice(-5).map(p => `• $${p.amount} - ${p.reason} (${p.vuln_type || ''})`).join('\n');
+                if (recentPenalties) {
+                    embdVar.addFields({name: "Recent Penalties", value: recentPenalties});
+                }
+            }
 
             if (preview.length) {
                 let invText = preview.join("\n");
                 const extra = Math.max(0, inv.length - previewMax);
-                if (extra > 0) invText += `\n+${extra} more — use /shop inventory for details`;
+                if (extra > 0) invText += `\n+${extra} more — use /inventory for details`;
 
                 embdVar.addFields({name: "Inventory", value: invText});
             }
