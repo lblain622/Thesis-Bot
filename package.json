@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "seed": "node bot/utils/loadData.js",
     "check": "npm run lint && npm run syntax",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
