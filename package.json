@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "check": "npm run lint && npm run syntax",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
+    "syntax": "node scripts/check-syntax.js",
     "start": "node bot/index.js"
   },
   "author": "",

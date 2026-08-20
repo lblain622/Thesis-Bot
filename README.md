@@ -17,10 +17,20 @@ Quick start:
 npm install
 ```
 
-2. Configure environment / database settings in `config/database.js` or via environment variables.
+2. Copy `.env.example` to `.env`, then set `DISCORD_TOKEN`, `DISCORD_APP_ID`, and `MONGO_URI`.
 
 3. Run the bot locally:
 
 ```bash
-node bot/index.js
+npm start
 ```
+
+Before committing changes, run the repository checks:
+
+```bash
+npm run check
+```
+
+## Player workflow
+
+Players begin with `/verify`, use `/search` and `/info` to find opportunities, then choose whether to `/report` or `/exploit`. The `/help` command provides the full guided flow inside Discord.

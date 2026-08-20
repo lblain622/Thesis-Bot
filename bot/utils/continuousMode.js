@@ -498,7 +498,11 @@ async function periodicTasks(client) {
 async function initialize(client) {
     clientRef = client;
     if (!genTimeout) await scheduleNextGeneration();
-    if (!sweepInterval) sweepInterval = setInterval(sweepExpirations, SWEEP_MS);
+    if (!sweepInterval) {
+        sweepInterval = setInterval(() => {
+            sweepExpirations().catch(e => console.error('Continuous expiration sweep error:', e));
+        }, SWEEP_MS);
+    }
     // On start, sweep immediately to normalize state
     await sweepExpirations();
     // Start 1-minute checker

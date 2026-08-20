@@ -112,6 +112,21 @@ async function buyItem(interaction) {
 
         // Pre-calc desired quantity for stock and cost
         let qty = item.stackable ? Math.max(1, qtyArg) : 1;
+        const cost = Number(item.price) * qty;
+        const currentBalance = Number(user.balance || 0);
+
+        if (!Number.isSafeInteger(cost) || cost < 0) {
+            return interaction.editReply({content: 'This item has an invalid price. Please contact an administrator.'});
+        }
+
+        // Give an immediate, useful response. The conditional debit below remains
+        // the authoritative check in case two purchases happen at the same time.
+        if (currentBalance < cost) {
+            return interaction.editReply({
+                content: `You cannot afford ${qty}x ${item.name}. You need $${cost}, but your balance is $${currentBalance}.`,
+                components: []
+            });
+        }
 
         let selectedCompany = null;
         let companyId = null;
@@ -138,6 +153,7 @@ async function buyItem(interaction) {
         }
 
         // Enforce rotation membership and stock when enabled
+        let reservedStock = null;
         if (process.env.SHOP_ROTATE_ENABLED === 'true') {
             const rotation = await getActiveRotation();
             const inRotation = (rotation.item_ids || []).some(id => String(id) === String(item._id));
@@ -146,24 +162,38 @@ async function buyItem(interaction) {
             const dayKey = getDayKey();
             const capDefault = Number(process.env.SHOP_DAILY_CAP_DEFAULT || 50);
             // Upsert stock doc if absent
-            let st = await ItemStock.findOneAndUpdate(
+            const st = await ItemStock.findOneAndUpdate(
                 {item_id: item._id, dayKey},
                 {$setOnInsert: {item_id: item._id, dayKey, cap: capDefault, sold: 0}},
                 {upsert: true, new: true}
             );
             const want = qty;
-            if ((st.sold + want) > (st.cap ?? capDefault)) {
+            const stockUpdate = await ItemStock.updateOne(
+                {_id: st._id, sold: {$lte: (st.cap ?? capDefault) - want}},
+                {$inc: {sold: want}}
+            );
+            if (stockUpdate.modifiedCount !== 1) {
                 return interaction.editReply({content: 'This item is out of stock for today. Check back after the daily reset.', components: []});
             }
-            // Reserve stock
-            await ItemStock.updateOne({_id: st._id, sold: st.sold}, {$inc: {sold: want}});
+            reservedStock = {id: st._id, qty: want};
         }
 
-        const cost = item.price * qty;
-        if ((user.balance || 0) < cost) {
-            return interaction.editReply({content: `You do not have enough balance to buy ${qty}x ${item.name}. You need $${cost}, but you have $${user.balance || 0}.`, components: []});
+        // Debit only when the balance is still sufficient. This single database
+        // operation prevents concurrent purchases from taking the balance below 0.
+        const debit = await Users.updateOne(
+            {_id: user._id, balance: {$gte: cost}},
+            {$inc: {balance: -cost}}
+        );
+        if (debit.modifiedCount !== 1) {
+            if (reservedStock) {
+                await ItemStock.updateOne({_id: reservedStock.id}, {$inc: {sold: -reservedStock.qty}});
+            }
+            const freshUser = await Users.findById(user._id).select('balance').lean();
+            return interaction.editReply({
+                content: `You cannot afford ${qty}x ${item.name}. You need $${cost}, but your balance is $${Number(freshUser?.balance || 0)}.`,
+                components: []
+            });
         }
-        await Users.updateOne({_id: user._id}, {$inc: {balance: -cost}});
  
         const existingIdx = (user.inventory || []).findIndex(e => String(e.item_id) === String(item._id) && String(e.company_id || '') === String(companyId || ''));
         if (existingIdx >= 0) {

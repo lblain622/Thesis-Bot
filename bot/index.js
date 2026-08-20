@@ -13,6 +13,10 @@ const {initializeShopRotation, cleanupShopRotation} = require('./utils/shopRotat
 const Company = require('../models/Company');
 const Platform = require('../models/Platform');
 
+const DB_RETRY_MS = Math.max(1000, Number(process.env.DB_RETRY_MS) || 30_000);
+let dbRetryTimer = null;
+let shutdownStarted = false;
+
 function logError(context, error) {
     console.error(`[${context}]`, error?.stack || error);
 }
@@ -34,12 +38,19 @@ async function safeInteractionReply(interaction, message) {
 }
 
 function executeEventSafely(event, args) {
-    Promise.resolve(event.execute(...args, client)).catch(error => {
+    // Starting from an already-resolved promise also catches synchronous throws.
+    Promise.resolve().then(() => event.execute(...args, client)).catch(error => {
         logError(`event:${event.name}`, error);
         const interaction = args[0];
         if (interaction?.isRepliable?.()) {
-            safeInteractionReply(interaction, 'An error occurred while processing that interaction.');
+            return safeInteractionReply(interaction, 'An error occurred while processing that interaction.');
         }
+    });
+}
+
+function runSafely(context, task) {
+    return Promise.resolve().then(task).catch(error => {
+        logError(context, error);
     });
 }
 
@@ -65,7 +76,6 @@ process.on('uncaughtException', error => {
 const client = new Client({
     intents:
         [
-            GatewayIntentBits.Guilds,
             GatewayIntentBits.Guilds,
             GatewayIntentBits.GuildMessages,
             GatewayIntentBits.MessageContent,
@@ -111,11 +121,29 @@ for (const file of eventFiles) {
 
 
 const rest = new REST({version: '10'}).setToken(process.env.DISCORD_TOKEN);
-connectDB().then(connected => {
-    if (!connected) {
-        console.warn('Bot will continue running, but database-backed commands may fail until MongoDB is available.');
+
+async function connectDatabaseWithRetry() {
+    const connected = await connectDB().catch(error => {
+        logError('connectDB', error);
+        return false;
+    });
+
+    if (connected) {
+        if (dbRetryTimer) clearTimeout(dbRetryTimer);
+        dbRetryTimer = null;
+        return;
     }
-}).catch(error => logError('connectDB', error));
+
+    console.warn(`Database unavailable; retrying in ${Math.round(DB_RETRY_MS / 1000)} seconds.`);
+    if (!dbRetryTimer && !shutdownStarted) {
+        dbRetryTimer = setTimeout(() => {
+            dbRetryTimer = null;
+            runSafely('database reconnect', connectDatabaseWithRetry);
+        }, DB_RETRY_MS);
+    }
+}
+
+runSafely('initial database connection', connectDatabaseWithRetry);
 
 // Ensure a Discord user exists in the database; create if not, update last_active/name if yes
 async function ensureUserExists(discordUser) {
@@ -152,9 +180,15 @@ function setupGracefulShutdown() {
 
     shutdownSignals.forEach(signal => {
         process.on(signal, async () => {
+            if (shutdownStarted) return;
+            shutdownStarted = true;
             console.log(`\n${signal} received. Shutting down gracefully...`);
 
             try {
+                if (dbRetryTimer) {
+                    clearTimeout(dbRetryTimer);
+                    dbRetryTimer = null;
+                }
                 // Clean up timers (round or continuous)
                 if (process.env.CONTINUOUS_MODE === 'true') {
                     if (typeof continuousMode.cleanupTimers === 'function') {
@@ -186,7 +220,7 @@ function setupGracefulShutdown() {
     });
 }
 
-client.once('clientReady', async () => {
+client.once('clientReady', () => runSafely('clientReady', async () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
 
     // Keep each startup task isolated so one failure does not skip the rest.
@@ -222,9 +256,14 @@ client.once('clientReady', async () => {
     });
 
     setupGracefulShutdown();
-});
+}));
 
-client.on('messageCreate', async (msg) => {
+// Node treats an EventEmitter `error` event without a listener as fatal.
+client.on('error', error => logError('discord client', error));
+client.on('shardError', error => logError('discord shard', error));
+client.on('warn', warning => console.warn('[discord warning]', warning));
+
+client.on('messageCreate', msg => runSafely('messageCreate', async () => {
     if (msg.author.bot) return;
 
     // Only update existing users' activity; do NOT auto-create here
@@ -244,10 +283,10 @@ client.on('messageCreate', async (msg) => {
     } catch (_) {
     }
 
-    if (msg.content === '!ping') return msg.reply('pong');
-});
+    if (msg.content === '!ping') await msg.reply('pong');
+}));
 
-client.on('interactionCreate', async interaction => {
+client.on('interactionCreate', interaction => runSafely('interactionCreate:commands', async () => {
     try {
         if (interaction.isChatInputCommand()) {
             const commandName = interaction.commandName;
@@ -347,7 +386,7 @@ client.on('interactionCreate', async interaction => {
             await safeInteractionReply(interaction, 'An error occurred while processing that interaction.');
         }
     }
-});
+}));
 
 client.login(process.env.DISCORD_TOKEN).catch(error => {
     logError('discord login', error);
